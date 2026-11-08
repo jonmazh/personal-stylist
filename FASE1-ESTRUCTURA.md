@@ -19,12 +19,12 @@ La app habla con cualquier servicio **compatible con la API de OpenAI** usando e
 | `AI_PROVIDER` | Coste | Clave | Chat (por defecto) | Fotos / visión (por defecto) |
 |---|---|---|---|---|
 | `gemini` | Prepago en cuentas nuevas desde marzo de 2026 (sin saldo → error 402) | `GEMINI_API_KEY` en https://aistudio.google.com/apikey | `gemini-3.8-flash` | `gemini-3.8-flash` |
-| `groq` *(defecto)* | Gratis, sin tarjeta (con límites por minuto y día) | `GROQ_API_KEY` en https://console.groq.com/keys | `llama-3.3-70b-versatile` | `qwen/qwen3.8-27b` |
+| `groq` *(defecto)* | Gratis, sin tarjeta (con límites por minuto y día) | `GROQ_API_KEY` en https://console.groq.com/keys | `openai/gpt-oss-120b` | `qwen/qwen3.8-27b` |
 | `openrouter` | Gratis con modelos `:free` | `OPENROUTER_API_KEY` en https://openrouter.ai/keys | `meta-llama/llama-3.3-70b-instruct:free` | `google/gemma-3-27b-it:free` |
 | `ollama` | Gratis, en tu PC | ninguna | `llama3.2` | `llama3.2-vision` |
 | `openai` | De pago | `OPENAI_API_KEY` | `gpt-4.1` | `gpt-4.1` |
 
-Los modelos se cambian con `AI_MODEL_CHAT` / `AI_MODEL_VISION`, y `AI_BASE_URL` permite apuntar a otro servidor compatible (LM Studio, Ollama remoto…).
+Los modelos se cambian con `AI_MODEL_CHAT` / `AI_MODEL_VISION`. Si el modelo configurado ya no existe (los proveedores gratuitos los retiran a menudo), la app consulta la lista de modelos del proveedor (`/models`), elige uno disponible automáticamente y lo indica en la consola del servidor. Además, y `AI_BASE_URL` permite apuntar a otro servidor compatible (LM Studio, Ollama remoto…).
 
 **Opción recomendada (Groq, 2 minutos, sin tarjeta):** crea una cuenta en https://console.groq.com, genera una clave en https://console.groq.com/keys y pon en `.env.local`:
 ```
