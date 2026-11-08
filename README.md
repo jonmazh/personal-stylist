@@ -1034,5 +1034,3 @@ El sistema debe conocer al usuario antes de personalizar, mantener fichas correg
 **La medida del éxito no es cuántas funciones de IA tiene la aplicación, sino si ayuda al usuario a vestirse mejor, comprar con criterio y construir un armario más útil y coherente con su vida.**
 
 ---
-
-*Fin del documento de referencia del producto.*
