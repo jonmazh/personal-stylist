@@ -29,6 +29,9 @@ test('cada pregunta se guarda en una columna que existe en las migraciones', () 
   }
   for (const c of ['category', 'name', 'measurements', 'notes']) assert.ok(cols.reference_garments.has(c))
   assert.ok(cols.profiles.has('photo_consent_at')); assert.ok(cols.body_photos.has('quality'))
+  for (const c of ['reference_id', 'rating']) assert.ok(cols.style_reference_ratings.has(c))
+  for (const c of ['storage_path', 'source_url', 'note', 'rating', 'ai_tags']) assert.ok(cols.style_references.has(c))
+  assert.ok(cols.profiles.has('delete_photos_after_analysis'))
 })
 
 test('especificacion completa: ids unicos, todas las areas, opciones y proposito declarados', () => {

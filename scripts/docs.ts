@@ -9,6 +9,8 @@ import { GARMENT_FIELDS, GARMENT_LABEL } from '@/lib/profile/summary'
 import { COMMON_RULES, PHOTO_PROTOCOL } from '@/lib/photos/protocol'
 import { THRESHOLDS } from '@/lib/photos/quality'
 import { RULES } from '@/lib/diagnosis/rules'
+import { OUTFITS, RATINGS } from '@/lib/style/references'
+import { MIN_RATED } from '@/lib/style/dna'
 import { CONFIDENCE_LABEL, CONFIDENCE_RULE, SECTIONS, buildFindings, type Confidence } from '@/lib/profile/blueprint'
 import { PHOTO_ANALYSIS, STYLIST_PERSONA } from '@/lib/ai/prompts'
 import type { Bundle } from '@/lib/profile/data'
@@ -43,6 +45,18 @@ export function questionnaireDoc() {
     for (const q of QUESTIONS.filter((x) => x.area === a.id))
       out.push(`| ${cell(q.label)} | ${KIND[q.kind]} | ${cell(answers(q))} | ${cell(q.extracts)} | ${storage(q)} | ${cell(q.feeds)} |`)
     if (a.id === 'a2') out.push('', 'Las fotografías de este capítulo siguen el [protocolo fotográfico](PROTOCOLO-FOTOGRAFICO.md).')
+    if (a.id === 'a4') {
+      out.push('', '### Descubrimiento visual (Style DNA)', '',
+        `El usuario valora conjuntos de referencia con su primera impresión. Se guardan en \`style_reference_ratings\` (\`reference_id\`, \`rating\`). Con ${MIN_RATED} o más valoraciones aparece la conclusión «Style DNA» en el diagnóstico.`, '',
+        '| Valoración | `rating` | Peso en el Style DNA |', '|---|---|---|',
+        ...RATINGS.map((r) => `| ${r.label} | \`${r.id}\` | ${r.weight > 0 ? '+' : ''}${String(r.weight).replace('.', ',')} |`), '',
+        'Qué extrae: estilos que atraen (suma de pesos), estilos descartados (suma negativa), aspiraciones («Me gustaría conseguir algo parecido»), lo que admira pero no se pondría, ajuste, estructura y formalidad dominantes, y colores más repetidos en lo que le gusta. Alimenta: Style DNA; Dirección de estilo.', '',
+        'Las ilustraciones son originales y se generan desde código (`lib/style/references.ts`); se muestran intercaladas, no agrupadas por estilo, y el estilo solo se revela tras valorar.', '',
+        '| Conjunto | Estilo | Ajuste | Estructura | Formalidad | Colores |', '|---|---|---|---|---|---|',
+        ...OUTFITS.map((o) => `| ${o.desc} | ${o.style} | ${o.fit} | ${o.structure} | ${o.formality}/5 | ${o.colors.join(', ')} |`), '',
+        '### Referencias propias', '',
+        'Capturas que inspiran al usuario (Pinterest, Instagram…). Imagen en el bucket privado `references-private`; fila en `style_references` (`storage_path`, `source_url`, `note`, `rating`, `ai_tags`). La IA extrae estilo, ajuste, estructura, formalidad, colores, prendas clave y lo que hace funcionar el conjunto (`REFERENCE_ANALYSIS`), normalizados a las mismas etiquetas que el catálogo. Una referencia sin valorar cuenta como «Me gusta». Alimenta: Style DNA.')
+    }
     if (a.id === 'a6') {
       out.push('', '### Prendas de referencia', '', 'Prendas que ya le quedan bien, medidas en plano (medidas de prenda, no corporales). Tabla `reference_garments` (`category`, `name`, `measurements` jsonb, `notes`).', '')
       out.push('| Tipo | Medidas que se piden (cm) |', '|---|---|')
@@ -51,7 +65,6 @@ export function questionnaireDoc() {
     }
     out.push('')
   })
-  out.push('## Pendiente', '', '- Descubrimiento visual del Style DNA (clasificar referencias de conjuntos: «Me encanta», «No me lo pondría»…): necesita un banco de imágenes de referencia.', '- Referencias visuales propias (Pinterest, Instagram): bucket `references-private` ya creado.', '')
   return out.join('\n')
 }
 
@@ -92,6 +105,12 @@ export function protocolDoc() {
     '',
     '**2. Por la IA, al analizar.** La IA devuelve primero `photo_quality` (utilizable o no, y por qué) para cada foto; las observaciones de fotos no utilizables se descartan y el motivo se muestra bajo la foto (`body_photos.quality.ai`). Los avisos del paso 1 se le pasan para que rebaje la confianza.',
     '',
+    '## Conservación y borrado',
+    '',
+    '- Por defecto las fotos se conservan hasta que el usuario las quita (una a una o «Borrar todas mis fotos»).',
+    '- Opción «Borrar mis fotos después de cada análisis» (`profiles.delete_photos_after_analysis`): tras analizar se eliminan los ficheros y sus filas y se conservan solo los resultados estructurados (README 15).',
+    '- Borrar fotos no borra las observaciones ya generadas: siguen en el diagnóstico como hipótesis revisables.',
+    '',
     '## Qué se guarda de cada análisis',
     '',
     '- `observations`: área, título, observación, confianza (alta/media/baja), justificación y foto de origen. Son propuestas: entran en el diagnóstico como pendientes de revisión.',
@@ -112,6 +131,8 @@ export const EXAMPLE: Bundle = {
   goals: { image_words: ['Limpia', 'Segura', 'Elegante'], answers: { g2: 'Una imagen cuidada sin parecer disfrazado' } },
   validated: { a1: true, a2: true, a3: false, a4: true, a5: true, a6: false, a7: false },
   observations: [], blueprints: [], garments: [], references: [], chatValidated: false,
+  refRatings: [['clasico-1', 'love'], ['sofisticado-1', 'love'], ['minimal-1', 'like'], ['sofisticado-2', 'like'], ['oldmoney-2', 'aspire'], ['street-1', 'never'], ['workwear-2', 'never'], ['italiana-2', 'admire']].map(([reference_id, rating]) => ({ reference_id, rating })),
+  styleRefs: [],
 }
 
 export function diagnosisDoc() {

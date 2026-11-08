@@ -41,6 +41,7 @@ Las observaciones de la IA nunca superan `media`: una foto es una hipótesis vis
 |---|---|---|
 | `mezcla` | Estilo | Un estilo personal suele ser una base (70–80 % del armario) con una influencia que aparece en una o dos piezas por conjunto. |
 | `objetivo` | Estilo | El objetivo de imagen manda sobre las tendencias: cada prenda nueva tiene que acercarte a las palabras que elegiste. |
+| `dna` | Estilo | Lo que eliges al ver conjuntos dice más de tu gusto que lo que declaras; lo que admiras pero no te pondrías marca un límite, no un objetivo. |
 | `limites` | Estilo | Lo que nunca te pondrías es un límite, no un reto: un buen estilista trabaja dentro de él. |
 | `drop` | Proporciones | La diferencia entre contorno de pecho y de cintura define la silueta: 20 cm o más es una V marcada; 10–19, equilibrada; 0–9, recta; negativa, más volumen en la cintura. |
 | `cadera` | Proporciones | Si la cadera supera al pecho en 4 cm o más, el volumen visual está abajo y conviene equilibrarlo arriba. |
@@ -79,6 +80,14 @@ Mezcla de casual sofisticado y minimalismo escandinavo, con tendencia a lo conte
 - **Por qué:** Lo deduzco de los estilos que marcaste (Casual sofisticado, Minimalismo escandinavo), tu posición en los ejes (contemporáneo 70/100, minimalista 25/100) y las palabras que elegiste. Un estilo personal suele ser una base (70–80 % del armario) con una influencia que aparece en una o dos piezas por conjunto.
 - **Qué haría un estilista:** Usaría uno de tus estilos como base y el otro como toque en una o dos piezas por conjunto; dime cuál pesa más corrigiendo esta conclusión. Cortes actuales y alguna textura técnica. Pocas prendas, lisas y sin logos. Y respetaría tu límite: nada de pantalón pitillo.
 - **Origen:** Declarado por ti · **Datos usados:** Estilos que te atraen, Ejes de estilo, Palabras de imagen, Lo que nunca te pondrías
+
+#### Style DNA · Confianza alta
+
+Te atraen sobre todo casual sofisticado, clásico contemporáneo y old money: siluetas de ajuste regular y estructuradas, formalidad 3,3/5. Aspiras a old money.
+
+- **Por qué:** De 8 referencias que has valorado. Colores que más se repiten en lo que te gusta: blanco, azul marino, gris, marrón y azul claro. Te gusta pero no para ti: elegancia italiana. Lo que eliges al ver conjuntos dice más de tu gusto que lo que declaras; lo que admiras pero no te pondrías marca un límite, no un objetivo.
+- **Qué haría un estilista:** Usaría casual sofisticado como referencia de compra y me acercaría a old money con una sola pieza de transición (por ejemplo, una prenda de esa línea en tus neutros). Dejaría fuera streetwear contemporáneo y workwear: lo has descartado.
+- **Origen:** Declarado por ti · **Datos usados:** Valoración de conjuntos
 
 #### Objetivo visual · Confianza media
 

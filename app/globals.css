@@ -181,3 +181,16 @@ ol.steps { padding-left: 1.2em; } ol.steps li { margin: 4px 0; }
 .ledger-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 28px; font-size: 15px; }
 .ledger-cols ul { padding-left: 18px; margin: 0; } .ledger-cols li { margin: 4px 0; }
 ol.steps { font-size: clamp(18px, 3vw, 20px); padding-left: 1.4em; }
+.refgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 22px 18px; margin: 14px 0 8px; }
+.refcard { margin: 0; display: grid; gap: 8px; align-content: start; }
+.refart { background: var(--paper); border: 1px solid var(--line); aspect-ratio: 160/300; padding: 10px 6px; }
+.refart svg { width: 100%; height: 100%; display: block; }
+.refcard.rated .refart { border-color: var(--ink); }
+.refcard figcaption { display: grid; gap: 2px; font-size: 12px; line-height: 1.4; }
+.refopts { display: flex; flex-wrap: wrap; gap: 5px; }
+.refopts button { font: 12px/1.2 var(--sans); padding: 6px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 99px; cursor: pointer; text-align: left; }
+.refopts button[aria-pressed=true] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.ownrefs { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 18px; margin: 14px 0; }
+.ownrefs figure { margin: 0; display: grid; gap: 6px; font-size: 13px; }
+.ownrefs img { aspect-ratio: 3/4; object-fit: cover; border: 1px solid var(--line); width: 100%; }
+.ownrefs select { width: 100%; padding: 6px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 13px var(--sans); }

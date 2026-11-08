@@ -1,6 +1,7 @@
 import { AREAS, DIMS } from './areas'
 import type { Bundle } from './data'
 import { rule } from '@/lib/diagnosis/rules'
+import { MIN_RATED, dnaOf } from '@/lib/style/dna'
 
 /**
  * Motor de diagnostico: reglas deterministas sobre TUS datos (README 10.4 y 12.4: la IA no calcula).
@@ -114,7 +115,7 @@ export function buildFindings(b: Bundle): Finding[] {
   const words: string[] = b.goals?.image_words ?? []
   const never: string | undefined = b.style?.never_wear || undefined
   const leaning = DIMS.map(([k, l, r]) => ({ k, v: dims[k], word: dims[k] >= 65 ? r : dims[k] <= 35 ? l : null })).filter((d) => d.word)
-  const dirData = styles.length > 0 || leaning.length > 0
+  const dirData = styles.length > 0 || leaning.length > 0 || dnaOf(b).rated >= MIN_RATED
   const DIM_ACTION: Record<string, string> = {
     Minimalista: 'pocas prendas, lisas y sin logos', Expresivo: 'una pieza protagonista por conjunto, no más',
     Estructurado: 'chaquetas de hombro definido y tejidos con cuerpo', Relajado: 'tejidos con caída y cortes con algo de holgura, siempre limpios',
@@ -123,7 +124,8 @@ export function buildFindings(b: Bundle): Finding[] {
     Discreto: 'neutros y detalles que solo se ven de cerca', Llamativo: 'color o estampado en una sola prenda',
     Ajustado: 'prendas a tu talla exacta, sin tirantez', Amplio: 'volumen controlado: amplio en una zona, limpio en la otra',
   }
-  const base = styles[0] ?? (leaning[0] ? cap(lower(leaning[0].word!)) : '')
+  const dnaTop = dnaOf(b).rated >= MIN_RATED ? dnaOf(b).topStyles[0] : undefined
+  const base = styles[0] ?? dnaTop ?? (leaning[0] ? cap(lower(leaning[0].word!)) : '')
   const mixed = styles.length >= 2
   const styleText = lower(styles.join(' '))
   // Si la base sale de los ejes (sin estilos), el primer eje ya es la base; se omiten tendencias que repiten un estilo.
@@ -143,6 +145,31 @@ export function buildFindings(b: Bundle): Finding[] {
     missing: dirData ? [] : ['Estilos o ejes (capítulo 04)'],
     origin: 'Declarado por ti', confidence: conf(dirData, v.a4),
   })
+
+  // ── Style DNA (descubrimiento visual) ──
+  const dna = dnaOf(b)
+  const FIT_TXT: Record<string, string> = { ajustado: 'ajustadas', regular: 'de ajuste regular', amplio: 'amplias' }
+  const declaredMiss = dna.topStyles.length && styles.length && !styles.some((st) => dna.topStyles.includes(st))
+  if (dna.rated >= MIN_RATED && dna.topStyles.length) {
+    add({
+      key: 'dna', section: 'direccion', title: 'Style DNA',
+      body: `Te atraen sobre todo ${list(dna.topStyles.map(lower))}: siluetas ${FIT_TXT[dna.fit ?? 'regular']} y ${({ estructurado: 'estructuradas', relajado: 'relajadas' } as Record<string, string>)[dna.structure ?? ''] ?? 'de estructura variable'}${dna.formality ? `, formalidad ${String(dna.formality).replace('.', ',')}/5` : ''}.${dna.aspire.length ? ` Aspiras a ${list(dna.aspire.map(lower))}.` : ''}`,
+      why: `De ${dna.rated} referencias que has valorado${dna.own ? ` (${dna.own} tuyas)` : ''}.${dna.colors.length ? ` Colores que más se repiten en lo que te gusta: ${list(dna.colors.map(lower))}.` : ''}${dna.admire.length ? ` Te gusta pero no para ti: ${list(dna.admire.map(lower))}.` : ''} ${rule('dna')}${declaredMiss ? ` Ojo: marcaste ${list(styles.map(lower))}, pero lo que eliges apunta a ${lower(dna.topStyles[0])}.` : ''}`,
+      action: `Usaría ${lower(dna.topStyles[0])} como referencia de compra${dna.aspire.length ? ` y me acercaría a ${lower(dna.aspire[0])} con una sola pieza de transición (por ejemplo, una prenda de esa línea en tus neutros)` : ''}.${dna.avoidStyles.length ? ` Dejaría fuera ${list(dna.avoidStyles.map(lower))}: lo has descartado.` : ''}${declaredMiss ? ' Revisaría los estilos que marcaste en el capítulo 04.' : ''}`,
+      data_used: ['Valoración de conjuntos', dna.own && 'Tus referencias'].filter(Boolean) as string[],
+      missing: dna.rated < 8 ? ['Valorar más referencias (mínimo 8 para afinar)'] : [],
+      origin: dna.own ? 'Declarado por ti · referencias analizadas por la IA' : 'Declarado por ti', confidence: dna.rated < 8 ? 'baja' : v.a4 ? 'alta' : 'media',
+    })
+  } else {
+    add({
+      key: 'dna', section: 'direccion', title: 'Style DNA',
+      body: 'Aún no has valorado suficientes conjuntos.',
+      why: `Necesito al menos ${MIN_RATED} valoraciones para ver un patrón; llevas ${dna.rated}. ${rule('dna')}`,
+      action: 'Valora los conjuntos del capítulo 04 con tu primera impresión: tardas dos minutos y dice mucho de tu gusto.',
+      data_used: dna.rated ? ['Valoración de conjuntos'] : [], missing: [`Valorar al menos ${MIN_RATED} conjuntos (capítulo 04)`],
+      origin: 'Declarado por ti', confidence: 'sin_datos',
+    })
+  }
 
   // ── Objetivo visual ──
   const ans: Record<string, string> = b.goals?.answers ?? {}

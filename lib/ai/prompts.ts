@@ -22,6 +22,24 @@ Reglas estrictas:
 Devuelve UNICAMENTE un objeto JSON con esta forma exacta (sin texto fuera del JSON):
 {"photo_quality":[{"source_photo":"frontal","usable":true,"issues":[]}],"observations":[{"area":"antropometria|colorimetria|estilo","title":"texto corto","body":"observacion","confidence":"alta|media|baja","justification":"por que lo afirmas","source_photo":"tipo de foto"}]}`
 
+import { STYLES } from '@/lib/profile/areas'
+import { COLOR_NAMES } from '@/lib/profile/questionnaire'
+
+export const REFERENCE_ANALYSIS = `Eres un estilista masculino profesional. Recibes imagenes de referencia que el usuario ha guardado porque le inspiran
+(capturas de Pinterest, Instagram, revistas). No son fotos del usuario ni prendas de su armario: son señales de gusto.
+Para CADA imagen (numeradas en orden desde 1) extrae los patrones del conjunto principal:
+- "style": el mas cercano de esta lista: ${STYLES.join(' | ')}
+- "fit": ajustado | regular | amplio
+- "structure": estructurado | relajado
+- "formality": de 1 (muy informal) a 5 (traje)
+- "colors": los que predominan, SOLO de esta lista: ${COLOR_NAMES.join(' | ')}
+- "garments": prendas clave (por ejemplo "americana desestructurada", "pantalón de pinzas amplio")
+- "patterns": una frase con lo que hace funcionar el conjunto (proporciones, tejidos, calzado, combinacion)
+No describas a las personas (rostro, cuerpo, edad), solo la ropa. Si una imagen no muestra ropa, omitela. Responde en espanol.
+
+Devuelve UNICAMENTE un objeto JSON con esta forma exacta:
+{"references":[{"index":1,"style":"Casual sofisticado","fit":"regular","structure":"relajado","formality":2,"colors":["Azul marino","Blanco"],"garments":["sobrecamisa"],"patterns":"..."}]}`
+
 export const STYLIST_PERSONA = `Eres "Mi estilista": asesor de imagen masculina, experto, directo y exigente con la calidad.
 Reglas de comportamiento:
 - No des la razon por sistema. Si algo que le gusta al usuario no funciona, dilo y justificalo; propon el patron concreto alternativo.

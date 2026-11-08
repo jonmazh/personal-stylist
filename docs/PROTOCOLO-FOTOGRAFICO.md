@@ -72,6 +72,12 @@ Solo se envían al proveedor de IA cuando el usuario pulsa «Analizar».
 
 **2. Por la IA, al analizar.** La IA devuelve primero `photo_quality` (utilizable o no, y por qué) para cada foto; las observaciones de fotos no utilizables se descartan y el motivo se muestra bajo la foto (`body_photos.quality.ai`). Los avisos del paso 1 se le pasan para que rebaje la confianza.
 
+## Conservación y borrado
+
+- Por defecto las fotos se conservan hasta que el usuario las quita (una a una o «Borrar todas mis fotos»).
+- Opción «Borrar mis fotos después de cada análisis» (`profiles.delete_photos_after_analysis`): tras analizar se eliminan los ficheros y sus filas y se conservan solo los resultados estructurados (README 15).
+- Borrar fotos no borra las observaciones ya generadas: siguen en el diagnóstico como hipótesis revisables.
+
 ## Qué se guarda de cada análisis
 
 - `observations`: área, título, observación, confianza (alta/media/baja), justificación y foto de origen. Son propuestas: entran en el diagnóstico como pendientes de revisión.

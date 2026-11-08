@@ -1,6 +1,7 @@
 import type { AreaId } from './areas'
 import type { Bundle } from './data'
 import { answered, questionsOf, valueOf } from './questionnaire'
+import { dnaOf } from '@/lib/style/dna'
 
 export const GARMENT_FIELDS: Record<string, [string, string][]> = {
   pantalon: [['cintura', 'Cintura'], ['tiro', 'Tiro'], ['largo', 'Largo'], ['bajo', 'Bajo']],
@@ -46,6 +47,10 @@ export function describeArea(id: AreaId, b: Bundle): string[] {
   if (id === 'a2' && b.photos.length) {
     const desc = b.photos.map((p) => `${p.kind}${p.quality?.ai?.usable === false ? ' (no utilizable según la IA)' : ''}`)
     out.push(`Fotos subidas: ${desc.join(', ')}. Las observaciones de la IA van en las conclusiones.`)
+  }
+  if (id === 'a4') {
+    const d = dnaOf(b)
+    if (d.rated) out.push(`Style DNA (de ${d.rated} referencias valoradas): le atraen ${d.topStyles.join(', ') || '—'}${d.aspire.length ? `; aspira a ${d.aspire.join(', ')}` : ''}${d.avoidStyles.length ? `; no se pondría ${d.avoidStyles.join(', ')}` : ''}${d.admire.length ? `; le gusta, pero no para sí: ${d.admire.join(', ')}` : ''}${d.colors.length ? `; colores frecuentes: ${d.colors.join(', ')}` : ''}`)
   }
   if (id === 'a6') for (const g of b.references) out.push(`Prenda de referencia que le queda bien: ${describeGarment(g)}`)
   return out

@@ -6,6 +6,7 @@ import { AREAS, PHOTO_KINDS } from '@/lib/profile/areas'
 import { buildAreaPayload } from '@/lib/profile/questionnaire'
 import { GARMENT_FIELDS } from '@/lib/profile/summary'
 import { QualitySchema } from '@/lib/photos/quality'
+import { OUTFITS, RATINGS } from '@/lib/style/references'
 import { loadBundle } from '@/lib/profile/data'
 import { buildFindings } from '@/lib/profile/blueprint'
 import { carryReviews } from '@/lib/profile/review'
@@ -154,4 +155,75 @@ export async function reviewFinding(formData: FormData) {
   const { data: last } = await supabase.from('blueprints').select('id').order('version', { ascending: false }).limit(1).maybeSingle()
   if (f && last && f.blueprint_id === last.id) await supabase.from('assessment_findings').update(patch).eq('id', fid)
   done()
+}
+
+// ── Style DNA: descubrimiento visual y referencias propias ──
+const RATING_IDS = RATINGS.map((r) => r.id) as string[]
+
+/** Valora un conjunto del catalogo (o quita la valoracion con rating vacio). */
+export async function rateReference(referenceId: string, rating: string | null) {
+  const { id, supabase } = await me()
+  if (!OUTFITS.some((o) => o.id === referenceId)) throw new Error('Referencia no valida')
+  if (rating === null) await supabase.from('style_reference_ratings').delete().eq('reference_id', referenceId)
+  else {
+    if (!RATING_IDS.includes(rating)) throw new Error('Valoracion no valida')
+    const { error } = await supabase.from('style_reference_ratings').upsert({ user_id: id, reference_id: referenceId, rating, rated_at: new Date().toISOString() })
+    if (error) throw new Error(/schema cache|does not exist/i.test(error.message) ? 'Ejecuta la migración 0004 en Supabase' : error.message)
+  }
+  done()
+}
+
+/** Registra una referencia visual propia ya subida al bucket privado references-private. */
+export async function registerStyleReference(path: string, sourceUrl: string, note: string) {
+  const { id, supabase } = await me()
+  if (!path.startsWith(id + '/')) throw new Error('Ruta no valida')
+  const url = sourceUrl.trim()
+  const { error } = await supabase.from('style_references').insert({
+    user_id: id, storage_path: path, source_url: /^https?:\/\//.test(url) ? url.slice(0, 500) : null, note: note.trim().slice(0, 300) || null,
+  })
+  if (error) {
+    await supabase.storage.from('references-private').remove([path])
+    throw new Error(/schema cache|does not exist/i.test(error.message) ? 'Ejecuta la migración 0004 en Supabase' : error.message)
+  }
+  done()
+}
+
+export async function rateStyleReference(formData: FormData) {
+  const { supabase } = await me()
+  const rating = String(formData.get('rating') ?? '')
+  await supabase.from('style_references').update({ rating: RATING_IDS.includes(rating) ? rating : null }).eq('id', String(formData.get('id')))
+  done()
+  redirect('/profile/estilo#referencias')
+}
+
+export async function deleteStyleReference(formData: FormData) {
+  const { supabase } = await me()
+  const rid = String(formData.get('id'))
+  const { data } = await supabase.from('style_references').select('storage_path').eq('id', rid).maybeSingle()
+  if (data) await supabase.storage.from('references-private').remove([data.storage_path])
+  await supabase.from('style_references').delete().eq('id', rid)
+  done()
+  redirect('/profile/estilo#referencias')
+}
+
+// ── Conservacion de fotos corporales (README 15) ──
+export async function setPhotoRetention(formData: FormData) {
+  const { id, supabase } = await me()
+  const del = formData.get('delete_after') === 'on'
+  const { error } = await supabase.from('profiles').upsert({ id, delete_photos_after_analysis: del })
+  done()
+  if (error) redirect('/profile/cuerpo?error=' + encodeURIComponent('No se pudo guardar la preferencia. ¿Has ejecutado la migración 0004? Detalle: ' + error.message) + '#fotos')
+  redirect('/profile/cuerpo?retention=' + (del ? 'delete' : 'keep') + '#fotos')
+}
+
+/** Borra todas las fotos corporales (ficheros y filas). Los resultados del analisis se conservan. */
+export async function deleteAllPhotos() {
+  const { supabase } = await me()
+  const { data } = await supabase.from('body_photos').select('id,storage_path')
+  if (data?.length) {
+    await supabase.storage.from('profile-private').remove(data.map((p) => p.storage_path))
+    await supabase.from('body_photos').delete().in('id', data.map((p) => p.id))
+  }
+  done()
+  redirect('/profile/cuerpo?deleted=1#fotos')
 }
