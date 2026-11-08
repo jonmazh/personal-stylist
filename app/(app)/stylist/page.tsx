@@ -7,15 +7,17 @@ import { ChatBox } from './chat-box'
 export default async function StylistPage() {
   const user = (await getUser())!
   const ctx = buildContext(await loadBundle(user.supabase, user.id))
+  const cfg = configError()
   return (
     <main>
-      <h2>Mi estilista</h2>
-      <p className="m">
-        {ctx.hasValidated ? 'Consulto tu perfil validado y tu armario real.' : 'Todavía no hay nada validado: trabajaré con hipótesis y te lo diré.'}
+      <p className="eyebrow">Consulta privada</p>
+      <h1 className="display">Tu estilista</h1>
+      <p className="lead">
+        {ctx.hasValidated ? 'Respondo a partir de lo que has validado y de tu armario real.' : 'Todavía no has validado nada: trabajaré con hipótesis y te lo diré.'}
       </p>
-      <p className="m">IA: {PROVIDER_LABEL()} · {MODEL_CHAT()}</p>
-      {configError() && <p className="msg">{configError()}</p>}
+      {cfg && <p className="note">{cfg}</p>}
       <ChatBox />
+      <p className="m small" style={{ marginTop: 40 }}>IA: {PROVIDER_LABEL()} · {MODEL_CHAT()}</p>
     </main>
   )
 }

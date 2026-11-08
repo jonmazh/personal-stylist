@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/supabase/server'
-import { DIMS, GOALS, LIFE, MEASURES, PREFS, PHOTO_KINDS } from '@/lib/profile/areas'
+import { AREAS, DIMS, GOALS, LIFE, MEASURES, PREFS, PHOTO_KINDS } from '@/lib/profile/areas'
 import { loadBundle } from '@/lib/profile/data'
 import { buildFindings } from '@/lib/profile/blueprint'
 import { carryReviews } from '@/lib/profile/review'
@@ -14,7 +14,11 @@ async function me() {
 }
 const num = (v: FormDataEntryValue | null) => (v === null || v === '' ? null : Number.isFinite(Number(v)) ? Number(v) : null)
 const str = (v: FormDataEntryValue | null) => (typeof v === 'string' && v.trim() ? v.trim() : null)
-const done = () => revalidatePath('/profile')
+const done = () => revalidatePath('/', 'layout')
+const back = (area: string, flag: string) => {
+  const a = AREAS.find((x) => x.id === area)
+  redirect(a ? `/profile/${a.slug}?${flag}=1` : '/profile')
+}
 
 export async function saveArea(formData: FormData) {
   const { id, supabase } = await me()
@@ -59,6 +63,7 @@ export async function saveArea(formData: FormData) {
       break
   }
   done()
+  back(String(f.get('area')), 'saved')
 }
 
 export async function toggleValidated(formData: FormData) {
@@ -67,6 +72,7 @@ export async function toggleValidated(formData: FormData) {
   const next = formData.get('next') === '1'
   await supabase.from('area_states').upsert({ user_id: id, area, validated: next, validated_at: next ? new Date().toISOString() : null })
   done()
+  back(area, next ? 'validated' : 'unvalidated')
 }
 
 export async function registerPhoto(kind: string, path: string) {
@@ -107,7 +113,8 @@ export async function generateBlueprint() {
     await supabase.from('blueprints').delete().eq('id', bp.id) // no dejar una version vacia
     throw new Error('No se pudieron guardar las conclusiones del Blueprint')
   }
-  redirect(`/profile?v=${version}#blueprint`)
+  done()
+  redirect(`/blueprint?v=${version}`)
 }
 
 export async function reviewFinding(formData: FormData) {
