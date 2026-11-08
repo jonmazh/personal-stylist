@@ -2,6 +2,7 @@ import { getUser } from '@/lib/supabase/server'
 import { loadBundle, filled, status, type Bundle } from '@/lib/profile/data'
 import { AREAS, CONSTRAINTS, DIMS, GOALS, LIFE, MEASURES, PHOTO_KINDS, PREFS, STYLES } from '@/lib/profile/areas'
 import { confClass } from '@/lib/profile/blueprint'
+import { reviewHint } from '@/lib/profile/review'
 import { deletePhoto, generateBlueprint, reviewFinding, saveArea, toggleValidated } from './actions'
 import { PhotoSlot } from './photo-slot'
 import { AnalyzeButton } from './analyze-button'
@@ -62,6 +63,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const last = b.blueprints.at(-1)
   const shown = b.blueprints.find((x) => String(x.version) === v) ?? last
   const allFindings = b.blueprints.flatMap((x) => x.findings)
+  const prevOfShown = shown ? b.blueprints.find((x) => x.version === shown.version - 1) : undefined
   const dod: [string, boolean][] = [
     ['Completar y guardar el perfil progresivamente', AREAS.some((a) => filled(a.id, b))],
     ['Introducir y actualizar medidas', Object.keys(b.measures).length > 0],
@@ -130,6 +132,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
               <span className={`pill ${f.status !== 'pending' ? 'ok' : confClass(f.confidence)}`}>{f.status === 'corrected' ? 'Corregida por ti' : f.status === 'confirmed' ? 'Confirmada por ti' : f.confidence}</span><br />
               {f.status === 'corrected' ? f.corrected_body : f.body}<br />
               <span className="m">Origen: {f.origin} · {f.justification}</span>
+              {(() => { const h = reviewHint(prevOfShown?.findings, f, prevOfShown?.version); return h && <><br /><span className="warn">{h}</span></> })()}
               {shown === last && (
                 <form action={reviewFinding} className="btns">
                   <input type="hidden" name="id" value={f.id} />

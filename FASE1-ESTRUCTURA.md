@@ -38,6 +38,14 @@ Cómo funciona: el chat usa Chat Completions; el análisis de fotos descarga las
 
 > Privacidad: en los planes gratuitos de algunos servicios, el proveedor puede usar los datos para mejorar sus modelos. Si eso te preocupa con fotos corporales, usa `ollama`.
 
+## Pruebas
+
+- `npm test` — pruebas unitarias (revisiones que se conservan entre versiones del Blueprint y contexto que recibe el chat).
+- Recorrido completo en la app (`tests/e2e/blueprint-review.cjs`): registro, datos, validación, Blueprint v1→v3, confirmar/corregir y chat. Necesita Docker:
+  1. `npx supabase init` en una carpeta aparte, copiar `supabase/migrations/0001_init.sql` a su `supabase/migrations/` y `npx supabase start`.
+  2. `.env.local` con la URL y la publishable key locales, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:4600/v1`, `AI_MODEL_CHAT=mock`.
+  3. `node tests/e2e/mock-ai.mjs /tmp/e2e/lastreq.json &`, `npm run build && npm start -- -p 3100 &` y `node tests/e2e/blueprint-review.cjs /tmp/e2e`.
+
 ## Cómo comprobar la condición 10 («solo accede el usuario autorizado»)
 
 1. Crea dos cuentas (A y B). Con A: guarda medidas y sube una foto.

@@ -5,6 +5,7 @@ import { getUser } from '@/lib/supabase/server'
 import { DIMS, GOALS, LIFE, MEASURES, PREFS, PHOTO_KINDS } from '@/lib/profile/areas'
 import { loadBundle } from '@/lib/profile/data'
 import { buildFindings } from '@/lib/profile/blueprint'
+import { carryReviews } from '@/lib/profile/review'
 
 async function me() {
   const u = await getUser()
@@ -96,10 +97,16 @@ export async function generateBlueprint() {
   const validated = Object.values(b.validated).filter(Boolean).length
   const { data: bp, error } = await supabase.from('blueprints').insert({ user_id: id, version, validated_areas: validated }).select('id').single()
   if (error || !bp) throw new Error('No se pudo crear el Blueprint')
-  const rows = buildFindings(b).map((x, i) => ({
-    blueprint_id: bp.id, user_id: id, position: i, title: x.title, body: x.body, origin: x.origin, confidence: x.confidence, justification: x.justification,
+  // Lo que ya revisaste en la version anterior se conserva si la conclusion no ha cambiado.
+  const rows = carryReviews(b.blueprints.at(-1)?.findings ?? [], buildFindings(b)).map((x, i) => ({
+    blueprint_id: bp.id, user_id: id, position: i, title: x.title, body: x.body, origin: x.origin, confidence: x.confidence,
+    justification: x.justification, status: x.status, corrected_body: x.corrected_body,
   }))
-  await supabase.from('assessment_findings').insert(rows)
+  const { error: fe } = await supabase.from('assessment_findings').insert(rows)
+  if (fe) {
+    await supabase.from('blueprints').delete().eq('id', bp.id) // no dejar una version vacia
+    throw new Error('No se pudieron guardar las conclusiones del Blueprint')
+  }
   redirect(`/profile?v=${version}#blueprint`)
 }
 
