@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getUser } from '@/lib/supabase/server'
+import { MODEL_CHAT, openai } from '@/lib/ai/client'
+import { STYLIST_PERSONA } from '@/lib/ai/prompts'
+import { buildContext } from '@/lib/ai/context'
+import { loadBundle } from '@/lib/profile/data'
+
+const Body = z.object({ messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(4000) })).min(1).max(30) })
+
+export async function POST(req: Request) {
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  const body = Body.safeParse(await req.json().catch(() => null))
+  if (!body.success) return NextResponse.json({ error: 'Mensaje no valido' }, { status: 400 })
+
+  const bundle = await loadBundle(user.supabase, user.id) // solo datos del usuario (RLS)
+  const ctx = buildContext(bundle)
+  try {
+    const res = await openai().responses.create({
+      model: MODEL_CHAT(),
+      instructions: `${STYLIST_PERSONA}\n\n${ctx.text}`,
+      input: body.data.messages.slice(-12),
+    })
+    await user.supabase.from('ai_runs').insert({ user_id: user.id, kind: 'chat', model: MODEL_CHAT(), meta: { validated: ctx.hasValidated } })
+    return NextResponse.json({ text: res.output_text })
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Error de IA' }, { status: 502 })
+  }
+}
