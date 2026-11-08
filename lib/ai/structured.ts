@@ -23,6 +23,9 @@ async function complete(model: string, messages: Msg[], json: boolean) {
   } catch (e) {
     // Algunos modelos gratuitos no aceptan response_format: se reintenta sin el.
     if (json && e instanceof Error && /response_format|json/i.test(e.message)) return complete(model, messages, false)
+    // Los proveedores retiran modelos con frecuencia: se explica como cambiarlo sin tocar codigo.
+    if (e instanceof Error && /^404\b|model.*(not found|no longer available|does not exist)/i.test(e.message))
+      throw new Error(`El modelo "${model}" no esta disponible en tu proveedor. Cambialo con AI_MODEL_CHAT / AI_MODEL_VISION en .env.local. Detalle: ${e.message.slice(0, 300)}`)
     throw e
   }
 }

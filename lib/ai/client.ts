@@ -21,8 +21,8 @@ const PRESETS: Record<ProviderId, Preset> = {
     label: 'Google Gemini (gratis)',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     keyEnv: 'GEMINI_API_KEY',
-    chat: 'gemini-2.5-flash',
-    vision: 'gemini-2.5-flash',
+    chat: 'gemini-3.8-flash',
+    vision: 'gemini-3.8-flash',
   },
   groq: {
     label: 'Groq (gratis)',
