@@ -4,8 +4,8 @@ import OpenAI from 'openai'
  * Proveedor de IA configurable. Todos estos servicios exponen una API compatible con
  * OpenAI (Chat Completions), asi que se usa el mismo SDK cambiando baseURL y modelo.
  *
- *  - gemini     → Google AI Studio. Clave GRATIS, con vision. (por defecto)
- *  - groq       → Groq Cloud. Clave GRATIS, muy rapido, con vision (Llama 4).
+ *  - groq       → Groq Cloud. Clave GRATIS sin tarjeta, muy rapido, con vision (Qwen). (por defecto)
+ *  - gemini     → Google AI Studio. Las cuentas nuevas usan facturacion prepago: sin saldo da 402.
  *  - openrouter → OpenRouter. Modelos ":free" sin coste.
  *  - ollama     → Modelos locales en tu ordenador. Gratis, sin clave y sin enviar datos fuera.
  *  - openai     → OpenAI de pago (opcional, por si algun dia lo quieres usar).
@@ -18,7 +18,7 @@ type Preset = { baseURL?: string; keyEnv?: string; chat: string; vision: string;
 
 const PRESETS: Record<ProviderId, Preset> = {
   gemini: {
-    label: 'Google Gemini (gratis)',
+    label: 'Google Gemini',
     baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     keyEnv: 'GEMINI_API_KEY',
     chat: 'gemini-3.8-flash',
@@ -29,7 +29,7 @@ const PRESETS: Record<ProviderId, Preset> = {
     baseURL: 'https://api.groq.com/openai/v1',
     keyEnv: 'GROQ_API_KEY',
     chat: 'llama-3.3-70b-versatile',
-    vision: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    vision: 'qwen/qwen3.8-27b',
   },
   openrouter: {
     label: 'OpenRouter (modelos :free)',
@@ -53,8 +53,8 @@ const PRESETS: Record<ProviderId, Preset> = {
 }
 
 export function providerId(): ProviderId {
-  const p = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase() as ProviderId
-  return p in PRESETS ? p : 'gemini'
+  const p = (process.env.AI_PROVIDER || 'groq').toLowerCase() as ProviderId
+  return p in PRESETS ? p : 'groq'
 }
 
 const preset = () => PRESETS[providerId()]

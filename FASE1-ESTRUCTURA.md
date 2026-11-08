@@ -1,6 +1,6 @@
 # Mi estilista · Style Profile (fase 1)
 
-Next.js 16 (App Router) + TypeScript + Supabase (Postgres, Auth, Storage, RLS) + IA gratuita configurable (Gemini, Groq, OpenRouter u Ollama local; OpenAI opcional) + Zod.
+Next.js 16 (App Router) + TypeScript + Supabase (Postgres, Auth, Storage, RLS) + IA gratuita configurable (Groq, OpenRouter u Ollama local; Gemini y OpenAI opcionales) + Zod.
 Verificado: `tsc` y `next build` pasan. **No se ha probado contra un Supabase ni un proveedor de IA real** (no había credenciales): sigue la guía de abajo y revisa los resultados.
 
 ## Puesta en marcha
@@ -18,25 +18,25 @@ La app habla con cualquier servicio **compatible con la API de OpenAI** usando e
 
 | `AI_PROVIDER` | Coste | Clave | Chat (por defecto) | Fotos / visión (por defecto) |
 |---|---|---|---|---|
-| `gemini` *(defecto)* | Gratis (con límites diarios) | `GEMINI_API_KEY` en https://aistudio.google.com/apikey | `gemini-3.8-flash` | `gemini-3.8-flash` |
-| `groq` | Gratis (con límites) | `GROQ_API_KEY` en https://console.groq.com/keys | `llama-3.3-70b-versatile` | `meta-llama/llama-4-scout-17b-16e-instruct` |
+| `gemini` | Prepago en cuentas nuevas desde marzo de 2026 (sin saldo → error 402) | `GEMINI_API_KEY` en https://aistudio.google.com/apikey | `gemini-3.8-flash` | `gemini-3.8-flash` |
+| `groq` *(defecto)* | Gratis, sin tarjeta (con límites por minuto y día) | `GROQ_API_KEY` en https://console.groq.com/keys | `llama-3.3-70b-versatile` | `qwen/qwen3.8-27b` |
 | `openrouter` | Gratis con modelos `:free` | `OPENROUTER_API_KEY` en https://openrouter.ai/keys | `meta-llama/llama-3.3-70b-instruct:free` | `google/gemma-3-27b-it:free` |
 | `ollama` | Gratis, en tu PC | ninguna | `llama3.2` | `llama3.2-vision` |
 | `openai` | De pago | `OPENAI_API_KEY` | `gpt-4.1` | `gpt-4.1` |
 
 Los modelos se cambian con `AI_MODEL_CHAT` / `AI_MODEL_VISION`, y `AI_BASE_URL` permite apuntar a otro servidor compatible (LM Studio, Ollama remoto…).
 
-**Opción recomendada (Gemini, 2 minutos):** entra en https://aistudio.google.com/apikey con tu cuenta de Google, pulsa *Create API key* y pon en `.env.local`:
+**Opción recomendada (Groq, 2 minutos, sin tarjeta):** crea una cuenta en https://console.groq.com, genera una clave en https://console.groq.com/keys y pon en `.env.local`:
 ```
-AI_PROVIDER=gemini
-GEMINI_API_KEY=tu_clave
+AI_PROVIDER=groq
+GROQ_API_KEY=tu_clave
 ```
 
 **Opción 100 % local y privada (Ollama):** instala https://ollama.com, ejecuta `ollama pull llama3.2` y `ollama pull llama3.2-vision`, y pon `AI_PROVIDER=ollama`. Las fotos no salen de tu ordenador (necesita ~8 GB de RAM para el modelo de visión).
 
 Cómo funciona: el chat usa Chat Completions; el análisis de fotos descarga las imágenes en el servidor (respetando RLS), las envía como base64, pide JSON y lo valida con el mismo esquema Zod (`lib/ai/structured.ts`), reintentando una vez si el modelo devuelve algo inválido. Las observaciones siguen guardándose como propuesta, nunca como dato confirmado.
 
-> Privacidad: en los planes gratuitos de Gemini y otros servicios, el proveedor puede usar los datos para mejorar sus modelos. Si eso te preocupa con fotos corporales, usa `ollama`.
+> Privacidad: en los planes gratuitos de algunos servicios, el proveedor puede usar los datos para mejorar sus modelos. Si eso te preocupa con fotos corporales, usa `ollama`.
 
 ## Cómo comprobar la condición 10 («solo accede el usuario autorizado»)
 

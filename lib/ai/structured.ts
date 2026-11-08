@@ -26,6 +26,8 @@ async function complete(model: string, messages: Msg[], json: boolean) {
     // Los proveedores retiran modelos con frecuencia: se explica como cambiarlo sin tocar codigo.
     if (e instanceof Error && /^404\b|model.*(not found|no longer available|does not exist)/i.test(e.message))
       throw new Error(`El modelo "${model}" no esta disponible en tu proveedor. Cambialo con AI_MODEL_CHAT / AI_MODEL_VISION en .env.local. Detalle: ${e.message.slice(0, 300)}`)
+    if (e instanceof Error && /^(402|429)\b|credits|quota|billing|RESOURCE_EXHAUSTED/i.test(e.message))
+      throw new Error(`Tu proveedor de IA ha rechazado la peticion por saldo o cuota agotados. Usa uno gratuito (AI_PROVIDER=groq u ollama en .env.local) o espera a que se renueve la cuota. Detalle: ${e.message.slice(0, 300)}`)
     throw e
   }
 }
