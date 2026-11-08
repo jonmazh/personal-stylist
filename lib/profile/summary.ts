@@ -1,6 +1,8 @@
 import type { AreaId } from './areas'
 import type { Bundle } from './data'
 import { answered, questionsOf, valueOf } from './questionnaire'
+import { styleProfileOf } from '@/lib/style/dna'
+import { brandById, elementLabel, styleName } from '@/lib/style/catalog'
 
 export const GARMENT_FIELDS: Record<string, [string, string][]> = {
   pantalon: [['cintura', 'Cintura'], ['tiro', 'Tiro'], ['largo', 'Largo'], ['bajo', 'Bajo']],
@@ -46,6 +48,17 @@ export function describeArea(id: AreaId, b: Bundle): string[] {
   if (id === 'a2' && b.photos.length) {
     const desc = b.photos.map((p) => `${p.kind}${p.quality?.ai?.usable === false ? ' (no utilizable según la IA)' : ''}`)
     out.push(`Fotos subidas: ${desc.join(', ')}. Las observaciones de la IA van en las conclusiones.`)
+  }
+  if (id === 'a4') {
+    const p = styleProfileOf(b)
+    const fmt = (xs: { style: string; role: string; weight: number }[]) => xs.map((i) => `${styleName(i.style)} ${i.weight} % (${i.role})`).join(', ')
+    if (p.declared.influences.length) out.push(`Identidad declarada (versión ${p.declared.version}): ${fmt(p.identity.influences)}. Los % son orientativos, no una restricción.`)
+    const el = (xs: { element: string; source: string }[], src: string) => xs.filter((x) => x.source === src).map((x) => elementLabel(x.element)).join(', ')
+    if (el(p.elements.liked, 'declarado')) out.push(`Elementos que declara que le gustan: ${el(p.elements.liked, 'declarado')}`)
+    if (el(p.elements.rejected, 'declarado')) out.push(`Elementos que declara que rechaza: ${el(p.elements.rejected, 'declarado')}`)
+    if (p.declared.brands.length) out.push(`Marcas de referencia (inspiración, no estilos): ${p.declared.brands.map((x) => brandById(x)?.name).join(', ')}`)
+    const inf = p.inferred
+    if (inf.rated) out.push(`INFERIDO de ${inf.rated} valoraciones (no declarado): ${inf.proposal.length ? `apunta a ${inf.proposal.map((x) => `${styleName(x.style)} ${x.weight} %`).join(', ')}` : 'aún sin patrón'}${inf.patterns.length ? `; patrones: ${inf.patterns.map((x) => `${x.kind} ${x.label.toLowerCase()} (${x.evidence} conjuntos)`).join(', ')}` : ''}${inf.admiredStyles.length ? `; admira sin querer llevarlo: ${inf.admiredStyles.map(styleName).join(', ')}` : ''}${inf.rejectedStyles.length ? `; descarta: ${inf.rejectedStyles.map(styleName).join(', ')}` : ''}`)
   }
   if (id === 'a6') for (const g of b.references) out.push(`Prenda de referencia que le queda bien: ${describeGarment(g)}`)
   return out

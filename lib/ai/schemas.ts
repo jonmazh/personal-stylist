@@ -18,3 +18,18 @@ export const ObservationsSchema = z.object({
   })).max(8),
 })
 export type Observations = z.infer<typeof ObservationsSchema>
+
+// Analisis de referencias visuales propias: patrones de estilo, nunca datos del usuario.
+export const ReferenceTagsSchema = z.object({
+  references: z.array(z.object({
+    index: z.number().int().min(1),
+    style: z.string(),
+    fit: z.enum(['ajustado', 'regular', 'amplio']),
+    structure: z.enum(['estructurado', 'relajado']),
+    formality: z.number().int().min(1).max(5),
+    colors: z.array(z.string()).max(6),
+    elements: z.array(z.string()).max(12).default([]),
+    garments: z.array(z.string()).max(6),
+    patterns: z.string(),
+  })).max(8),
+})

@@ -26,7 +26,7 @@ const { until, goodPhoto } = require('./lib.cjs')
   await p.waitForSelector('img[alt="Foto frontal"]'); await p.waitForFunction(() => { const i = document.querySelector('img[alt="Foto frontal"]'); return i && i.complete && i.naturalWidth > 0 })
   await shot('capitulo-cuerpo'); log('capítulo Cuerpo: medidas guardadas, foto privada subida y visible, capítulo validado')
   await save('color', async () => { await p.click('.opts label:has-text("Cálida")') })
-  await save('estilo', async () => { await p.click('.opts label:has-text("Casual sofisticado")') })
+  await save('estilo', async () => { await p.fill('input[name=d_clasico]', '75') }) // eje clásico ↔ contemporáneo
   await save('vida', async () => { await p.fill('input[name=l_trabajo]', '60') })
   assert.match(await p.locator('main').innerText(), /60 %/)
   await p.goto(U + '/profile'); const idx = await p.locator('.chapters').innerText()

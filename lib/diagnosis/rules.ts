@@ -9,6 +9,7 @@ export const RULES = {
   // Estilo
   mezcla: { id: 'mezcla', area: 'Estilo', text: 'Un estilo personal suele ser una base (70–80 % del armario) con una influencia que aparece en una o dos piezas por conjunto.' },
   objetivo: { id: 'objetivo', area: 'Estilo', text: 'El objetivo de imagen manda sobre las tendencias: cada prenda nueva tiene que acercarte a las palabras que elegiste.' },
+  dna: { id: 'dna', area: 'Estilo', text: 'Lo que eliges al ver conjuntos dice más de tu gusto que lo que declaras; lo que admiras pero no te pondrías marca un límite, no un objetivo.' },
   limites: { id: 'limites', area: 'Estilo', text: 'Lo que nunca te pondrías es un límite, no un reto: un buen estilista trabaja dentro de él.' },
   // Proporciones
   drop: { id: 'drop', area: 'Proporciones', text: 'La diferencia entre contorno de pecho y de cintura define la silueta: 20 cm o más es una V marcada; 10–19, equilibrada; 0–9, recta; negativa, más volumen en la cintura.' },

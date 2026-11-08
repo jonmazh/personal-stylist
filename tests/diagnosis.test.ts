@@ -25,12 +25,12 @@ test('formato: toda conclusion tiene conclusion, por que, que haria un estilista
 
 test('las secciones del README 4.5 estan presentes y en orden', () => {
   const keys = buildFindings(EXAMPLE).map((f) => f.key)
-  assert.deepEqual(keys, ['direccion', 'objetivo', 'proporciones', 'cortes', 'precaucion', 'colorimetria', 'paleta', 'vida', 'prioridades', 'pasos'])
+  assert.deepEqual(keys, ['direccion', 'dna', 'objetivo', 'proporciones', 'cortes', 'precaucion', 'colorimetria', 'paleta', 'vida', 'prioridades', 'pasos'])
 })
 
 test('sin datos: nunca inventa; dice que falta y la confianza es sin_datos', () => {
   const fs = buildFindings(EMPTY)
-  for (const k of ['direccion', 'proporciones', 'colorimetria', 'paleta', 'vida']) {
+  for (const k of ['direccion', 'dna', 'proporciones', 'colorimetria', 'paleta', 'vida']) {
     const f = find(fs, k)
     assert.equal(f.confidence, 'sin_datos', k)
     assert.ok(f.missing.length > 0, `${k} sin lista de lo que falta`)

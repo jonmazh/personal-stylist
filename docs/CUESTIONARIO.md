@@ -71,8 +71,12 @@ _Qué quieres transmitir. No hace falta elegir una sola etiqueta: tu estilo pued
 | Ajustado ↔ Amplio | Deslizador 0–100 | Ajustado (0) ↔ Amplio (100); 50 = sin preferencia | Posición entre ajustado y amplio (50 = sin preferencia). | `style_preferences.dims.ajustado` (jsonb) | Identidad estética |
 | Formal ↔ Casual | Deslizador 0–100 | Formal (0) ↔ Casual (100); 50 = sin preferencia | Posición entre formal y casual (50 = sin preferencia). | `style_preferences.dims.formal` (jsonb) | Identidad estética |
 | Discreto ↔ Llamativo | Deslizador 0–100 | Discreto (0) ↔ Llamativo (100); 50 = sin preferencia | Posición entre discreto y llamativo (50 = sin preferencia). | `style_preferences.dims.discreto` (jsonb) | Identidad estética |
-| Estilos que te atraen | Varias opciones | Clásico contemporáneo · Minimalismo escandinavo · Elegancia italiana · Workwear · Streetwear contemporáneo · Preppy / Ivy League · Casual sofisticado · Old money | Referencias de estilo; pueden mezclarse. | `style_preferences.styles` | Identidad estética |
 | Algo que nunca te pondrías | Texto | Libre | Límites del estilo: tan informativos como los gustos. | `style_preferences.never_wear` | Identidad estética; Cortes con precaución |
+
+### Identidad estética, catálogo de estilos y Style DNA
+
+Además de los ejes y los límites, el capítulo 04 incluye el catálogo de 30 estilos con su galería valorable, la identidad híbrida declarada (influencias con rol y %, elementos que quiere o rechaza, marcas de referencia), referencias propias analizadas por la IA y el Style DNA inferido. Todo está documentado en [STYLE-DNA.md](STYLE-DNA.md).
+
 
 ## 05 · Estilo de vida
 
@@ -131,8 +135,3 @@ _Hacia dónde quieres ir. Lo revisaremos en cada actualización de tu perfil._
 | ¿Qué imagen quieres proyectar? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g2` (jsonb) | Objetivos |
 | ¿Qué prendas usas y cuáles evitas? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g3` (jsonb) | Objetivos |
 | ¿Qué te gustaría llevar dentro de seis meses y hoy no te atreves? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g4` (jsonb) | Objetivos |
-
-## Pendiente
-
-- Descubrimiento visual del Style DNA (clasificar referencias de conjuntos: «Me encanta», «No me lo pondría»…): necesita un banco de imágenes de referencia.
-- Referencias visuales propias (Pinterest, Instagram): bucket `references-private` ya creado.

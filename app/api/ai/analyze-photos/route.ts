@@ -55,7 +55,14 @@ export async function POST() {
       meta: { photos: used.map((p) => p.kind), unusable: [...unusable], discarded: parsed.observations.length - kept.length } }).select('id').single()
     // Se guardan como OBSERVACIONES (propuesta), nunca como dato confirmado.
     if (kept.length) await supabase.from('observations').insert(kept.map((o) => ({ ...o, user_id: id, run_id: run?.id })))
-    return NextResponse.json({ count: kept.length, unusable: [...unusable] })
+    // Modo «borrar tras el analisis»: se eliminan las imagenes y se conservan solo los resultados estructurados.
+    const { data: prof } = await supabase.from('profiles').select('delete_photos_after_analysis').eq('id', id).maybeSingle()
+    let deleted = false
+    if (prof?.delete_photos_after_analysis) {
+      const { error: re } = await supabase.storage.from('profile-private').remove(photos.map((p) => p.storage_path))
+      if (!re) { await supabase.from('body_photos').delete().in('id', photos.map((p) => p.id)); deleted = true }
+    }
+    return NextResponse.json({ count: kept.length, unusable: [...unusable], deleted })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error de IA' }, { status: 502 })
   }
