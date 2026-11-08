@@ -36,7 +36,7 @@ export function buildFindings(b: Bundle): Finding[] {
 
   const c = b.color ?? {}, t = TEMP[c.temperature ?? ''] ?? null
   add('Colorimetría',
-    t ? `Subtono ${String(c.temperature).toLowerCase()}${['depth', 'intensity', 'contrast'].filter((k) => c[k]).map((k) => `, ${({ depth: 'profundidad', intensity: 'intensidad', contrast: 'contraste' } as Record<string, string>)[k]} ${String(c[k]).toLowerCase()}`).join('')}.` : 'Sin definir.',
+    t ? `Subtono ${({ c: 'cálido', f: 'frío', n: 'neutro' } as Record<string, string>)[t]}${['depth', 'intensity', 'contrast'].filter((k) => c[k]).map((k) => `, ${({ depth: 'profundidad', intensity: 'intensidad', contrast: 'contraste' } as Record<string, string>)[k]} ${String(c[k]).toLowerCase()}`).join('')}.` : 'Sin definir.',
     'Declarado por ti', v.a3 ? 'Confirmada' : t ? 'Hipótesis pendiente de validar' : 'Sin datos', 'Las fotos de móvil alteran el color: valídalo con luz natural.')
   if (t) add('Paleta', COLORS.filter(([, neu, ct]) => neu || ct === 'n' || t === 'n' || ct === t).map(([n]) => n).join(', ') + '.',
     'Declarado por ti', v.a3 ? 'Confirmada' : 'Hipótesis pendiente de validar', 'Derivada de tu subtono; ningún color está prohibido, algunos van mejor lejos de la cara.')

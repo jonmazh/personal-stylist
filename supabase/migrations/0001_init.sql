@@ -105,6 +105,6 @@ insert into storage.buckets (id, name, public, file_size_limit) values
 on conflict (id) do nothing;
 do $$ declare b text; begin
   foreach b in array array['profile-private','wardrobe-private','outfits-private','references-private'] loop
-    execute format('create policy %L on storage.objects for all to authenticated using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text) with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text)', 'own files '||b, b, b);
+    execute format('create policy %I on storage.objects for all to authenticated using (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text) with check (bucket_id = %L and (storage.foldername(name))[1] = (select auth.uid())::text)', 'own files '||b, b, b);
   end loop;
 end $$;
