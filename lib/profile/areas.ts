@@ -23,8 +23,8 @@ export const PREFS: Record<string, string[]> = {
   camisetas: ['Regular', 'Relaxed', 'Ajustada'], camisas: ['Regular', 'Oversize', 'Entallada'], pantalones: ['Recto', 'Amplio', 'Tapered'],
   chaquetas: ['Estructurada', 'Desestructurada'], abrigos: ['Corto', 'Medio', 'Largo'], calzado: ['Minimalista', 'Clásico', 'Deportivo'],
 }
-export const CONSTRAINTS = ['Camino mucho', 'Necesito prendas que no se arruguen', 'Uso transporte público', 'Llevo uniforme', 'Visto formal a diario']
-export const LIFE: [string, string][] = [['trabajo', 'Trabajo'], ['ocio', 'Ocio'], ['deporte', 'Deporte'], ['eventos', 'Eventos']]
+export const CONSTRAINTS = ['Camino mucho', 'Necesito prendas que no se arruguen', 'Uso transporte público', 'Llevo uniforme', 'Visto formal a diario', 'Paso calor con facilidad', 'Priorizo la comodidad sobre todo']
+export const LIFE: [string, string][] = [['trabajo', 'Trabajo'], ['universidad', 'Estudios'], ['ocio', 'Ocio'], ['deporte', 'Deporte'], ['citas', 'Citas y cenas'], ['eventos', 'Eventos y ocasiones especiales']]
 export const GOALS = [
   '¿Qué te gustaría cambiar de tu forma de vestir?', '¿En qué situaciones nunca encuentras la ropa adecuada?',
   '¿Qué imagen quieres proyectar?', '¿Qué prendas usas y cuáles evitas?', '¿Qué te gustaría llevar dentro de seis meses y hoy no te atreves?',

@@ -2,7 +2,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/supabase/server'
-import { AREAS, DIMS, GOALS, LIFE, MEASURES, PREFS, PHOTO_KINDS } from '@/lib/profile/areas'
+import { AREAS, PHOTO_KINDS } from '@/lib/profile/areas'
+import { buildAreaPayload } from '@/lib/profile/questionnaire'
+import { GARMENT_FIELDS } from '@/lib/profile/summary'
+import { QualitySchema } from '@/lib/photos/quality'
 import { loadBundle } from '@/lib/profile/data'
 import { buildFindings } from '@/lib/profile/blueprint'
 import { carryReviews } from '@/lib/profile/review'
@@ -22,48 +25,34 @@ const back = (area: string, flag: string) => {
 
 export async function saveArea(formData: FormData) {
   const { id, supabase } = await me()
-  const f = formData
-  switch (f.get('area')) {
-    case 'a1':
-      await supabase.from('profiles').upsert({
-        id, age: num(f.get('age')), height_cm: num(f.get('height_cm')), weight_kg: num(f.get('weight_kg')), city: str(f.get('city')),
-        sizes: str(f.get('sizes')), brands: str(f.get('brands')), budget_max: num(f.get('budget_max')) ?? 80, fit_pref: str(f.get('fit_pref')),
-        updated_at: new Date().toISOString(),
-      })
-      break
-    case 'a2': {
-      const { data } = await supabase.from('body_measurements').select('key,value_cm').order('measured_at', { ascending: false })
-      const latest = new Map<string, number>()
-      for (const r of data ?? []) if (!latest.has(r.key)) latest.set(r.key, Number(r.value_cm))
-      const rows = MEASURES.map(([k]) => ({ key: k, value_cm: num(f.get(k)) }))
-        .filter((r): r is { key: string; value_cm: number } => !!r.value_cm && r.value_cm > 0 && latest.get(r.key) !== r.value_cm)
-        .map((r) => ({ ...r, user_id: id, source: 'manual' }))
-      if (rows.length) await supabase.from('body_measurements').insert(rows) // historial: nunca se sobrescribe
-      break
+  const area = AREAS.find((a) => a.id === formData.get('area'))
+  if (!area) redirect('/profile')
+  const { rows, measures, warnings } = buildAreaPayload(area.id, formData)
+  const now = new Date().toISOString()
+  const errors: string[] = []
+
+  for (const [table, row] of Object.entries(rows) as [string, Record<string, unknown>][]) {
+    const payload: Record<string, unknown> = table === 'profiles' ? { id, ...row, updated_at: now } : { user_id: id, ...row, updated_at: now }
+    const { error } = await supabase.from(table).upsert(payload)
+    if (error) errors.push(error.message)
+  }
+  if (measures.length) {
+    // Historial: solo se inserta lo que ha cambiado respecto a la ultima medida; nunca se sobrescribe.
+    const { data } = await supabase.from('body_measurements').select('key,value_cm').order('measured_at', { ascending: false })
+    const latest = new Map<string, number>()
+    for (const r of data ?? []) if (!latest.has(r.key)) latest.set(r.key, Number(r.value_cm))
+    const fresh = measures.filter((m) => latest.get(m.key) !== m.value_cm).map((m) => ({ ...m, user_id: id, source: 'manual' }))
+    if (fresh.length) {
+      const { error } = await supabase.from('body_measurements').insert(fresh)
+      if (error) errors.push(error.message)
     }
-    case 'a3':
-      await supabase.from('color_profiles').upsert({ user_id: id, temperature: str(f.get('temperature')), depth: str(f.get('depth')),
-        intensity: str(f.get('intensity')), contrast: str(f.get('contrast')), updated_at: new Date().toISOString() })
-      break
-    case 'a4':
-      await supabase.from('style_preferences').upsert({ user_id: id, styles: f.getAll('styles').map(String),
-        dims: Object.fromEntries(DIMS.map(([k]) => [k, num(f.get('d_' + k)) ?? 50])), updated_at: new Date().toISOString() })
-      break
-    case 'a5':
-      await supabase.from('lifestyle_profiles').upsert({ user_id: id, constraints: f.getAll('constraints').map(String),
-        life: Object.fromEntries(LIFE.map(([k]) => [k, num(f.get('l_' + k)) ?? 0])), updated_at: new Date().toISOString() })
-      break
-    case 'a6':
-      await supabase.from('fit_preferences').upsert({ user_id: id,
-        prefs: Object.fromEntries(Object.keys(PREFS).map((k) => [k, str(f.get('p_' + k))]).filter(([, v]) => v)), updated_at: new Date().toISOString() })
-      break
-    case 'a7':
-      await supabase.from('style_goals').upsert({ user_id: id,
-        answers: Object.fromEntries(GOALS.map((_, i) => [`g${i}`, str(f.get(`g${i}`)) ?? ''])), updated_at: new Date().toISOString() })
-      break
   }
   done()
-  back(String(f.get('area')), 'saved')
+  if (errors.length) {
+    const hint = errors.some((e) => /column|schema cache|does not exist/i.test(e)) ? ' ¿Has ejecutado la migración 0002 en Supabase?' : ''
+    redirect(`/profile/${area.slug}?error=${encodeURIComponent('No se pudo guardar.' + hint + ' Detalle: ' + errors[0])}`)
+  }
+  redirect(`/profile/${area.slug}?saved=1${warnings.length ? `&warn=${encodeURIComponent(warnings.join(' '))}` : ''}`)
 }
 
 export async function toggleValidated(formData: FormData) {
@@ -75,16 +64,51 @@ export async function toggleValidated(formData: FormData) {
   back(area, next ? 'validated' : 'unvalidated')
 }
 
-export async function registerPhoto(kind: string, path: string) {
+export async function registerPhoto(kind: string, path: string, quality?: unknown) {
   const { id, supabase } = await me()
   if (!(PHOTO_KINDS as readonly string[]).includes(kind) || !path.startsWith(id + '/')) throw new Error('Ruta no valida')
+  const { data: prof } = await supabase.from('profiles').select('photo_consent_at').eq('id', id).maybeSingle()
+  if (!prof?.photo_consent_at) {
+    await supabase.storage.from('profile-private').remove([path])
+    throw new Error('Antes de subir fotos tienes que aceptar cómo se tratan')
+  }
+  const q = QualitySchema.safeParse(quality)
   const { data: old } = await supabase.from('body_photos').select('id,storage_path').eq('kind', kind)
   if (old?.length) {
     await supabase.storage.from('profile-private').remove(old.map((o) => o.storage_path))
     await supabase.from('body_photos').delete().eq('kind', kind)
   }
-  await supabase.from('body_photos').insert({ user_id: id, kind, storage_path: path })
+  await supabase.from('body_photos').insert({ user_id: id, kind, storage_path: path, quality: q.success ? { client: q.data } : null })
   done()
+}
+
+/** Consentimiento explicito antes de la primera foto (README 15). */
+export async function setPhotoConsent(formData: FormData) {
+  const { id, supabase } = await me()
+  const give = formData.get('consent') === 'on'
+  if (give) await supabase.from('profiles').upsert({ id, photo_consent_at: new Date().toISOString() })
+  done()
+  redirect('/profile/cuerpo#fotos')
+}
+
+/** Prendas que ya le quedan bien, con sus medidas de prenda (no corporales). */
+export async function addReferenceGarment(formData: FormData) {
+  const { id, supabase } = await me()
+  const category = String(formData.get('category') ?? '')
+  const name = str(formData.get('name'))
+  if (!GARMENT_FIELDS[category] || !name) redirect('/profile/prendas?error=' + encodeURIComponent('Indica el tipo de prenda y un nombre para reconocerla.'))
+  const measurements = Object.fromEntries(GARMENT_FIELDS[category].map(([k]) => [k, num(formData.get(`m_${k}`))]).filter(([, v]) => v !== null && (v as number) > 0 && (v as number) < 200))
+  const { error } = await supabase.from('reference_garments').insert({ user_id: id, category, name, measurements, notes: str(formData.get('notes')) })
+  done()
+  if (error) redirect('/profile/prendas?error=' + encodeURIComponent('No se pudo guardar la prenda. ¿Has ejecutado la migración 0002? Detalle: ' + error.message))
+  redirect('/profile/prendas?saved=1#referencias')
+}
+
+export async function deleteReferenceGarment(formData: FormData) {
+  const { supabase } = await me()
+  await supabase.from('reference_garments').delete().eq('id', String(formData.get('id')))
+  done()
+  redirect('/profile/prendas#referencias')
 }
 
 export async function deletePhoto(formData: FormData) {

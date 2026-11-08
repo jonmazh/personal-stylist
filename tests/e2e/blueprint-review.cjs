@@ -1,21 +1,9 @@
 // Prueba e2e del expediente, el Blueprint y el chat. Uso: ver FASE1-ESTRUCTURA.md (Pruebas).
 // Argumento: carpeta donde mock-ai.mjs guarda la ultima peticion (lastreq.json). SHOTS=1 guarda capturas ahi.
-const { chromium } = require('playwright'); const fs = require('fs'); const assert = require('assert'); const zlib = require('zlib')
+const { chromium } = require('playwright'); const fs = require('fs'); const assert = require('assert')
 const S = process.argv[2], U = process.env.APP_URL || 'http://127.0.0.1:3100'
 const log = (...a) => console.log('✔', ...a)
-const until = async (loc, re, ms = 20000) => { const t = Date.now(); let txt = ''
-  while (Date.now() - t < ms) { txt = await loc.innerText().catch(() => ''); if (re.test(txt)) return txt; await new Promise(r => setTimeout(r, 200)) }
-  throw new Error(`no aparece ${re} en: ${txt.slice(0, 300)}`) }
-// PNG 300x400 de un color, para probar la subida de fotos sin ficheros externos
-function png(w, h) {
-  const crc = (b) => { let c, t = []; for (let n = 0; n < 256; n++) { c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0 }
-    let x = 0xffffffff; for (const v of b) x = t[(x ^ v) & 0xff] ^ (x >>> 8); return (x ^ 0xffffffff) >>> 0 }
-  const chunk = (type, data) => { const l = Buffer.alloc(4); l.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([l, td, c]) }
-  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2
-  const raw = Buffer.alloc((w * 3 + 1) * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const o = y * (w * 3 + 1) + 1 + x * 3; raw[o] = 176; raw[o + 1] = 141; raw[o + 2] = 87 }
-  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))])
-}
-
+const { until, goodPhoto } = require('./lib.cjs')
 ;(async () => {
   const br = await chromium.launch(); const p = await br.newPage({ viewport: { width: 1200, height: 900 } })
   p.setDefaultTimeout(30000)
@@ -33,7 +21,8 @@ function png(w, h) {
 
   await save('cuerpo', async () => { for (const [k, v] of [['pecho', 104], ['hombros', 47], ['cintura', 84], ['cadera', 98], ['torso', 62], ['entrepierna', 81]]) await p.fill(`input[name=${k}]`, String(v)) })
   await p.click('button:has-text("Validar este capítulo")'); await p.waitForURL(/validated=1/); await until(p.locator("main"), /Validado por ti/i)
-  await p.setInputFiles('input[aria-label="Subir foto frontal"]', { name: 'frontal.png', mimeType: 'image/png', buffer: png(300, 400) })
+  await p.check('input[name=consent]'); await p.click('button:has-text("Aceptar y continuar")'); await until(p.locator('.photos'), /Añadir foto/)
+  await p.setInputFiles('input[aria-label="Subir foto frontal"]', { name: 'frontal.png', mimeType: 'image/png', buffer: goodPhoto() })
   await p.waitForSelector('img[alt="Foto frontal"]'); await p.waitForFunction(() => { const i = document.querySelector('img[alt="Foto frontal"]'); return i && i.complete && i.naturalWidth > 0 })
   await shot('capitulo-cuerpo'); log('capítulo Cuerpo: medidas guardadas, foto privada subida y visible, capítulo validado')
   await save('color', async () => { await p.click('.opts label:has-text("Cálida")') })

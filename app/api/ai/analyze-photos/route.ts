@@ -15,17 +15,18 @@ export async function POST() {
   if (cfg) return NextResponse.json({ error: cfg }, { status: 503 })
   const { supabase, id } = user
 
-  const { data: photos } = await supabase.from('body_photos').select('kind,storage_path')
+  const { data: photos } = await supabase.from('body_photos').select('id,kind,storage_path,quality')
   if (!photos?.length) return NextResponse.json({ error: 'Sube al menos una foto' }, { status: 400 })
 
   // Las fotos se descargan en el servidor (RLS) y se envian como data URL base64:
   // funciona con todos los proveedores (incluido Ollama local) y no expone URLs.
-  const used: { kind: string; dataUrl: string }[] = []
+  const used: { id: string; kind: string; dataUrl: string; warnings: string[]; quality: any }[] = []
   for (const p of photos.slice(0, MAX_PHOTOS)) {
     const { data: blob } = await supabase.storage.from('profile-private').download(p.storage_path)
     if (!blob) continue
     const b64 = Buffer.from(await blob.arrayBuffer()).toString('base64')
-    used.push({ kind: p.kind, dataUrl: `data:${blob.type || 'image/jpeg'};base64,${b64}` })
+    const warnings: string[] = (p.quality?.client?.issues ?? []).map((i: { message: string }) => i.message)
+    used.push({ id: p.id, kind: p.kind, quality: p.quality, warnings, dataUrl: `data:${blob.type || 'image/jpeg'};base64,${b64}` })
   }
   if (!used.length) return NextResponse.json({ error: 'No se pudieron preparar las fotos' }, { status: 500 })
 
@@ -36,15 +37,25 @@ export async function POST() {
       schema: ObservationsSchema,
       system: PHOTO_ANALYSIS,
       user: [
-        { type: 'text', text: `Fotos en este orden: ${used.map((p) => p.kind).join(', ')}. Responde en JSON.` },
+        { type: 'text', text: `Fotos en este orden: ${used.map((p) => p.kind).join(', ')}.\n${used.map((p) => `Avisos de calidad de ${p.kind}: ${p.warnings.join(' ') || 'ninguno'}`).join('\n')}\nResponde en JSON.` },
         ...used.map((p) => ({ type: 'image_url' as const, image_url: { url: p.dataUrl } })),
       ],
     })
 
-    const { data: run } = await supabase.from('ai_runs').insert({ user_id: id, kind: 'photo_analysis', model: `${providerId()}:${effectiveModel('vision', MODEL_VISION())}`, meta: { photos: used.map((p) => p.kind) } }).select('id').single()
+    // Veredicto de calidad de la IA por foto; sin veredicto se considera utilizable.
+    const verdict = new Map(parsed.photo_quality.map((q) => [q.source_photo.toLowerCase(), q]))
+    const unusable = new Set(used.filter((p) => verdict.get(p.kind)?.usable === false).map((p) => p.kind))
+    for (const p of used) {
+      const v = verdict.get(p.kind)
+      if (v) await supabase.from('body_photos').update({ quality: { ...(p.quality ?? {}), ai: { usable: v.usable, issues: v.issues } } }).eq('id', p.id)
+    }
+    const kept = parsed.observations.filter((o) => !unusable.has(o.source_photo.toLowerCase()))
+
+    const { data: run } = await supabase.from('ai_runs').insert({ user_id: id, kind: 'photo_analysis', model: `${providerId()}:${effectiveModel('vision', MODEL_VISION())}`,
+      meta: { photos: used.map((p) => p.kind), unusable: [...unusable], discarded: parsed.observations.length - kept.length } }).select('id').single()
     // Se guardan como OBSERVACIONES (propuesta), nunca como dato confirmado.
-    await supabase.from('observations').insert(parsed.observations.map((o) => ({ ...o, user_id: id, run_id: run?.id })))
-    return NextResponse.json({ count: parsed.observations.length })
+    if (kept.length) await supabase.from('observations').insert(kept.map((o) => ({ ...o, user_id: id, run_id: run?.id })))
+    return NextResponse.json({ count: kept.length, unusable: [...unusable] })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error de IA' }, { status: 502 })
   }

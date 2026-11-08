@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --tsconfig tsconfig.json --test tests/*.test.ts"
+    "test": "tsx --tsconfig tsconfig.json --test tests/*.test.ts",
+    "docs": "tsx --tsconfig tsconfig.json scripts/docs.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
