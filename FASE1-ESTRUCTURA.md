@@ -6,7 +6,7 @@ Verificado: `tsc` y `next build` pasan. **No se ha probado contra un Supabase ni
 ## Puesta en marcha
 
 1. **Supabase**: crea un proyecto en https://supabase.com/dashboard.
-2. **Esquema**: pega `supabase/migrations/0001_init.sql` en *SQL Editor* y ejecútalo (o `supabase link` + `supabase db push`). Crea tablas, RLS, 4 buckets privados y sus políticas.
+2. **Esquema**: pega `supabase/migrations/0001_init.sql` y después `0002_questionnaire_photos.sql` en *SQL Editor* y ejecútalos (la 0002 se puede repetir sin riesgo) (o `supabase link` + `supabase db push`). Crea tablas, RLS, 4 buckets privados y sus políticas.
 3. **Auth**: en *Authentication > Email Templates > Confirm signup* cambia `{{ .ConfirmationURL }}` por
    `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` y pon tu URL en *Site URL* (en local, `http://localhost:3000`).
 4. **Variables**: copia `.env.example` a `.env.local` y rellénalo (URL y publishable key de *Project Settings > API*; clave **gratuita** de IA, ver abajo).
@@ -40,11 +40,12 @@ Cómo funciona: el chat usa Chat Completions; el análisis de fotos descarga las
 
 ## Pruebas
 
-- `npm test` — pruebas unitarias (revisiones que se conservan entre versiones del Blueprint y contexto que recibe el chat).
-- Recorrido completo en la app (`tests/e2e/blueprint-review.cjs`): registro, datos, validación, Blueprint v1→v3, confirmar/corregir y chat. Necesita Docker:
-  1. `npx supabase init` en una carpeta aparte, copiar `supabase/migrations/0001_init.sql` a su `supabase/migrations/` y `npx supabase start`.
+- `npm test` — pruebas unitarias: revisiones entre versiones del Blueprint, contexto del chat, cuestionario (cada pregunta contra el esquema SQL), control de calidad de fotos y documentos al día.
+- `npm run docs` — regenera `docs/CUESTIONARIO.md` y `docs/PROTOCOLO-FOTOGRAFICO.md` desde el código.
+- Recorridos completos en la app (`tests/e2e/blueprint-review.cjs` y `tests/e2e/questionnaire-photos.cjs`): expediente, Blueprint v1→v3, cuestionario, fotos con control de calidad, análisis y chat. Necesitan Docker:
+  1. `npx supabase init` en una carpeta aparte, copiar las migraciones de `supabase/migrations/` a su `supabase/migrations/` y `npx supabase start`.
   2. `.env.local` con la URL y la publishable key locales, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:4600/v1`, `AI_MODEL_CHAT=mock`.
-  3. `node tests/e2e/mock-ai.mjs /tmp/e2e/lastreq.json &`, `npm run build && npm start -- -p 3100 &` y `node tests/e2e/blueprint-review.cjs /tmp/e2e`.
+  3. `node tests/e2e/mock-ai.mjs /tmp/e2e/lastreq.json &`, `npm run build && npm start -- -p 3100 &` y `node tests/e2e/<prueba>.cjs /tmp/e2e`.
 
 ## Cómo comprobar la condición 10 («solo accede el usuario autorizado»)
 

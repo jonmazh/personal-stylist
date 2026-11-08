@@ -153,3 +153,22 @@ input[type=file] { border: 0; font-size: 13px; }
 /* ── Panel tecnico ───────────────────────────────────────── */
 .checklist { list-style: none; padding: 0; } .checklist li { padding: 10px 0; border-top: 1px solid var(--line); display: flex; gap: 12px; }
 .btns .msg { flex-basis: 100%; margin: 0; }
+fieldset.q { border: 0; padding: 0; margin: 0 0 18px; min-width: 0; }
+fieldset.q legend { font-size: 15px; color: var(--ink); padding: 0; margin-bottom: 4px; }
+textarea { width: 100%; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 16px/1.5 var(--sans); resize: vertical; }
+textarea:focus { outline: none; border-color: var(--ink); }
+.qgroup { margin-bottom: 8px; }
+.protocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 28px; margin: 12px 0 24px; font-size: 14px; }
+.protocol ul { margin: 6px 0 0; padding-left: 18px; }
+.protocol li { margin: 3px 0; }
+details.howto { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 0; margin: 18px 0; }
+details.howto summary { cursor: pointer; padding: 10px 0; font: 500 12px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; }
+.qc { font-size: 12px; line-height: 1.45; }
+.qc ul { margin: 4px 0 0; padding-left: 16px; }
+.guide { width: 38%; max-width: 70px; opacity: .35; margin: 0 auto 8px; color: var(--ink); }
+.refs { list-style: none; padding: 0; margin: 12px 0 20px; }
+.refs li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; padding: 12px 0; border-top: 1px solid var(--line); }
+.photo-frame.qc { aspect-ratio: auto; min-height: 100%; place-items: start; text-align: left; overflow: visible; }
+.photo-frame.qc .btns { justify-content: flex-start !important; }
+details.howto { font-size: 14px; }
+details.howto > ul { padding-left: 18px; margin: 4px 0 14px; }

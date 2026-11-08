@@ -17,7 +17,7 @@ test('el chat recibe los DATOS de las areas validadas, no solo su nombre', () =>
   assert.match(val, /Estudio antropométrico/)
   assert.match(val, /Pecho: 104 cm \(medida por el usuario, 2026-11-01\)/)
   assert.match(val, /Reparto del armario: Trabajo 50 %/)
-  assert.match(val, /Restricciones: Camino mucho/)
+  assert.match(val, /Restricciones prácticas: Camino mucho/)
   assert.ok(hasValidated)
 })
 

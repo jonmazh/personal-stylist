@@ -21,6 +21,7 @@ export function sampleBundle(over: Partial<Bundle> = {}): Bundle {
     observations: [],
     blueprints: [],
     garments: [],
+    references: [],
     chatValidated: false,
     ...over,
   }
