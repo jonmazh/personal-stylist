@@ -13,7 +13,7 @@
 | Style Blueprint versionado, cada conclusión con origen, confianza y justificación | Sí: `blueprints` + `assessment_findings` |
 | 4 buckets privados y URLs firmadas de duración limitada | Sí: `profile-private` (en uso) y los otros tres creados |
 | El chat consulta el perfil validado y no se limita a darte la razón | Sí: `lib/ai/context.ts`, `lib/ai/prompts.ts` |
-| Tailwind + shadcn/ui, React Hook Form, Gemini, pgvector | Tailwind instalado (estilos propios en CSS); IA gratuita (Gemini por defecto, Groq, OpenRouter, Ollama) vía `lib/ai/client.ts`; el resto, pendiente |
+| Tailwind + shadcn/ui, React Hook Form, Gemini, pgvector | Tailwind instalado (estilos propios en CSS); IA gratuita (Groq por defecto, OpenRouter, Ollama; Gemini y OpenAI de pago) vía `lib/ai/client.ts`; el resto, pendiente |
 
 ## 2. Documentación oficial consultada y dónde se usa
 
