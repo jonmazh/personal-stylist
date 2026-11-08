@@ -1,7 +1,8 @@
 import { AREAS, DIMS } from './areas'
 import type { Bundle } from './data'
 import { rule } from '@/lib/diagnosis/rules'
-import { MIN_RATED, dnaOf } from '@/lib/style/dna'
+import { MIN_RATED, evolution, snapshotOf, styleProfileOf } from '@/lib/style/dna'
+import { elementLabel, styleName } from '@/lib/style/catalog'
 
 /**
  * Motor de diagnostico: reglas deterministas sobre TUS datos (README 10.4 y 12.4: la IA no calcula).
@@ -109,13 +110,14 @@ export function buildFindings(b: Bundle): Finding[] {
   const add = (f: Omit<Finding, 'justification'>) => out.push({ ...f, justification: f.why })
   const v = b.validated
 
-  // ── Direccion de estilo ──
+  // ── Direccion de estilo (identidad hibrida: declarada o propuesta) ──
   const dims: Record<string, number> = b.style?.dims ?? {}
-  const styles: string[] = b.style?.styles ?? []
   const words: string[] = b.goals?.image_words ?? []
   const never: string | undefined = b.style?.never_wear || undefined
   const leaning = DIMS.map(([k, l, r]) => ({ k, v: dims[k], word: dims[k] >= 65 ? r : dims[k] <= 35 ? l : null })).filter((d) => d.word)
-  const dirData = styles.length > 0 || leaning.length > 0 || dnaOf(b).rated >= MIN_RATED
+  const sp = styleProfileOf(b)
+  const idn = sp.identity
+  const infl = idn.influences
   const DIM_ACTION: Record<string, string> = {
     Minimalista: 'pocas prendas, lisas y sin logos', Expresivo: 'una pieza protagonista por conjunto, no más',
     Estructurado: 'chaquetas de hombro definido y tejidos con cuerpo', Relajado: 'tejidos con caída y cortes con algo de holgura, siempre limpios',
@@ -124,50 +126,59 @@ export function buildFindings(b: Bundle): Finding[] {
     Discreto: 'neutros y detalles que solo se ven de cerca', Llamativo: 'color o estampado en una sola prenda',
     Ajustado: 'prendas a tu talla exacta, sin tirantez', Amplio: 'volumen controlado: amplio en una zona, limpio en la otra',
   }
-  const dnaTop = dnaOf(b).rated >= MIN_RATED ? dnaOf(b).topStyles[0] : undefined
-  const base = styles[0] ?? dnaTop ?? (leaning[0] ? cap(lower(leaning[0].word!)) : '')
-  const mixed = styles.length >= 2
-  const styleText = lower(styles.join(' '))
-  // Si la base sale de los ejes (sin estilos), el primer eje ya es la base; se omiten tendencias que repiten un estilo.
-  const tendencies = (styles.length ? leaning : leaning.slice(1)).map((d) => lower(d.word!)).filter((w) => !styleText.includes(w.slice(0, 6))).slice(0, 2)
+  const pct = (i: { style: string; weight: number }) => `${styleName(i.style)} (${i.weight} %)`
+  const principal = infl.find((i) => i.role === 'principal') ?? infl[0]
+  const secondaries = infl.filter((i) => i.role === 'secundario' && i !== principal)
+  const touches = infl.filter((i) => i.role === 'influencia' && i !== principal)
+  const tendencies = (infl.length ? leaning : leaning.slice(1)).slice(0, 2).map((d) => lower(d.word!))
+  const dirData = infl.length > 0 || leaning.length > 0
+  const likedEls = sp.elements.liked.slice(0, 3).map((e) => lower(elementLabel(e.element)))
+  const rejectedEls = sp.elements.rejected.filter((e) => e.source === 'declarado').map((e) => lower(elementLabel(e.element)))
+  const limits = [never && lower(never), ...rejectedEls].filter(Boolean) as string[]
   add({
     key: 'direccion', section: 'direccion', title: 'Dirección de estilo',
-    body: dirData
-      ? `${mixed ? `Mezcla de ${list(styles.map(lower))}` : base}${tendencies.length ? `, con tendencia a lo ${list(tendencies)}` : ''}.${words.length ? ` Imagen ${list(words.map(lower))}.` : ''}`
-      : 'Aún no sé qué quieres transmitir.',
-    why: dirData
-      ? `Lo deduzco de ${list([styles.length && `los estilos que marcaste (${styles.join(', ')})`, leaning.length && `tu posición en los ejes (${leaning.map((d) => `${lower(d.word!)} ${d.v}/100`).join(', ')})`, words.length && `las palabras que elegiste`].filter(Boolean) as string[])}. ${rule('mezcla')}`
-      : 'No has marcado estilos ni te has situado en los ejes del capítulo Identidad estética.',
-    action: dirData
-      ? `${mixed ? `Usaría uno de tus estilos como base y el otro como toque en una o dos piezas por conjunto; dime cuál pesa más corrigiendo esta conclusión` : `Construiría la base del armario en ${lower(base)}`}. ${leaning.slice(0, 3).map((d) => cap(DIM_ACTION[d.word!] ?? '')).filter(Boolean).join('. ')}${leaning.length ? '.' : ''}${never ? ` Y respetaría tu límite: nada de ${lower(never)}.` : ''}`.trim()
-      : 'Empezaría por el capítulo 04: marca dos o tres estilos y sitúate en los ejes; con eso ya puedo proponerte una dirección.',
-    data_used: [styles.length && 'Estilos que te atraen', leaning.length && 'Ejes de estilo', words.length && 'Palabras de imagen', never && 'Lo que nunca te pondrías'].filter(Boolean) as string[],
-    missing: dirData ? [] : ['Estilos o ejes (capítulo 04)'],
-    origin: 'Declarado por ti', confidence: conf(dirData, v.a4),
+    body: !dirData ? 'Aún no sé qué quieres transmitir.'
+      : infl.length
+        ? `${pct(principal)} como base${secondaries.length ? `, con ${list(secondaries.map(pct))}` : ''}${touches.length ? ` e influencia de ${list(touches.map(pct))}` : ''}.${tendencies.length ? ` Tendencia a lo ${list(tendencies)}.` : ''}${words.length ? ` Imagen ${list(words.map(lower))}.` : ''}`
+        : `${cap(lower(leaning[0].word!))}${tendencies.length ? `, con tendencia a lo ${list(tendencies)}` : ''}.${words.length ? ` Imagen ${list(words.map(lower))}.` : ''}`,
+    why: !dirData ? 'No has construido tu identidad ni te has situado en los ejes del capítulo Identidad estética.'
+      : `${idn.source === 'declarada' ? `Es la identidad que construiste (versión ${sp.declared.version || 1}).` : idn.source === 'propuesta' ? `Es una propuesta a partir de tus ${sp.inferred.rated} valoraciones: aún no la has confirmado.` : 'Sale de tu posición en los ejes de estilo.'}${leaning.length ? ` Tus ejes: ${leaning.map((d) => `${lower(d.word!)} ${d.v}/100`).join(', ')}.` : ''} Los porcentajes son orientativos: describen preferencias, no una clasificación objetiva. ${rule('mezcla')}`,
+    action: !dirData ? 'Explora el catálogo de estilos y valora conjuntos: con cuatro valoraciones ya puedo proponerte una identidad que tú ajustas.'
+      : `${infl.length ? `Construiría la base del armario en ${lower(styleName(principal.style))}${secondaries.length || touches.length ? ` y usaría ${list([...secondaries, ...touches].map((i) => lower(styleName(i.style))))} en una o dos piezas por conjunto, sin que ninguna mande sobre la base` : ''}.` : ''} ${leaning.slice(0, 2).map((d) => cap(DIM_ACTION[d.word!] ?? '')).filter(Boolean).join('. ')}${leaning.length ? '.' : ''}${likedEls.length ? ` Mantendría lo que te gusta: ${list(likedEls)}.` : ''}${limits.length ? ` Y respetaría tus límites: nada de ${list(limits)}.` : ''}${idn.source === 'propuesta' ? ' Confírmala o ajústala en «Mi identidad».' : ''}`.replace(/\s+/g, ' ').trim(),
+    data_used: [idn.source === 'declarada' && 'Identidad declarada', idn.source === 'propuesta' && 'Propuesta de tus valoraciones', leaning.length && 'Ejes de estilo', words.length && 'Palabras de imagen', never && 'Lo que nunca te pondrías', sp.elements.liked.length && 'Elementos preferidos'].filter(Boolean) as string[],
+    missing: [!dirData && 'Identidad o ejes de estilo (capítulo 04)', idn.source === 'propuesta' && 'Confirmar tu identidad'].filter(Boolean) as string[],
+    origin: idn.source === 'propuesta' ? 'Inferido de tus valoraciones' : 'Declarado por ti',
+    confidence: !dirData ? 'sin_datos' : idn.source === 'propuesta' ? 'baja' : conf(true, v.a4),
   })
 
-  // ── Style DNA (descubrimiento visual) ──
-  const dna = dnaOf(b)
-  const FIT_TXT: Record<string, string> = { ajustado: 'ajustadas', regular: 'de ajuste regular', amplio: 'amplias' }
-  const declaredMiss = dna.topStyles.length && styles.length && !styles.some((st) => dna.topStyles.includes(st))
-  if (dna.rated >= MIN_RATED && dna.topStyles.length) {
+  // ── Style DNA: lo INFERIDO de tus valoraciones (separado de lo declarado) ──
+  const inf = sp.inferred
+  const snap = snapshotOf(sp)
+  const prevDna = b.blueprints.at(-1)?.findings?.find((f) => f.key === 'dna')
+  const changes = evolution(prevDna?.details as { influences?: { style: string; weight: number; role: 'principal' }[] } | undefined, snap)
+  const prefers = inf.patterns.filter((x) => x.kind === 'prefiere'), avoidPatterns = inf.patterns.filter((x) => x.kind === 'evita')
+  const declaredPrincipal = sp.declared.influences.find((i) => i.role === 'principal')?.style
+  const conflict = declaredPrincipal && inf.proposal.length && !inf.proposal.slice(0, 2).some((x) => x.style === declaredPrincipal)
+  if (inf.enough) {
     add({
       key: 'dna', section: 'direccion', title: 'Style DNA',
-      body: `Te atraen sobre todo ${list(dna.topStyles.map(lower))}: siluetas ${FIT_TXT[dna.fit ?? 'regular']} y ${({ estructurado: 'estructuradas', relajado: 'relajadas' } as Record<string, string>)[dna.structure ?? ''] ?? 'de estructura variable'}${dna.formality ? `, formalidad ${String(dna.formality).replace('.', ',')}/5` : ''}.${dna.aspire.length ? ` Aspiras a ${list(dna.aspire.map(lower))}.` : ''}`,
-      why: `De ${dna.rated} referencias que has valorado${dna.own ? ` (${dna.own} tuyas)` : ''}.${dna.colors.length ? ` Colores que más se repiten en lo que te gusta: ${list(dna.colors.map(lower))}.` : ''}${dna.admire.length ? ` Te gusta pero no para ti: ${list(dna.admire.map(lower))}.` : ''} ${rule('dna')}${declaredMiss ? ` Ojo: marcaste ${list(styles.map(lower))}, pero lo que eliges apunta a ${lower(dna.topStyles[0])}.` : ''}`,
-      action: `Usaría ${lower(dna.topStyles[0])} como referencia de compra${dna.aspire.length ? ` y me acercaría a ${lower(dna.aspire[0])} con una sola pieza de transición (por ejemplo, una prenda de esa línea en tus neutros)` : ''}.${dna.avoidStyles.length ? ` Dejaría fuera ${list(dna.avoidStyles.map(lower))}: lo has descartado.` : ''}${declaredMiss ? ' Revisaría los estilos que marcaste en el capítulo 04.' : ''}`,
-      data_used: ['Valoración de conjuntos', dna.own && 'Tus referencias'].filter(Boolean) as string[],
-      missing: dna.rated < 8 ? ['Valorar más referencias (mínimo 8 para afinar)'] : [],
-      origin: dna.own ? 'Declarado por ti · referencias analizadas por la IA' : 'Declarado por ti', confidence: dna.rated < 8 ? 'baja' : v.a4 ? 'alta' : 'media',
+      body: `Tus valoraciones apuntan a ${list(inf.proposal.map((x) => `${lower(styleName(x.style))} ${x.weight} %`))}.${prefers.length ? ` Prefieres: ${list(prefers.slice(0, 4).map((x) => lower(x.label)))}.` : ''}${avoidPatterns.length ? ` Evitas: ${list(avoidPatterns.slice(0, 3).map((x) => lower(x.label)))}.` : ''}`,
+      why: `De ${inf.rated} valoraciones${inf.own ? ` (${inf.own} de tus referencias, analizadas por la IA)` : ''}${sp.declared.brands.length ? ` y tus marcas de referencia, que orientan pero no son estilos` : ''}. Solo cuento un patrón cuando aparece en al menos 2 conjuntos distintos.${inf.admiredStyles.length ? ` Admiras sin querer llevarlo: ${list(inf.admiredStyles.map((x) => lower(styleName(x))))}.` : ''} ${rule('dna')}${conflict ? ` Ojo: declaraste ${lower(styleName(declaredPrincipal!))} como principal, pero tus valoraciones apuntan a ${lower(styleName(inf.proposal[0].style))}.` : ''}${changes.length ? ` Desde la v${b.blueprints.at(-1)!.version}: ${changes.slice(0, 3).map((c) => `${lower(styleName(c.style))} ${c.from} % → ${c.to} %`).join('; ')}.` : ''}`,
+      action: `${prefers.length ? `Usaría estos patrones al elegir prendas: ${list(prefers.slice(0, 3).map((x) => lower(x.label)))}.` : 'Aún no veo patrones claros: sigue valorando conjuntos.'}${inf.rejectedStyles.length ? ` Dejaría fuera ${list(inf.rejectedStyles.slice(0, 3).map((x) => lower(styleName(x))))}: lo has descartado.` : ''}${idn.source !== 'declarada' ? ' Confirma o ajusta la propuesta en «Mi identidad».' : conflict ? ' Revisaría tu identidad: lo que eliges y lo que declaras no coinciden.' : ''}`,
+      data_used: ['Valoraciones de la galería', inf.own && 'Tus referencias', sp.declared.brands.length && 'Marcas de referencia'].filter(Boolean) as string[],
+      missing: inf.rated < 10 ? ['Valorar más conjuntos (10 o más para afinar)'] : [],
+      origin: inf.own ? 'Inferido de tus valoraciones · referencias analizadas por la IA' : 'Inferido de tus valoraciones',
+      confidence: inf.rated < 10 ? 'baja' : 'media',
+      details: snap,
     })
   } else {
     add({
       key: 'dna', section: 'direccion', title: 'Style DNA',
       body: 'Aún no has valorado suficientes conjuntos.',
-      why: `Necesito al menos ${MIN_RATED} valoraciones para ver un patrón; llevas ${dna.rated}. ${rule('dna')}`,
-      action: 'Valora los conjuntos del capítulo 04 con tu primera impresión: tardas dos minutos y dice mucho de tu gusto.',
-      data_used: dna.rated ? ['Valoración de conjuntos'] : [], missing: [`Valorar al menos ${MIN_RATED} conjuntos (capítulo 04)`],
-      origin: 'Declarado por ti', confidence: 'sin_datos',
+      why: `Necesito al menos ${MIN_RATED} valoraciones para ver un patrón; llevas ${inf.rated}. ${rule('dna')}`,
+      action: 'Explora el catálogo de estilos y valora conjuntos con tu primera impresión: tardas dos minutos y dice mucho de tu gusto.',
+      data_used: inf.rated ? ['Valoraciones de la galería'] : [], missing: [`Valorar al menos ${MIN_RATED} conjuntos (catálogo de estilos)`],
+      origin: 'Inferido de tus valoraciones', confidence: 'sin_datos', details: snap,
     })
   }
 

@@ -75,19 +75,19 @@ Resultado del motor para un perfil ficticio: 34 años, 180 cm, medidas y estilo 
 
 #### Dirección de estilo · Confianza alta
 
-Mezcla de casual sofisticado y minimalismo escandinavo, con tendencia a lo contemporáneo. Imagen limpia, segura y elegante.
+Elevated casual (50 %) como base, con Scandinavian minimalism (30 %) e influencia de Quiet luxury (20 %). Tendencia a lo contemporáneo y minimalista. Imagen limpia, segura y elegante.
 
-- **Por qué:** Lo deduzco de los estilos que marcaste (Casual sofisticado, Minimalismo escandinavo), tu posición en los ejes (contemporáneo 70/100, minimalista 25/100) y las palabras que elegiste. Un estilo personal suele ser una base (70–80 % del armario) con una influencia que aparece en una o dos piezas por conjunto.
-- **Qué haría un estilista:** Usaría uno de tus estilos como base y el otro como toque en una o dos piezas por conjunto; dime cuál pesa más corrigiendo esta conclusión. Cortes actuales y alguna textura técnica. Pocas prendas, lisas y sin logos. Y respetaría tu límite: nada de pantalón pitillo.
-- **Origen:** Declarado por ti · **Datos usados:** Estilos que te atraen, Ejes de estilo, Palabras de imagen, Lo que nunca te pondrías
+- **Por qué:** Es la identidad que construiste (versión 2). Tus ejes: contemporáneo 70/100, minimalista 25/100. Los porcentajes son orientativos: describen preferencias, no una clasificación objetiva. Un estilo personal suele ser una base (70–80 % del armario) con una influencia que aparece en una o dos piezas por conjunto.
+- **Qué haría un estilista:** Construiría la base del armario en elevated casual y usaría scandinavian minimalism y quiet luxury en una o dos piezas por conjunto, sin que ninguna mande sobre la base. Cortes actuales y alguna textura técnica. Pocas prendas, lisas y sin logos. Mantendría lo que te gusta: líneas limpias, pantalón recto y pantalón de sastrería. Y respetaría tus límites: nada de pantalón pitillo y pantalón slim.
+- **Origen:** Declarado por ti · **Datos usados:** Identidad declarada, Ejes de estilo, Palabras de imagen, Lo que nunca te pondrías, Elementos preferidos
 
-#### Style DNA · Confianza alta
+#### Style DNA · Confianza media
 
-Te atraen sobre todo casual sofisticado, clásico contemporáneo y old money: siluetas de ajuste regular y estructuradas, formalidad 3,3/5. Aspiras a old money.
+Tus valoraciones apuntan a elevated casual 40 %, quiet luxury 25 %, minimalismo contemporáneo 20 % y classic contemporary 15 %. Prefieres: pantalón recto, pantalón de sastrería, capas y superposiciones y camisa. Evitas: parte de arriba oversize.
 
-- **Por qué:** De 8 referencias que has valorado. Colores que más se repiten en lo que te gusta: blanco, azul marino, gris, marrón y azul claro. Te gusta pero no para ti: elegancia italiana. Lo que eliges al ver conjuntos dice más de tu gusto que lo que declaras; lo que admiras pero no te pondrías marca un límite, no un objetivo.
-- **Qué haría un estilista:** Usaría casual sofisticado como referencia de compra y me acercaría a old money con una sola pieza de transición (por ejemplo, una prenda de esa línea en tus neutros). Dejaría fuera streetwear contemporáneo y workwear: lo has descartado.
-- **Origen:** Declarado por ti · **Datos usados:** Valoración de conjuntos
+- **Por qué:** De 10 valoraciones y tus marcas de referencia, que orientan pero no son estilos. Solo cuento un patrón cuando aparece en al menos 2 conjuntos distintos. Admiras sin querer llevarlo: italian casual. Lo que eliges al ver conjuntos dice más de tu gusto que lo que declaras; lo que admiras pero no te pondrías marca un límite, no un objetivo.
+- **Qué haría un estilista:** Usaría estos patrones al elegir prendas: pantalón recto, pantalón de sastrería y capas y superposiciones. Dejaría fuera hip-hop inspired y streetwear contemporáneo: lo has descartado.
+- **Origen:** Inferido de tus valoraciones · **Datos usados:** Valoraciones de la galería, Marcas de referencia
 
 #### Objetivo visual · Confianza media
 
@@ -208,6 +208,8 @@ Reglas de comportamiento:
 - Prioriza el PERFIL VALIDADO y las CONCLUSIONES CONFIRMADAS O CORREGIDAS: son la verdad del usuario; si corrigio una conclusion, manda su correccion.
 - Los DATOS DECLARADOS SIN VALIDAR y las CONCLUSIONES PROVISIONALES son hipotesis: presentalos como tales y sugiere validarlos si afectan a tu respuesta.
 - Si una area esta en AREAS SIN DATOS y la necesitas, di que dato falta y por que importa.
+- La identidad estetica puede ser HIBRIDA (principal, secundarios, influencias con %): combina influencias secundarias cuando tenga sentido; los % son orientativos, no una restriccion.
+- Distingue lo DECLARADO por el usuario de lo INFERIDO de sus valoraciones y de tus recomendaciones; si chocan, dilo.
 - Al proponer outfits usa solo prendas del ARMARIO REAL. No inventes prendas ni medidas.
 - Si no tienes datos suficientes para afirmar algo, dilo y explica que falta.
 - Cada recomendacion lleva dos partes breves: «Por qué» (que dato o regla la justifica) y «Qué haría un estilista» (la accion concreta).

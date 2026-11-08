@@ -18,7 +18,6 @@ export const DIMS: [string, string, string][] = [
   ['clasico', 'Clásico', 'Contemporáneo'], ['minimalista', 'Minimalista', 'Expresivo'], ['estructurado', 'Estructurado', 'Relajado'],
   ['ajustado', 'Ajustado', 'Amplio'], ['formal', 'Formal', 'Casual'], ['discreto', 'Discreto', 'Llamativo'],
 ]
-export const STYLES = ['Clásico contemporáneo', 'Minimalismo escandinavo', 'Elegancia italiana', 'Workwear', 'Streetwear contemporáneo', 'Preppy / Ivy League', 'Casual sofisticado', 'Old money']
 export const PREFS: Record<string, string[]> = {
   camisetas: ['Regular', 'Relaxed', 'Ajustada'], camisas: ['Regular', 'Oversize', 'Entallada'], pantalones: ['Recto', 'Amplio', 'Tapered'],
   chaquetas: ['Estructurada', 'Desestructurada'], abrigos: ['Corto', 'Medio', 'Largo'], calzado: ['Minimalista', 'Clásico', 'Deportivo'],

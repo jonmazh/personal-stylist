@@ -9,8 +9,9 @@ import { GARMENT_FIELDS, GARMENT_LABEL } from '@/lib/profile/summary'
 import { COMMON_RULES, PHOTO_PROTOCOL } from '@/lib/photos/protocol'
 import { THRESHOLDS } from '@/lib/photos/quality'
 import { RULES } from '@/lib/diagnosis/rules'
-import { OUTFITS, RATINGS } from '@/lib/style/references'
-import { MIN_RATED } from '@/lib/style/dna'
+import { OUTFITS, RATINGS, outfitsOf } from '@/lib/style/references'
+import { MIN_EVIDENCE, MIN_RATED } from '@/lib/style/dna'
+import { BRAND_UNIVERSES, ELEMENTS, ELEMENT_GROUPS, STYLE_CATALOG, STYLE_GROUPS, elementLabel, styleName } from '@/lib/style/catalog'
 import { CONFIDENCE_LABEL, CONFIDENCE_RULE, SECTIONS, buildFindings, type Confidence } from '@/lib/profile/blueprint'
 import { PHOTO_ANALYSIS, STYLIST_PERSONA } from '@/lib/ai/prompts'
 import type { Bundle } from '@/lib/profile/data'
@@ -46,16 +47,8 @@ export function questionnaireDoc() {
       out.push(`| ${cell(q.label)} | ${KIND[q.kind]} | ${cell(answers(q))} | ${cell(q.extracts)} | ${storage(q)} | ${cell(q.feeds)} |`)
     if (a.id === 'a2') out.push('', 'Las fotografías de este capítulo siguen el [protocolo fotográfico](PROTOCOLO-FOTOGRAFICO.md).')
     if (a.id === 'a4') {
-      out.push('', '### Descubrimiento visual (Style DNA)', '',
-        `El usuario valora conjuntos de referencia con su primera impresión. Se guardan en \`style_reference_ratings\` (\`reference_id\`, \`rating\`). Con ${MIN_RATED} o más valoraciones aparece la conclusión «Style DNA» en el diagnóstico.`, '',
-        '| Valoración | `rating` | Peso en el Style DNA |', '|---|---|---|',
-        ...RATINGS.map((r) => `| ${r.label} | \`${r.id}\` | ${r.weight > 0 ? '+' : ''}${String(r.weight).replace('.', ',')} |`), '',
-        'Qué extrae: estilos que atraen (suma de pesos), estilos descartados (suma negativa), aspiraciones («Me gustaría conseguir algo parecido»), lo que admira pero no se pondría, ajuste, estructura y formalidad dominantes, y colores más repetidos en lo que le gusta. Alimenta: Style DNA; Dirección de estilo.', '',
-        'Las ilustraciones son originales y se generan desde código (`lib/style/references.ts`); se muestran intercaladas, no agrupadas por estilo, y el estilo solo se revela tras valorar.', '',
-        '| Conjunto | Estilo | Ajuste | Estructura | Formalidad | Colores |', '|---|---|---|---|---|---|',
-        ...OUTFITS.map((o) => `| ${o.desc} | ${o.style} | ${o.fit} | ${o.structure} | ${o.formality}/5 | ${o.colors.join(', ')} |`), '',
-        '### Referencias propias', '',
-        'Capturas que inspiran al usuario (Pinterest, Instagram…). Imagen en el bucket privado `references-private`; fila en `style_references` (`storage_path`, `source_url`, `note`, `rating`, `ai_tags`). La IA extrae estilo, ajuste, estructura, formalidad, colores, prendas clave y lo que hace funcionar el conjunto (`REFERENCE_ANALYSIS`), normalizados a las mismas etiquetas que el catálogo. Una referencia sin valorar cuenta como «Me gusta». Alimenta: Style DNA.')
+      out.push('', '### Identidad estética, catálogo de estilos y Style DNA', '',
+        `Además de los ejes y los límites, el capítulo 04 incluye el catálogo de ${STYLE_CATALOG.length} estilos con su galería valorable, la identidad híbrida declarada (influencias con rol y %, elementos que quiere o rechaza, marcas de referencia), referencias propias analizadas por la IA y el Style DNA inferido. Todo está documentado en [STYLE-DNA.md](STYLE-DNA.md).`, '')
     }
     if (a.id === 'a6') {
       out.push('', '### Prendas de referencia', '', 'Prendas que ya le quedan bien, medidas en plano (medidas de prenda, no corporales). Tabla `reference_garments` (`category`, `name`, `measurements` jsonb, `notes`).', '')
@@ -125,13 +118,15 @@ export const EXAMPLE: Bundle = {
   profile: { age: 34, height_cm: 180, city: 'Madrid', fit_pref: 'Regular' },
   measures: Object.fromEntries([['pecho', 104], ['hombros', 47], ['cintura', 84], ['cadera', 98], ['entrepierna', 86]].map(([k, v]) => [k, { value: v as number, at: '2026-11-01T10:00:00Z', source: 'manual' }])),
   photos: [], color: { hair_color: 'Castaño oscuro', skin_tone: 'Clara', vein_color: 'Verdosas', metal: 'Oro', temperature: 'Cálida', likes: ['Camel', 'Azul claro'], avoids: ['Mostaza'] },
-  style: { dims: { clasico: 70, minimalista: 25, estructurado: 50 }, styles: ['Casual sofisticado', 'Minimalismo escandinavo'], never_wear: 'Pantalón pitillo' },
+  style: { dims: { clasico: 70, minimalista: 25, estructurado: 50 }, never_wear: 'Pantalón pitillo', identity_version: 2,
+    influences: [{ style: 'elevated-casual', role: 'principal', weight: 50 }, { style: 'scandinavian-minimalism', role: 'secundario', weight: 30 }, { style: 'quiet-luxury', role: 'influencia', weight: 20 }],
+    liked_elements: ['clean-lines', 'leg-straight'], rejected_elements: ['leg-slim'], brand_refs: ['cos', 'massimo-dutti'] },
   life: { life: { trabajo: 50, ocio: 30, deporte: 10, citas: 10 }, work_formality: 'Smart casual', climate: 'Cuatro estaciones marcadas', laundry: 'Una o dos veces por semana', constraints: ['Camino mucho'] },
   fit: { prefs: { pantalones: 'Recto', camisas: 'Regular', chaquetas: 'Desestructurada' } },
   goals: { image_words: ['Limpia', 'Segura', 'Elegante'], answers: { g2: 'Una imagen cuidada sin parecer disfrazado' } },
   validated: { a1: true, a2: true, a3: false, a4: true, a5: true, a6: false, a7: false },
   observations: [], blueprints: [], garments: [], references: [], chatValidated: false,
-  refRatings: [['clasico-1', 'love'], ['sofisticado-1', 'love'], ['minimal-1', 'like'], ['sofisticado-2', 'like'], ['oldmoney-2', 'aspire'], ['street-1', 'never'], ['workwear-2', 'never'], ['italiana-2', 'admire']].map(([reference_id, rating]) => ({ reference_id, rating })),
+  refRatings: [['clasico-1', 'love'], ['sofisticado-1', 'love'], ['minimal-1', 'like'], ['sofisticado-2', 'represents'], ['oldmoney-2', 'like'], ['quiet-1', 'love'], ['mincont-1', 'like'], ['street-1', 'dislike'], ['hiphop-1', 'dislike'], ['italiana-2', 'admire']].map(([reference_id, rating]) => ({ reference_id, rating })),
   styleRefs: [],
 }
 
@@ -203,9 +198,92 @@ export function diagnosisDoc() {
   return out.join('\n')
 }
 
+export function styleDnaDoc() {
+  const out = [
+    '# Identidad estética: catálogo de estilos y Style DNA',
+    '',
+    '> Documento generado desde `lib/style/catalog.ts`, `lib/style/references.ts` y `lib/style/dna.ts` con `npm run docs`. No lo edites a mano.',
+    '',
+    '## Principios',
+    '',
+    '- **Un solo sistema.** Amplía el estudio de identidad estética del capítulo 04 y se versiona con el Style Blueprint: cada diagnóstico guarda una instantánea del Style DNA (`assessment_findings.details` de la conclusión «Style DNA») y la siguiente versión indica qué ha cambiado.',
+    '- **Identidad híbrida.** Estilo principal, secundarios e influencias con un % orientativo y editable. Los % describen preferencias, no una clasificación objetiva, y no limitan las recomendaciones.',
+    '- **Tres cosas que nunca se mezclan:** lo **declarado** por el usuario (identidad, elementos, marcas), lo **inferido** de sus valoraciones y referencias, y las **recomendaciones** del estilista (motor de diagnóstico).',
+    `- **Una valoración no es una preferencia.** Un patrón solo aparece si se repite en al menos ${MIN_EVIDENCE} conjuntos distintos; la propuesta de identidad necesita ${MIN_RATED} valoraciones.`,
+    '- **Admirar ≠ vestir.** «Me gusta, pero no me lo pondría» no suma a la identidad: se guarda como admiración.',
+    '- **Sin scraping ni imágenes de terceros.** Las ilustraciones son originales y se generan desde código; las referencias propias las aporta el usuario; las marcas se describen por los rasgos que se les suelen asociar.',
+    '- **Catálogo ampliable.** Es un fichero de datos con ids estables: añadir, editar o relacionar un estilo no obliga a tocar la interfaz ni la base de datos.',
+    '',
+    '## Escala de valoración',
+    '',
+    '| Valoración | `rating` | Peso | Cuenta como querer vestirlo |', '|---|---|---|---|',
+    ...RATINGS.map((r) => `| ${r.label} | \`${r.id}\` | ${r.weight > 0 ? '+' : ''}${String(r.weight).replace('.', ',')} | ${r.wear ? 'Sí' : 'No'} |`),
+    '',
+    '«Me gusta algún elemento, pero no el conjunto» permite marcar qué elementos concretos gustan; cada uno suma +1,5 a ese elemento, no al estilo. Una referencia propia sin valorar cuenta como «Me gusta». Las valoraciones antiguas se convierten: «Me gustaría conseguir algo parecido» → «Me representa»; «No me lo pondría» → «No me gusta».',
+    '',
+    '## Cómo se infiere el Style DNA',
+    '',
+    '1. Cada valoración (galería) o referencia propia analizada se convierte en una señal: estilo, ajuste, estructura, formalidad, colores y elementos visuales.',
+    '2. **Propuesta de identidad:** suma de pesos por estilo (las marcas de referencia añaden 1,5 × su afinidad con cada estilo) → hasta 4 estilos con % en múltiplos de 5; el primero es principal, los de 20 % o más secundarios y el resto influencias.',
+    `3. **Patrones:** un elemento es «prefiere» si aparece en ≥ ${MIN_EVIDENCE} conjuntos valorados positivamente y su puntuación es ≥ 2,5; «evita» si aparece en ≥ ${MIN_EVIDENCE} conjuntos rechazados con puntuación ≤ −2,5. Las marcas nunca crean un patrón por sí solas.`,
+    '4. **Admirados:** estilos marcados «Me gusta, pero no me lo pondría» que no suman a la identidad. **Descartados:** estilos con suma negativa.',
+    '5. **Identidad vigente:** la declarada si existe; si no, la propuesta (marcada como tal). Los elementos declarados mandan sobre los inferidos; un inferido que contradiga lo declarado se ignora.',
+    '',
+    '## Integración con el resto de la aplicación',
+    '',
+    'Punto de acceso único: `styleProfileOf(bundle)` devuelve `{ declared, inferred, identity, elements }`. Para puntuar una prenda, conjunto o producto: `styleFit(perfil, { style, elements })` → `{ score 0–100, match, reasons[] }`. Suma si representa una influencia (más cuanto más peso tiene), si es de un estilo relacionado o si tiene elementos que gustan; resta por elementos rechazados (más si son declarados) o estilos descartados. No es un filtro: combina influencias secundarias y explica por qué.',
+    '',
+    '| Módulo | Uso |', '|---|---|',
+    '| Armario digital (fase 2) | `styleFit` de cada prenda: a qué influencia representa y si encaja o choca. |',
+    '| Outfit Studio | Combinar la base (principal) con piezas de los secundarios e influencias. |',
+    '| Compras inteligentes y wishlist | `styleFit` del producto; marcas de referencia como pista de búsqueda, nunca como filtro. |',
+    '| Evolución personal | `evolution()` entre instantáneas de versiones del Blueprint. |',
+    '| Chat | Recibe la identidad declarada y lo inferido por separado. |',
+    '',
+    '## Datos',
+    '',
+    'Se amplían las tablas existentes, sin un sistema paralelo (migración `0005_style_identity.sql`):',
+    '',
+    '| Qué | Dónde |', '|---|---|',
+    '| Catálogo de estilos, subestilos relacionados, elementos y marcas | `lib/style/catalog.ts` (datos versionados con el código, ids estables) |',
+    '| Referencias visuales (galería) | `lib/style/references.ts` (ilustraciones generadas) |',
+    '| Valoraciones individuales | `style_reference_ratings` (`reference_id`, `rating`, `liked_elements`, `rated_at`) |',
+    '| Referencias propias y rasgos detectados por la IA | `style_references` (`ai_tags`: estilo, ajuste, estructura, formalidad, colores, elementos, prendas, patrón) |',
+    '| Influencias seleccionadas y su peso; preferencias confirmadas | `style_preferences` (`influences`, `liked_elements`, `rejected_elements`, `brand_refs`) |',
+    '| Fecha y versión de la identidad | `style_preferences` (`identity_version`, `identity_updated_at`) y la instantánea en cada versión del Blueprint |',
+    '',
+    '## Elementos visuales',
+    '',
+    ...ELEMENT_GROUPS.map((g) => `- **${g}:** ${ELEMENTS.filter((e) => e.group === g).map((e) => `${e.label} (\`${e.id}\`)`).join(', ')}`),
+    '',
+    '## Universos de marca',
+    '',
+    'Inspiración, no estilos. Cada marca orienta hacia rasgos visuales y estilos afines; el usuario puede marcarlas en «Mi identidad».',
+    '',
+    '| Marca | Rasgos que se le suelen asociar | Estilos afines |', '|---|---|---|',
+    ...BRAND_UNIVERSES.map((br) => `| ${br.name} | ${br.description} | ${Object.keys(br.styles).map(styleName).join(', ')} |`),
+    '',
+    '## Catálogo de estilos',
+    '',
+  ]
+  for (const g of STYLE_GROUPS) {
+    out.push(`### ${g.name}`, '')
+    for (const st of STYLE_CATALOG.filter((x) => x.group === g.id)) {
+      out.push(`#### ${st.name} (\`${st.id}\`)`, '', st.description, '',
+        `- **Características:** ${st.traits.join('; ')}`, `- **Siluetas habituales:** ${st.silhouettes.join('; ')}`, `- **Prendas características:** ${st.garments.join(', ')}`,
+        `- **Calzado y complementos:** ${st.footwear.join(', ')}`, `- **Paleta frecuente:** ${st.palette.join(', ')}`,
+        `- **Elementos visuales:** ${st.elements.map(elementLabel).join(', ')}`, `- **Relacionados:** ${st.related.map(styleName).join(', ')}`,
+        `- **Galería:** ${outfitsOf(st.id).map((o) => o.desc).join(' · ')}`, '')
+    }
+  }
+  out.push(`Total: ${STYLE_CATALOG.length} estilos y ${OUTFITS.length} conjuntos ilustrados.`, '')
+  return out.join('\n')
+}
+
 if (process.argv[1]?.endsWith('docs.ts')) {
+  writeFileSync('docs/STYLE-DNA.md', styleDnaDoc())
   writeFileSync('docs/MOTOR-DIAGNOSTICO.md', diagnosisDoc())
   writeFileSync('docs/CUESTIONARIO.md', questionnaireDoc())
   writeFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', protocolDoc())
-  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md y docs/MOTOR-DIAGNOSTICO.md actualizados')
+  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md y docs/STYLE-DNA.md actualizados')
 }

@@ -54,7 +54,7 @@ export function filled(area: string, b: Bundle): boolean {
   if (!a) return false
   if (area === 'a2' && b.photos.length) return true
   if (area === 'a6' && b.references.length) return true
-  if (area === 'a4' && (b.refRatings.length || b.styleRefs.length)) return true
+  if (area === 'a4' && (b.refRatings.length || b.styleRefs.length || (b.style?.influences ?? []).length)) return true
   return questionsOf(a.id).some((q) => answered(q, valueOf(q, b)))
 }
 export const status = (area: string, b: Bundle): [string, string] =>

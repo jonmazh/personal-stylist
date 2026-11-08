@@ -1,4 +1,4 @@
-import { CONSTRAINTS, DIMS, GOALS, LIFE, MEASURES, PREFS, STYLES, type AreaId } from './areas'
+import { CONSTRAINTS, DIMS, GOALS, LIFE, MEASURES, PREFS, type AreaId } from './areas'
 
 /**
  * Cuestionario de incorporacion: UNICA fuente de verdad.
@@ -69,7 +69,6 @@ export const QUESTIONS: Question[] = [
     id: `d_${k}`, area: 'a4', group: 'Dónde te sitúas', label: `${l} ↔ ${r}`, kind: 'slider', ends: [l, r],
     extracts: `Posición entre ${l.toLowerCase()} y ${r.toLowerCase()} (50 = sin preferencia).`, feeds: 'Identidad estética', store: { table: 'style_preferences', column: 'dims', key: k },
   })),
-  { id: 'styles', area: 'a4', group: 'Estilos que te atraen', label: 'Estilos que te atraen', kind: 'multi', options: STYLES, extracts: 'Referencias de estilo; pueden mezclarse.', feeds: 'Identidad estética', store: { table: 'style_preferences', column: 'styles' } },
   { id: 'never_wear', area: 'a4', group: 'Lo que no eres', label: 'Algo que nunca te pondrías', kind: 'text', help: 'Por ejemplo: pantalón pitillo, estampados grandes, americana', extracts: 'Límites del estilo: tan informativos como los gustos.', feeds: 'Identidad estética; Cortes con precaución', store: { table: 'style_preferences', column: 'never_wear' } },
 
   // ── a5 · Estilo de vida ────────────────────────────────────────

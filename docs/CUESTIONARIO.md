@@ -71,47 +71,12 @@ _Qué quieres transmitir. No hace falta elegir una sola etiqueta: tu estilo pued
 | Ajustado ↔ Amplio | Deslizador 0–100 | Ajustado (0) ↔ Amplio (100); 50 = sin preferencia | Posición entre ajustado y amplio (50 = sin preferencia). | `style_preferences.dims.ajustado` (jsonb) | Identidad estética |
 | Formal ↔ Casual | Deslizador 0–100 | Formal (0) ↔ Casual (100); 50 = sin preferencia | Posición entre formal y casual (50 = sin preferencia). | `style_preferences.dims.formal` (jsonb) | Identidad estética |
 | Discreto ↔ Llamativo | Deslizador 0–100 | Discreto (0) ↔ Llamativo (100); 50 = sin preferencia | Posición entre discreto y llamativo (50 = sin preferencia). | `style_preferences.dims.discreto` (jsonb) | Identidad estética |
-| Estilos que te atraen | Varias opciones | Clásico contemporáneo · Minimalismo escandinavo · Elegancia italiana · Workwear · Streetwear contemporáneo · Preppy / Ivy League · Casual sofisticado · Old money | Referencias de estilo; pueden mezclarse. | `style_preferences.styles` | Identidad estética |
 | Algo que nunca te pondrías | Texto | Libre | Límites del estilo: tan informativos como los gustos. | `style_preferences.never_wear` | Identidad estética; Cortes con precaución |
 
-### Descubrimiento visual (Style DNA)
+### Identidad estética, catálogo de estilos y Style DNA
 
-El usuario valora conjuntos de referencia con su primera impresión. Se guardan en `style_reference_ratings` (`reference_id`, `rating`). Con 4 o más valoraciones aparece la conclusión «Style DNA» en el diagnóstico.
+Además de los ejes y los límites, el capítulo 04 incluye el catálogo de 30 estilos con su galería valorable, la identidad híbrida declarada (influencias con rol y %, elementos que quiere o rechaza, marcas de referencia), referencias propias analizadas por la IA y el Style DNA inferido. Todo está documentado en [STYLE-DNA.md](STYLE-DNA.md).
 
-| Valoración | `rating` | Peso en el Style DNA |
-|---|---|---|
-| Me encanta | `love` | +2 |
-| Me gusta | `like` | +1 |
-| Me gustaría conseguir algo parecido | `aspire` | +1,5 |
-| Me gusta, pero no para mí | `admire` | 0 |
-| No me lo pondría | `never` | -1,5 |
-
-Qué extrae: estilos que atraen (suma de pesos), estilos descartados (suma negativa), aspiraciones («Me gustaría conseguir algo parecido»), lo que admira pero no se pondría, ajuste, estructura y formalidad dominantes, y colores más repetidos en lo que le gusta. Alimenta: Style DNA; Dirección de estilo.
-
-Las ilustraciones son originales y se generan desde código (`lib/style/references.ts`); se muestran intercaladas, no agrupadas por estilo, y el estilo solo se revela tras valorar.
-
-| Conjunto | Estilo | Ajuste | Estructura | Formalidad | Colores |
-|---|---|---|---|---|---|
-| Americana azul marino, camisa blanca, pantalón de vestir gris y mocasines marrones | Clásico contemporáneo | regular | estructurado | 4/5 | Azul marino, Blanco, Gris, Marrón |
-| Abrigo camel, jersey gris, pantalón de vestir azul marino y zapatos negros | Clásico contemporáneo | regular | estructurado | 4/5 | Camel, Gris, Azul marino, Negro |
-| Camiseta blanca, sobrecamisa gris, chino crudo y zapatillas blancas | Minimalismo escandinavo | regular | relajado | 2/5 | Blanco, Gris, Beige |
-| Abrigo largo antracita, jersey negro, pantalón negro recto y botas negras | Minimalismo escandinavo | regular | estructurado | 3/5 | Negro, Gris |
-| Americana beige desestructurada, camisa azul claro, pantalón blanco y mocasines marrones | Elegancia italiana | regular | relajado | 4/5 | Beige, Azul claro, Blanco, Marrón |
-| Polo de punto oliva, pantalón amplio crudo con pinzas y mocasines marrones | Elegancia italiana | amplio | relajado | 3/5 | Oliva, Beige, Marrón |
-| Chaqueta de trabajo azul marino, camiseta cruda, vaquero oscuro recto y botas marrones | Workwear | regular | relajado | 2/5 | Azul marino, Beige, Marrón |
-| Sobrecamisa oliva, camiseta blanca, pantalón cargo caqui y botas marrones | Workwear | amplio | relajado | 1/5 | Oliva, Blanco, Beige, Marrón |
-| Sudadera negra amplia, pantalón cargo gris amplio y zapatillas de running blancas | Streetwear contemporáneo | amplio | relajado | 1/5 | Negro, Gris, Blanco |
-| Bomber verde bosque, camiseta blanca, vaquero negro amplio y zapatillas blancas | Streetwear contemporáneo | amplio | relajado | 1/5 | Verde bosque, Blanco, Negro |
-| Jersey azul marino sobre camisa oxford blanca, chino beige y mocasines marrones | Preppy / Ivy League | regular | estructurado | 3/5 | Azul marino, Blanco, Beige, Marrón |
-| Polo burdeos, chino blanco ajustado y zapatillas blancas | Preppy / Ivy League | ajustado | estructurado | 2/5 | Burdeos, Blanco |
-| Sobrecamisa azul marino, camiseta blanca, vaquero oscuro ajustado y zapatillas blancas | Casual sofisticado | ajustado | relajado | 2/5 | Azul marino, Blanco |
-| Jersey camel sobre camisa blanca, pantalón antracita y zapatos marrones | Casual sofisticado | regular | estructurado | 3/5 | Camel, Blanco, Gris, Marrón |
-| Jersey crudo sobre camisa blanca, pantalón amplio azul marino y mocasines marrones | Old money | amplio | relajado | 4/5 | Beige, Blanco, Azul marino, Marrón |
-| Americana azul marino, camisa azul claro, pantalón de franela gris y mocasines negros | Old money | regular | estructurado | 5/5 | Azul marino, Azul claro, Gris, Negro |
-
-### Referencias propias
-
-Capturas que inspiran al usuario (Pinterest, Instagram…). Imagen en el bucket privado `references-private`; fila en `style_references` (`storage_path`, `source_url`, `note`, `rating`, `ai_tags`). La IA extrae estilo, ajuste, estructura, formalidad, colores, prendas clave y lo que hace funcionar el conjunto (`REFERENCE_ANALYSIS`), normalizados a las mismas etiquetas que el catálogo. Una referencia sin valorar cuenta como «Me gusta». Alimenta: Style DNA.
 
 ## 05 · Estilo de vida
 

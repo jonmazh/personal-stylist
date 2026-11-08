@@ -1,6 +1,6 @@
 // Servidor de IA simulado (compatible OpenAI) para las pruebas e2e. Guarda la ultima peticion en el fichero indicado.
 // - Chat: responde un texto fijo.
-// - Analisis de referencias: etiqueta cada imagen como Workwear (incluye un color fuera de la paleta para probar el filtro).
+// - Analisis de referencias: etiqueta cada imagen como Workwear contemporáneo (incluye un color y un elemento fuera del vocabulario para probar el filtro).
 // - Analisis de fotos (peticion con imagenes): marca "lateral" como no utilizable y devuelve una observacion por foto.
 import http from 'node:http'; import fs from 'node:fs'
 const out = process.argv[2]
@@ -15,7 +15,7 @@ http.createServer((req, res) => {
     const refs = Array.isArray(user?.content) && user.content[0].text.match(/Referencias en este orden: (\d+)/)
     if (refs) {
       content = JSON.stringify({ references: Array.from({ length: Number(refs[1]) }, (_, i) => ({
-        index: i + 1, style: 'Workwear', fit: 'amplio', structure: 'relajado', formality: 2, colors: ['Oliva', 'Fucsia'], garments: ['sobrecamisa'], patterns: 'Capas de algodón grueso y botas',
+        index: i + 1, style: 'Workwear contemporáneo', fit: 'amplio', structure: 'relajado', formality: 2, colors: ['Oliva', 'Fucsia'], elements: ['overshirt', 'cargo', 'boot', 'inventado'], garments: ['sobrecamisa'], patterns: 'Capas de algodón grueso y botas',
       })) })
     } else if (Array.isArray(user?.content)) {
       const kinds = (user.content[0].text.match(/Fotos en este orden: ([^.]+)\./)?.[1] ?? '').split(', ')

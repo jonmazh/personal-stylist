@@ -9,14 +9,15 @@ import { PhotoSlot } from '../photo-slot'
 import { AnalyzeButton } from '../analyze-button'
 import { COMMON_RULES, PHOTO_PROTOCOL } from '@/lib/photos/protocol'
 import { GARMENT_FIELDS, GARMENT_LABEL, describeGarment } from '@/lib/profile/summary'
-import { OUTFITS, RATINGS, outfitSvg } from '@/lib/style/references'
-import { MIN_RATED, dnaOf } from '@/lib/style/dna'
+import { RATINGS } from '@/lib/style/references'
+import { styleProfileOf } from '@/lib/style/dna'
+import { STYLE_CATALOG, elementLabel, styleName } from '@/lib/style/catalog'
+import { quickDiscovery, raterInitial, raterItems, raterRatings } from '@/lib/style/view'
 import { ReferenceRater } from '@/components/reference-rater'
 import { StyleRefUpload } from '@/components/style-ref-upload'
 import { AnalyzeRefsButton } from '@/components/analyze-refs-button'
 
-// Orden intercalado (no agrupado por estilo) para no sesgar la primera impresion.
-const DISCOVERY = [...OUTFITS.filter((_, i) => i % 2 === 0), ...OUTFITS.filter((_, i) => i % 2 === 1)]
+
 
 export default async function ChapterPage({ params, searchParams }: {
   params: Promise<{ area: string }>; searchParams: Promise<{ saved?: string; validated?: string; unvalidated?: string; warn?: string; error?: string; retention?: string; deleted?: string }>
@@ -43,7 +44,8 @@ export default async function ChapterPage({ params, searchParams }: {
     const { data } = await user.supabase.storage.from('references-private').createSignedUrls(b.styleRefs.map((r) => r.storage_path), 300)
     refUrl = new Map((data ?? []).map((x) => [x.path, x.signedUrl]))
   }
-  const dna = dnaOf(b)
+  const sp = styleProfileOf(b)
+  const quick = quickDiscovery(new Set(b.refRatings.map((r) => r.reference_id)))
 
   return (
     <main>
@@ -145,17 +147,25 @@ export default async function ChapterPage({ params, searchParams }: {
       </>)}
 
       {a.id === 'a4' && (<>
-        <h2 id="descubrimiento">Descubrimiento visual</h2>
-        <p className="m">Valora cada conjunto con tu primera impresión, sin pensarlo mucho. No hay respuestas correctas: así construyo tu Style DNA. Si pulsas otra vez la misma opción, la quitas.</p>
-        {dna.rated >= MIN_RATED && dna.topStyles.length > 0 && (
-          <p className="note">Tu Style DNA hasta ahora: te atraen <b>{dna.topStyles.join(', ').toLowerCase()}</b>
-            {dna.aspire.length ? <>; aspiras a <b>{dna.aspire.join(', ').toLowerCase()}</b></> : null}
-            {dna.avoidStyles.length ? <>; descartas {dna.avoidStyles.join(', ').toLowerCase()}</> : null}. Lo verás razonado en tu diagnóstico.</p>
+        <h2 id="identidad">Tu identidad estética</h2>
+        {sp.identity.source === 'ninguna' ? (
+          <p className="m">Aún no la tienes. Explora el catálogo de {STYLE_CATALOG.length} estilos, valora conjuntos o constrúyela directamente combinando varios estilos.</p>
+        ) : (
+          <div className="note">
+            <p style={{ margin: 0 }}>{sp.identity.source === 'propuesta' ? 'Propuesta a partir de tus valoraciones (aún sin confirmar): ' : `Declarada por ti (versión ${sp.declared.version}): `}
+              <b>{sp.identity.influences.map((i) => `${styleName(i.style)} ${i.weight} %`).join(' · ')}</b></p>
+            {sp.elements.liked.length > 0 && <p className="m small" style={{ margin: '6px 0 0' }}>Te gusta: {sp.elements.liked.slice(0, 6).map((e) => elementLabel(e.element).toLowerCase() + (e.source === 'inferido' ? ' (inferido)' : '')).join(', ')}.</p>}
+            {sp.elements.rejected.length > 0 && <p className="m small" style={{ margin: '4px 0 0' }}>Rechazas: {sp.elements.rejected.slice(0, 6).map((e) => elementLabel(e.element).toLowerCase() + (e.source === 'inferido' ? ' (inferido)' : '')).join(', ')}.</p>}
+          </div>
         )}
+        <div className="btns"><a className="btn primary" href="/estilos">Explorar el catálogo de estilos</a><a className="btn" href="/estilos/identidad">{sp.declared.influences.length ? 'Editar mi identidad' : 'Construir mi identidad'}</a></div>
+
+        <h2 id="descubrimiento">Descubrimiento rápido</h2>
+        <p className="m">Un conjunto de cada estilo, mezclados. Valóralos con tu primera impresión: no hay respuestas correctas. Si pulsas otra vez la misma opción, la quitas.</p>
         <ReferenceRater
-          items={DISCOVERY.map((o) => ({ id: o.id, svg: outfitSvg(o), desc: o.desc, style: o.style }))}
-          ratings={RATINGS.map((r) => ({ id: r.id, label: r.label }))}
-          initial={Object.fromEntries(b.refRatings.map((r) => [r.reference_id, r.rating]))}
+          items={raterItems(quick)}
+          ratings={raterRatings()}
+          initial={raterInitial(b.refRatings.filter((r) => quick.some((o) => o.id === r.reference_id)))}
         />
 
         <h2 id="referencias">Tus referencias</h2>

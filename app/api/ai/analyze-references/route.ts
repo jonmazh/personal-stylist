@@ -4,7 +4,7 @@ import { configError, MODEL_VISION, providerId } from '@/lib/ai/client'
 import { effectiveModel, generateStructured } from '@/lib/ai/structured'
 import { ReferenceTagsSchema } from '@/lib/ai/schemas'
 import { REFERENCE_ANALYSIS } from '@/lib/ai/prompts'
-import { STYLES } from '@/lib/profile/areas'
+import { ELEMENT_IDS, styleIdFromName } from '@/lib/style/catalog'
 import { COLOR_NAMES } from '@/lib/profile/questionnaire'
 
 const MAX = 5 // varios proveedores gratuitos aceptan pocas imagenes por peticion
@@ -39,9 +39,10 @@ export async function POST() {
       if (!img) continue
       // Se normaliza a las etiquetas conocidas: nada fuera del catalogo entra en el Style DNA.
       const tags = {
-        style: (STYLES as readonly string[]).includes(t.style) ? t.style : null,
+        style: styleIdFromName(t.style) ?? null,
         fit: t.fit, structure: t.structure, formality: t.formality,
         colors: t.colors.filter((c) => (COLOR_NAMES as readonly string[]).includes(c)),
+        elements: t.elements.filter((e) => ELEMENT_IDS.includes(e)),
         garments: t.garments, patterns: t.patterns,
       }
       await supabase.from('style_references').update({ ai_tags: tags }).eq('id', img.id)

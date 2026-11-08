@@ -28,6 +28,7 @@ export const ReferenceTagsSchema = z.object({
     structure: z.enum(['estructurado', 'relajado']),
     formality: z.number().int().min(1).max(5),
     colors: z.array(z.string()).max(6),
+    elements: z.array(z.string()).max(12).default([]),
     garments: z.array(z.string()).max(6),
     patterns: z.string(),
   })).max(8),
