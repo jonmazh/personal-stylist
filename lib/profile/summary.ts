@@ -2,6 +2,7 @@ import type { AreaId } from './areas'
 import type { Bundle } from './data'
 import { answered, questionsOf, valueOf } from './questionnaire'
 import { styleProfileOf } from '@/lib/style/dna'
+import { temperatureLabel, temperatureState } from '@/lib/color/temperature'
 import { brandById, elementLabel, styleName } from '@/lib/style/catalog'
 
 export const GARMENT_FIELDS: Record<string, [string, string][]> = {
@@ -25,6 +26,7 @@ export function describeArea(id: AreaId, b: Bundle): string[] {
   const out: string[] = []
   const percents: string[] = []
   for (const q of questionsOf(id)) {
+    if (q.external) continue
     const v = valueOf(q, b)
     if (!answered(q, v)) continue
     switch (q.kind) {
@@ -48,6 +50,12 @@ export function describeArea(id: AreaId, b: Bundle): string[] {
   if (id === 'a2' && b.photos.length) {
     const desc = b.photos.map((p) => `${p.kind}${p.quality?.ai?.usable === false ? ' (no utilizable según la IA)' : ''}`)
     out.push(`Fotos subidas: ${desc.join(', ')}. Las observaciones de la IA van en las conclusiones.`)
+  }
+  if (id === 'a3') {
+    const t = temperatureState(b.color, b.colorAnalyses)
+    if (t.fromUser) out.unshift(`Temperatura cromática: ${temperatureLabel(t.value, t.secondary)} (${t.status === 'validado' ? 'validada por el usuario' : 'declarada, sin validar'}${t.source === 'ia' ? '; estimada por la IA y confirmada' : ''})`)
+    else if (t.value) out.unshift(`Temperatura cromática ESTIMADA POR LA IA (sin confirmar): ${temperatureLabel(t.value, t.secondary)}, confianza ${t.confidence}`)
+    if (t.aiDiffers) out.push(`La última estimación de la IA (${temperatureLabel(t.latest!.temperature, t.latest!.secondary_tendency)}) difiere del dato validado: manda el del usuario`)
   }
   if (id === 'a4') {
     const p = styleProfileOf(b)

@@ -224,3 +224,12 @@ a.chip:hover { border-color: var(--ink); }
 .brands label { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; color: var(--ink); font-size: 15px; margin: 0; padding: 10px 0; border-top: 1px solid var(--line); }
 .brands label span { grid-column: 2; font-size: 13px; color: var(--mut); }
 p.state { white-space: normal; }
+.tempcard { border: 1px solid var(--line); background: var(--paper); padding: 4px 22px 18px; margin: 18px 0 36px; }
+.tempcard h2 { margin-top: 18px; }
+.tempresult { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 16px 0; margin: 14px 0; font-size: 15px; }
+.tempresult ul { margin: 4px 0 10px; padding-left: 18px; }
+.tempresult .label, .tempask .label { display: block; font: 500 11px/1.4 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--acc); margin-top: 10px; }
+.tempvalue { font: 400 clamp(24px, 4vw, 30px)/1.2 var(--serif); margin: 8px 0; }
+.tempask .opts .btn { border-radius: 0; }
+.tempphoto { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 18px; align-items: start; margin-top: 12px; }
+@media (max-width: 520px) { .tempphoto { grid-template-columns: 1fr; } .tempcard { padding: 4px 14px 16px; } }

@@ -23,7 +23,7 @@ const toJpeg = (img: ImageBitmap) => new Promise<Blob>((res, rej) =>
 function check(img: ImageBitmap, vertical: boolean, colorCritical: boolean): Quality {
   const { c, ctx } = draw(img, 256)
   const { data } = ctx.getImageData(0, 0, c.width, c.height)
-  return assessPhoto({ width: c.width, height: c.height, data }, { width: img.width, height: img.height }, { vertical, colorCritical })
+  return assessPhoto({ width: c.width, height: c.height, data }, { width: img.width, height: img.height }, { vertical, colorCritical, face: colorCritical })
 }
 
 /** Silueta guia del hueco vacio. */

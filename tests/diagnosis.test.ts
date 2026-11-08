@@ -66,7 +66,7 @@ test('colorimetria: deduce el subtono de las pistas si no se declara (hipotesis)
   assert.equal(c.temp, 'Fría'); assert.equal(c.declared, undefined); assert.equal(c.contrast, 'Alto')
   const f = find(buildFindings(b), 'colorimetria')
   assert.equal(f.confidence, 'baja'); assert.equal(f.origin, 'Deducido de tus respuestas')
-  assert.match(f.body, /Subtono frío, contraste alto/); assert.match(f.action, /foto de rostro/)
+  assert.match(f.body, /Subtono frío, contraste alto/); assert.match(f.action, /tarjeta «Temperatura cromática»/)
 })
 
 test('colorimetria: avisa si lo declarado contradice las pistas', () => {

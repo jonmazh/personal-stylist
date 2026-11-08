@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/server'
 import { loadBundle, status } from '@/lib/profile/data'
 import { AREAS, PHOTO_KINDS, areaBySlug } from '@/lib/profile/areas'
-import { addReferenceGarment, deleteAllPhotos, deletePhoto, deleteReferenceGarment, deleteStyleReference, rateStyleReference, saveArea, setPhotoConsent, setPhotoRetention, toggleValidated } from '../actions'
+import { addReferenceGarment, deleteAllPhotos, deletePhoto, deleteReferenceGarment, deleteStyleReference, rateStyleReference, saveArea, setPhotoConsent, setPhotoRetention, setTemperature, toggleValidated } from '../actions'
 import { AreaBody } from '../fields'
 import { PhotoSlot } from '../photo-slot'
 import { AnalyzeButton } from '../analyze-button'
@@ -16,11 +16,13 @@ import { quickDiscovery, raterInitial, raterItems, raterRatings } from '@/lib/st
 import { ReferenceRater } from '@/components/reference-rater'
 import { StyleRefUpload } from '@/components/style-ref-upload'
 import { AnalyzeRefsButton } from '@/components/analyze-refs-button'
+import { AnalyzeTemperatureButton } from '@/components/analyze-temperature-button'
+import { temperatureLabel, temperatureState } from '@/lib/color/temperature'
 
 
 
 export default async function ChapterPage({ params, searchParams }: {
-  params: Promise<{ area: string }>; searchParams: Promise<{ saved?: string; validated?: string; unvalidated?: string; warn?: string; error?: string; retention?: string; deleted?: string }>
+  params: Promise<{ area: string }>; searchParams: Promise<{ saved?: string; validated?: string; unvalidated?: string; warn?: string; error?: string; retention?: string; deleted?: string; temp?: string }>
 }) {
   const { area: slug } = await params
   const flags = await searchParams
@@ -34,7 +36,7 @@ export default async function ChapterPage({ params, searchParams }: {
   const isValidated = b.validated[a.id]
 
   let urlOf = new Map<string | null, string | null>()
-  if (a.id === 'a2' && b.photos.length) {
+  if ((a.id === 'a2' || a.id === 'a3') && b.photos.length) {
     const { data } = await user.supabase.storage.from('profile-private').createSignedUrls(b.photos.map((p) => p.storage_path), 300)
     urlOf = new Map((data ?? []).map((s) => [s.path, s.signedUrl]))
   }
@@ -61,6 +63,93 @@ export default async function ChapterPage({ params, searchParams }: {
       {flags.error && <p className="note warn" role="alert">{flags.error}</p>}
       {flags.retention && <p className="note" role="status">{flags.retention === 'delete' ? 'Hecho: borraré tus fotos después de cada análisis y conservaré solo los resultados.' : 'Hecho: conservaré tus fotos hasta que las borres.'}</p>}
       {flags.deleted && <p className="note" role="status">He borrado todas tus fotos. Los resultados de análisis anteriores se conservan.</p>}
+
+      {a.id === 'a3' && (() => {
+        const ts = temperatureState(b.color, b.colorAnalyses)
+        const latest = ts.latest
+        const face = b.photos.find((p) => p.kind === 'rostro')
+        const consent = !!b.profile?.photo_consent_at
+        const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '')
+        const STATUS = { pendiente: ['Pendiente', 'bad'], recopilado: [ts.fromUser ? 'Declarada, sin validar' : 'Estimada por la IA, sin confirmar', 'warn'], validado: ['Validada por ti', 'ok'] } as const
+        return (
+          <section id="temperatura" className="tempcard">
+            <h2>Temperatura cromática</h2>
+            <p className="m">El subtono de tu piel —cálido, frío o neutro—, no su temperatura física. Es una de las cuatro dimensiones del estudio: no cambia intensidad, profundidad ni contraste.</p>
+            <p className={`state ${STATUS[ts.status][1]}`}>{STATUS[ts.status][0]}{ts.status === 'validado' ? ` · ${temperatureLabel(ts.value, ts.secondary)} · ${ts.source === 'ia' ? 'estimación de la IA confirmada' : latest ? 'corregida por ti' : 'elegida por ti'} el ${fmt(ts.validatedAt)}` : ''}</p>
+            {flags.temp === 'confirmed' && <p className="note" role="status">Confirmado: tu temperatura queda validada y alimenta tu paleta.</p>}
+            {flags.temp === 'corrected' && <p className="note" role="status">Corregido: guardo tu elección como dato validado. La IA no la cambiará sin que vuelvas a confirmarlo.</p>}
+            {flags.temp === 'set' && <p className="note" role="status">Guardado como dato validado por ti.</p>}
+
+            {latest && (
+              <div className="tempresult">
+                <p className="eyebrow" style={{ margin: 0 }}>Tu temperatura cromática estimada · {fmt(latest.created_at)}</p>
+                {latest.image_quality?.suitable === false ? (<>
+                  <p className="tempvalue">No he podido estimarla con esta foto</p>
+                  <ul>{(latest.image_quality?.issues ?? []).map((x: string) => <li key={x}>{x}</li>)}{(latest.client_quality?.issues ?? []).map((x: { message: string }) => <li key={x.message}>{x.message}</li>)}</ul>
+                  <p className="m">Sube otra foto siguiendo las instrucciones: no saco conclusiones de una foto inadecuada.</p>
+                </>) : (<>
+                  <p className="tempvalue">Resultado: {temperatureLabel(latest.temperature, latest.secondary_tendency)}</p>
+                  <p><b>Confianza: {latest.confidence}</b>{latest.confidence_capped ? <span className="m small"> · rebajada por la calidad de la foto</span> : null}</p>
+                  {latest.explanation && <p><span className="label">Explicación</span>«{latest.explanation}»</p>}
+                  {latest.observations?.length > 0 && <><span className="label">Lo que se aprecia</span><ul>{latest.observations.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+                </>)}
+                {latest.limitations?.length > 0 && <><span className="label">Limitaciones</span><ul className="m">{latest.limitations.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+                {ts.aiDiffers && <p className="warn small">Esta estimación es distinta de tu dato validado ({temperatureLabel(ts.value, ts.secondary)}). No la aplico salvo que la confirmes.</p>}
+              </div>
+            )}
+
+            <form action={setTemperature} className="tempask">
+              {latest?.id && <input type="hidden" name="analysis_id" value={latest.id} />}
+              <p><b>{latest?.temperature ? '¿Consideras que este resultado representa correctamente tu temperatura cromática?' : '¿Cuál es tu temperatura cromática?'}</b></p>
+              <div className="opts" role="group" aria-label="Tu temperatura cromática">
+                {(['Cálida', 'Neutra', 'Fría'] as const).map((t) => (
+                  <button key={t} className={`btn${ts.fromUser && ts.value === t ? ' primary' : ''}`} name="value" value={t} aria-pressed={ts.fromUser && ts.value === t}>
+                    {t}{latest?.temperature === t && !(ts.fromUser && ts.value === t) ? ' · lo que estimó la IA' : ''}
+                  </button>
+                ))}
+              </div>
+              <p className="m small">Elegir la misma que la IA la confirma; elegir otra la corrige. Tu elección queda validada y tiene prioridad.</p>
+            </form>
+
+            <details className="howto" open={!latest || latest.image_quality?.suitable === false}>
+              <summary>Detectar mi temperatura cromática mediante una fotografía · cómo hacer la foto</summary>
+              <ul>
+                <li>Rostro visible y centrado, sin gafas ni gorra.</li>
+                <li>Luz natural, uniforme y preferiblemente indirecta (de frente a una ventana).</li>
+                <li>Sin luces amarillas, anaranjadas o de colores, ni flash.</li>
+                <li>Sin filtros ni retoques, y sin maquillaje que cambie el color de la piel.</li>
+                <li>Sin sombras fuertes; ni sobreexpuesta ni demasiado oscura.</li>
+                <li>Si puedes, un folio blanco bajo la barbilla: sirve de referencia de color.</li>
+              </ul>
+            </details>
+            {!consent ? (
+              <form action={setPhotoConsent} className="note">
+                <input type="hidden" name="back" value="color" />
+                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'var(--ink)', fontSize: 15 }}>
+                  <input type="checkbox" name="consent" required />
+                  <span>Entiendo que la foto se guarda en privado, que solo se envía al proveedor de IA configurado cuando pido el análisis (los planes gratuitos pueden usarla para entrenar; con Ollama no sale de mi equipo) y que puedo borrarla cuando quiera.</span>
+                </label>
+                <div className="btns" style={{ marginTop: 12 }}><button className="btn">Aceptar y continuar</button></div>
+              </form>
+            ) : (
+              <div className="tempphoto" id="foto-rostro">
+                <div className="photo" style={{ maxWidth: 200 }}>
+                  {face ? <div className="photo-frame"><img src={urlOf.get(face.storage_path) ?? ''} alt="Foto de rostro" /></div>
+                    : <PhotoSlot uid={user.id} kind="rostro" help="Rostro con luz natural" vertical={false} consent />}
+                  {face && <div className="photo-cap"><span>rostro</span><form action={deletePhoto}><input type="hidden" name="id" value={face.id} /><button className="btn quiet small">Quitar foto</button></form></div>}
+                  {face && <div className="qc">{(face.quality?.client?.issues ?? []).length ? <span className="warn">Con avisos: {face.quality.client.issues.map((i: { message: string }) => i.message).join(' ')}</span> : <span className="ok">Calidad correcta</span>}</div>}
+                </div>
+                <div>
+                  <AnalyzeTemperatureButton disabled={!face} again={!!latest} />
+                  {!face && latest && <p className="m small">Para un nuevo análisis, vuelve a subir una fotografía.</p>}
+                  {face && latest && <p className="m small">¿Prefieres otra foto? Pulsa «Quitar foto» y sube una nueva.</p>}
+                  <p className="m small">Solo envío esta foto al proveedor de IA configurado. Si en el capítulo 02 elegiste borrar las fotos tras el análisis, se eliminará y conservaré solo el resultado.</p>
+                </div>
+              </div>
+            )}
+          </section>
+        )
+      })()}
 
       <form action={saveArea}>
         <input type="hidden" name="area" value={a.id} />

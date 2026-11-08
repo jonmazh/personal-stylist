@@ -26,7 +26,7 @@ test('lo no validado va aparte, como provisional', () => {
   const val = part(text, 'PERFIL VALIDADO POR EL USUARIO')
   const prov = part(text, 'DATOS DECLARADOS SIN VALIDAR')
   assert.doesNotMatch(val, /Temperatura/)
-  assert.match(prov, /Temperatura: Cálida/)
+  assert.match(prov, /Temperatura cromática: Cálida \(declarada, sin validar\)/)
   assert.match(prov, /Clásico ↔ Contemporáneo: 70\/100 \(tira a contemporáneo\)/)
   assert.doesNotMatch(prov, /Minimalista ↔ Expresivo: 50/) // estructurado=50 es neutro y no se envia
   assert.match(prov, /¿Qué imagen quieres proyectar\? → Una imagen limpia y profesional/)

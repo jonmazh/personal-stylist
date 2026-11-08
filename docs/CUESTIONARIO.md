@@ -52,7 +52,7 @@ _Cómo se comporta el color contigo. Es una hipótesis que se valida con luz nat
 | Las venas de tu muñeca, con luz natural, parecen… | Una opción | Azuladas o violetas · Verdosas · Una mezcla / no lo sé | Indicio de subtono frío (azuladas) o cálido (verdosas). | `color_profiles.vein_color` | Colorimetría |
 | Con el sol… | Una opción | Me quemo y apenas me bronceo · Me quemo y luego me bronceo · Me bronceo con facilidad · Casi nunca me quemo | Indicio de subtono y profundidad. | `color_profiles.sun_reaction` | Colorimetría |
 | ¿Qué metal te favorece más (reloj, anillo)? | Una opción | Plata · Oro · Los dos por igual · No lo sé | Indicio de subtono frío (plata) o cálido (oro). | `color_profiles.metal` | Colorimetría |
-| Temperatura | Una opción | Cálida · Neutra · Fría | Subtono declarado (hipótesis hasta validarlo con luz natural). | `color_profiles.temperature` | Colorimetría; Paleta |
+| Temperatura | Una opción | Cálida · Neutra · Fría | Subtono de la piel validado por el usuario (con origen IA o usuario, estado y fechas). | `color_profiles.temperature` — Tarjeta «Temperatura cromática»: estimación por IA con la foto de rostro, que el usuario confirma o corrige (BIS 2). | Colorimetría; Paleta; encaje de color |
 | Profundidad | Una opción | Clara · Media · Oscura | Claridad general de tus colores. | `color_profiles.depth` | Colorimetría |
 | Intensidad | Una opción | Suave · Media · Brillante | Si te favorecen colores apagados o saturados. | `color_profiles.intensity` | Colorimetría |
 | Contraste | Una opción | Bajo · Medio · Alto | Diferencia entre piel, pelo y ojos: cuánto contraste admiten tus combinaciones. | `color_profiles.contrast` | Colorimetría |

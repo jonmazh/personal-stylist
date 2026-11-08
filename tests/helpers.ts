@@ -24,6 +24,7 @@ export function sampleBundle(over: Partial<Bundle> = {}): Bundle {
     references: [],
     refRatings: [],
     styleRefs: [],
+    colorAnalyses: [],
     chatValidated: false,
     ...over,
   }

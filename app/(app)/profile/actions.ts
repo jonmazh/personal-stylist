@@ -92,7 +92,7 @@ export async function setPhotoConsent(formData: FormData) {
   const give = formData.get('consent') === 'on'
   if (give) await supabase.from('profiles').upsert({ id, photo_consent_at: new Date().toISOString() })
   done()
-  redirect('/profile/cuerpo#fotos')
+  redirect(formData.get('back') === 'color' ? '/profile/color#temperatura' : '/profile/cuerpo#fotos')
 }
 
 /** Prendas que ya le quedan bien, con sus medidas de prenda (no corporales). */
@@ -291,4 +291,26 @@ export async function deleteAllPhotos() {
   }
   done()
   redirect('/profile/cuerpo?deleted=1#fotos')
+}
+
+// ── Temperatura cromatica (BIS 2): el usuario confirma o corrige; la IA nunca escribe este dato ──
+const TEMPS = ['Cálida', 'Fría', 'Neutra']
+
+/** Confirma o corrige la temperatura. Queda validada por el usuario y prevalece sobre cualquier estimacion posterior. */
+export async function setTemperature(formData: FormData) {
+  const { id, supabase } = await me()
+  const value = String(formData.get('value') ?? '')
+  if (!TEMPS.includes(value)) redirect('/profile/color#temperatura')
+  const analysisId = String(formData.get('analysis_id') ?? '') || null
+  const { data: analysis } = analysisId ? await supabase.from('color_analyses').select('id,temperature').eq('id', analysisId).maybeSingle() : { data: null }
+  const confirmsAI = !!analysis && analysis.temperature === value
+  const now = new Date().toISOString()
+  // Solo cambia la dimension de temperatura: intensidad, profundidad y contraste no se tocan.
+  const { error } = await supabase.from('color_profiles').upsert({
+    user_id: id, temperature: value, temperature_source: confirmsAI ? 'ia' : 'usuario', temperature_status: 'validado',
+    temperature_analysis_id: analysis?.id ?? null, temperature_updated_at: now, temperature_validated_at: now,
+  })
+  done()
+  if (error) redirect('/profile/color?error=' + encodeURIComponent(/column|schema cache/i.test(error.message) ? 'Ejecuta la migración 0006 en Supabase.' : error.message) + '#temperatura')
+  redirect(`/profile/color?temp=${confirmsAI ? 'confirmed' : analysis ? 'corrected' : 'set'}#temperatura`)
 }

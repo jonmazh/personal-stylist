@@ -22,6 +22,8 @@ export interface Question {
   extracts: string           // que informacion pretende extraer
   feeds: string              // que conclusion del Blueprint (o del chat) alimenta
   store: { table: Table; column: string; key?: string }
+  /** Se gestiona fuera del formulario general (p. ej. la tarjeta de temperatura cromatica): no se pinta ni se guarda con el capitulo. */
+  external?: string
 }
 
 export const COLOR_NAMES = ['Negro', 'Blanco', 'Gris', 'Azul marino', 'Beige', 'Camel', 'Marrón', 'Oliva', 'Burdeos', 'Azul claro',
@@ -57,7 +59,7 @@ export const QUESTIONS: Question[] = [
   { id: 'vein_color', area: 'a3', group: 'Pistas de subtono', label: 'Las venas de tu muñeca, con luz natural, parecen…', kind: 'single', options: ['Azuladas o violetas', 'Verdosas', 'Una mezcla / no lo sé'], extracts: 'Indicio de subtono frío (azuladas) o cálido (verdosas).', feeds: 'Colorimetría', store: C('vein_color') },
   { id: 'sun_reaction', area: 'a3', group: 'Pistas de subtono', label: 'Con el sol…', kind: 'single', options: ['Me quemo y apenas me bronceo', 'Me quemo y luego me bronceo', 'Me bronceo con facilidad', 'Casi nunca me quemo'], extracts: 'Indicio de subtono y profundidad.', feeds: 'Colorimetría', store: C('sun_reaction') },
   { id: 'metal', area: 'a3', group: 'Pistas de subtono', label: '¿Qué metal te favorece más (reloj, anillo)?', kind: 'single', options: ['Plata', 'Oro', 'Los dos por igual', 'No lo sé'], extracts: 'Indicio de subtono frío (plata) o cálido (oro).', feeds: 'Colorimetría', store: C('metal') },
-  { id: 'temperature', area: 'a3', group: 'Tu hipótesis', label: 'Temperatura', kind: 'single', options: ['Cálida', 'Neutra', 'Fría'], help: 'Si no lo sabes, déjalo en blanco: lo deduciré de las pistas anteriores.', extracts: 'Subtono declarado (hipótesis hasta validarlo con luz natural).', feeds: 'Colorimetría; Paleta', store: C('temperature') },
+  { id: 'temperature', area: 'a3', group: 'Tu hipótesis', label: 'Temperatura', kind: 'single', options: ['Cálida', 'Neutra', 'Fría'], external: 'Tarjeta «Temperatura cromática»: estimación por IA con la foto de rostro, que el usuario confirma o corrige (BIS 2).', extracts: 'Subtono de la piel validado por el usuario (con origen IA o usuario, estado y fechas).', feeds: 'Colorimetría; Paleta; encaje de color', store: C('temperature') },
   { id: 'depth', area: 'a3', group: 'Tu hipótesis', label: 'Profundidad', kind: 'single', options: ['Clara', 'Media', 'Oscura'], extracts: 'Claridad general de tus colores.', feeds: 'Colorimetría', store: C('depth') },
   { id: 'intensity', area: 'a3', group: 'Tu hipótesis', label: 'Intensidad', kind: 'single', options: ['Suave', 'Media', 'Brillante'], extracts: 'Si te favorecen colores apagados o saturados.', feeds: 'Colorimetría', store: C('intensity') },
   { id: 'contrast', area: 'a3', group: 'Tu hipótesis', label: 'Contraste', kind: 'single', options: ['Bajo', 'Medio', 'Alto'], extracts: 'Diferencia entre piel, pelo y ojos: cuánto contraste admiten tus combinaciones.', feeds: 'Colorimetría', store: C('contrast') },
@@ -114,6 +116,7 @@ export function buildAreaPayload(area: AreaId, f: Form) {
   let percentTotal = 0, hasPercent = false
 
   for (const q of questionsOf(area)) {
+    if (q.external) continue // se guarda en su propio flujo
     let v: unknown
     switch (q.kind) {
       case 'measure': {

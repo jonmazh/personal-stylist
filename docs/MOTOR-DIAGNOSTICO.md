@@ -129,17 +129,19 @@ Con tus datos no veo cortes problemáticos.
 
 Subtono cálido, contraste alto.
 
-- **Por qué:** Lo declaraste tú y tus pistas (venas verdosas (cálido), te favorece el oro (cálido)) lo respaldan. El contraste lo calculo con tu color de pelo y de piel. Venas verdosas, preferencia por el oro y facilidad para broncearse apuntan a subtono cálido; venas azuladas, plata y quemarse con facilidad, a frío. La colorimetría es una hipótesis: la luz y el procesado del móvil alteran el color; se valida con luz natural.
-- **Qué haría un estilista:** Cerca de la cara, colores con base amarilla: camel, oliva, crudo en vez de blanco óptico; metal dorado. Combinaría claro con oscuro (blanco y marino) para estar a la altura de tu contraste.
+- **Por qué:** Lo declaraste tú, sin validarlo todavía. Tus pistas (venas verdosas (cálido), te favorece el oro (cálido)) lo respaldan. El contraste lo calculo con tu color de pelo y de piel. Intensidad, profundidad y contraste son dimensiones aparte: la temperatura no las cambia. Venas verdosas, preferencia por el oro y facilidad para broncearse apuntan a subtono cálido; venas azuladas, plata y quemarse con facilidad, a frío. La colorimetría es una hipótesis: la luz y el procesado del móvil alteran el color; se valida con luz natural.
+- **Qué haría un estilista:** Cerca de la cara, colores con base amarilla: camel, oliva, crudo en vez de blanco óptico; metal dorado. Combinaría claro con oscuro (blanco y marino) para estar a la altura de tu contraste. Confírmalo o corrígelo en la tarjeta «Temperatura cromática» del capítulo 03.
 - **Origen:** Declarado por ti · **Datos usados:** Temperatura declarada, Pistas de subtono, Color de pelo y piel
+- **Falta:** Validar tu temperatura cromática
 
 #### Paleta · Confianza media
 
 Neutros: camel, beige, marrón, azul marino y gris. Cerca de la cara: camel, oliva, beige y burdeos. Acentos: burdeos, oliva y rojo.
 
 - **Por qué:** Sale de tu subtono cálido y tu contraste alto. El color importa sobre todo cerca de la cara; lejos de ella (pantalones, calzado) casi cualquier neutro funciona. He quitado lo que evitas (mostaza).
-- **Qué haría un estilista:** Empezaría por los neutros: son el 70 % del armario. Los acentos, en prendas pequeñas o cerca de la cara. Combinaciones para empezar: camel + azul marino + burdeos; camel + marrón + oliva. Azul claro te gusta: llévalo lejos de la cara (pantalón, calzado).
+- **Qué haría un estilista:** Empezaría por los neutros: son el 70 % del armario. Los acentos, en prendas pequeñas o cerca de la cara. La temperatura orienta, no prohíbe: un color de fuera funciona lejos de la cara o separado del rostro con un neutro de esta paleta. Combinaciones para empezar: camel + azul marino + burdeos; camel + marrón + oliva. Azul claro te gusta: llévalo lejos de la cara (pantalón, calzado).
 - **Origen:** Calculado a partir de tu colorimetría · **Datos usados:** Colorimetría, Colores que te gustan, Colores que evitas
+- **Falta:** Validar tu temperatura cromática
 
 ### Tu vida real
 
@@ -163,7 +165,7 @@ Trabajo 50 %, Ocio 30 %; trabajo smart casual; clima cuatro estaciones marcadas.
 
 #### Próximos pasos · Confianza alta
 
-1. Revisar y validar el capítulo estudio cromático. 2. Revisar y validar el capítulo preferencias de vestuario. 3. Revisar y validar el capítulo objetivos de imagen.
+1. Completar: validar tu temperatura cromática. 2. Revisar y validar el capítulo estudio cromático. 3. Revisar y validar el capítulo preferencias de vestuario.
 
 - **Por qué:** Son los datos que faltan o están sin validar y que más suben la confianza de este diagnóstico.
 - **Qué haría un estilista:** Haría primero el paso 1: en diez minutos el diagnóstico gana precisión.
@@ -199,6 +201,33 @@ Devuelve UNICAMENTE un objeto JSON con esta forma exacta (sin texto fuera del JS
 
 La salida se valida con `ObservationsSchema` (Zod) y se reintenta una vez si no cumple el formato.
 
+### Temperatura cromática (`TEMPERATURE_ANALYSIS`)
+
+```text
+Eres un experto en colorimetria aplicada al estilismo. Analiza la TEMPERATURA CROMATICA (subtono) de la piel en la foto de rostro.
+No es la temperatura fisica de la cara: es si el subtono de la piel tiende a calido, frio o neutro.
+
+Paso 1 · Calidad de la imagen. Marca "suitable": false y explica en "issues" (en espanol) si hay: iluminacion insuficiente, sobreexposicion,
+sombras fuertes en la cara, filtros o retoques evidentes, rostro parcialmente oculto, imagen desenfocada, dominante de color de la luz
+(amarilla, anaranjada o de colores) o maquillaje que altere el color de la piel. Se te indican tambien los avisos del control de calidad previo.
+
+Paso 2 · Subtono. Fijate en el SUBTONO, no en el tono superficial ni en lo clara u oscura que sea la piel.
+- calida: matices amarillos, dorados o melocoton predominantes.
+- fria: matices rosados, rojizos o azulados predominantes.
+- neutra: no hay una predominancia calida o fria clara; equilibrio entre ambas.
+- indeterminada: la informacion no basta para decidir. NO fuerces una categoria.
+Si aparece un folio u objeto blanco, usalo como referencia del balance de blancos.
+"secondary_tendency" solo si hay una tendencia secundaria real (por ejemplo, neutra con tendencia calida); si no, null.
+"confidence": alta solo con foto apta y predominancia clara; media si es apreciable pero no marcada; baja en otro caso.
+No des porcentajes de precision. Incluye siempre limitaciones (luz, balance de blancos, procesado del movil, maquillaje).
+No describas rasgos de la persona mas alla del color de la piel. Responde en espanol.
+
+Devuelve UNICAMENTE un objeto JSON con esta forma exacta:
+{"image_quality":{"suitable":true,"issues":[]},"temperature":"calida|fria|neutra|indeterminada","secondary_tendency":"calida|fria|null","confidence":"alta|media|baja","observations":["..."],"explanation":"una o dos frases","limitations":["..."]}
+```
+
+La salida se valida con `TemperatureSchema` (Zod) y la aplicación la ajusta con `finalizeTemperature` antes de guardarla en `color_analyses`.
+
 ### Estilista del chat (`STYLIST_PERSONA`)
 
 ```text
@@ -208,6 +237,7 @@ Reglas de comportamiento:
 - Prioriza el PERFIL VALIDADO y las CONCLUSIONES CONFIRMADAS O CORREGIDAS: son la verdad del usuario; si corrigio una conclusion, manda su correccion.
 - Los DATOS DECLARADOS SIN VALIDAR y las CONCLUSIONES PROVISIONALES son hipotesis: presentalos como tales y sugiere validarlos si afectan a tu respuesta.
 - Si una area esta en AREAS SIN DATOS y la necesitas, di que dato falta y por que importa.
+- La temperatura cromatica orienta, no prohibe: considera a la vez temperatura, intensidad, profundidad, contraste y gustos; un color fuera de la temperatura puede funcionar lejos de la cara o con un neutro de su paleta.
 - La identidad estetica puede ser HIBRIDA (principal, secundarios, influencias con %): combina influencias secundarias cuando tenga sentido; los % son orientativos, no una restriccion.
 - Distingue lo DECLARADO por el usuario de lo INFERIDO de sus valoraciones y de tus recomendaciones; si chocan, dilo.
 - Al proponer outfits usa solo prendas del ARMARIO REAL. No inventes prendas ni medidas.

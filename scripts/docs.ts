@@ -13,7 +13,8 @@ import { OUTFITS, RATINGS, outfitsOf } from '@/lib/style/references'
 import { MIN_EVIDENCE, MIN_RATED } from '@/lib/style/dna'
 import { BRAND_UNIVERSES, ELEMENTS, ELEMENT_GROUPS, STYLE_CATALOG, STYLE_GROUPS, elementLabel, styleName } from '@/lib/style/catalog'
 import { CONFIDENCE_LABEL, CONFIDENCE_RULE, SECTIONS, buildFindings, type Confidence } from '@/lib/profile/blueprint'
-import { PHOTO_ANALYSIS, STYLIST_PERSONA } from '@/lib/ai/prompts'
+import { PHOTO_ANALYSIS, STYLIST_PERSONA, TEMPERATURE_ANALYSIS } from '@/lib/ai/prompts'
+import { SERIOUS_ISSUES } from '@/lib/color/temperature'
 import type { Bundle } from '@/lib/profile/data'
 
 const KIND: Record<Question['kind'], string> = {
@@ -25,7 +26,8 @@ const answers = (q: Question) =>
   : q.kind === 'slider' ? `${q.ends![0]} (0) ↔ ${q.ends![1]} (100); 50 = sin preferencia`
   : q.kind === 'percent' ? '0–100 en pasos de 5; el grupo debe sumar 100 %'
   : q.kind === 'measure' ? '1–299 cm' : q.unit ? `Número (${q.unit})` : 'Libre'
-const storage = (q: Question) =>
+const storage = (q: Question) => storageBase(q) + (q.external ? ` — ${q.external}` : '')
+const storageBase = (q: Question) =>
   q.kind === 'measure' ? `\`body_measurements\` (key=\`${q.store.key}\`, value_cm; histórico con fecha)`
   : `\`${q.store.table}.${q.store.column}${q.store.key ? `.${q.store.key}` : ''}\`${q.store.key ? ' (jsonb)' : ''}`
 
@@ -92,9 +94,11 @@ export function protocolDoc() {
     `| Resolución | lado menor < ${T.minSide} px | Resolución baja |`,
     '| Orientación | horizontal en fotos de cuerpo entero | Debe ser vertical |',
     `| Exposición | luminancia media < ${T.dark} o > ${T.bright} (0–255) | Demasiado oscura / sobreexpuesta |`,
-    `| Contraste | desviación de luminancia < ${T.flat} | Silueta poco distinguible |`,
+    `| Contraste (no en rostro) | desviación de luminancia < ${T.flat} | Silueta poco distinguible |`,
     `| Nitidez | varianza del laplaciano < ${T.blurry} (imagen a 256 px) | Desenfocada o movida |`,
-    `| Dominante de color (solo rostro) | desviación de un canal > ${Math.round(T.cast * 100)} % | No sirve para colorimetría |`,
+    `| Dominante de color (solo rostro) | en las zonas claras casi neutras (fondo, folio blanco), desviación de un canal > ${Math.round(T.cast * 100)} %; sin zonas neutras no se juzga (la piel no es una dominante) | No sirve para colorimetría |`,
+    `| Sombras fuertes (solo rostro) | diferencia de luminancia entre mitades de la cara > ${T.shadow} | Busca luz frontal y uniforme |`,
+    `| Filtro o color alterado (solo rostro) | saturación media > ${T.saturationHigh} o < ${T.saturationLow} | Sin filtros ni retoques / foto sin color |`,
     '',
     '**2. Por la IA, al analizar.** La IA devuelve primero `photo_quality` (utilizable o no, y por qué) para cada foto; las observaciones de fotos no utilizables se descartan y el motivo se muestra bajo la foto (`body_photos.quality.ai`). Los avisos del paso 1 se le pasan para que rebaje la confianza.',
     '',
@@ -103,6 +107,23 @@ export function protocolDoc() {
     '- Por defecto las fotos se conservan hasta que el usuario las quita (una a una o «Borrar todas mis fotos»).',
     '- Opción «Borrar mis fotos después de cada análisis» (`profiles.delete_photos_after_analysis`): tras analizar se eliminan los ficheros y sus filas y se conservan solo los resultados estructurados (README 15).',
     '- Borrar fotos no borra las observaciones ya generadas: siguen en el diagnóstico como hipótesis revisables.',
+    '',
+    '## Temperatura cromática con la foto de rostro (BIS 2)',
+    '',
+    'Desde la tarjeta «Temperatura cromática» del capítulo 03: instrucciones de captura → foto de rostro (con el control de calidad de arriba) → «Analizar mi temperatura cromática» (`/api/ai/analyze-temperature`, solo se envía esa foto) → resultado → el usuario confirma o corrige. Es el **subtono** de la piel, no la temperatura física.',
+    '',
+    '**Contrato de la IA** (`TemperatureSchema`, Zod): `image_quality {suitable, issues[]}`, `temperature` (calida · fria · neutra · indeterminada), `secondary_tendency` (calida · fria · null), `confidence` (alta · media · baja), `observations[]`, `explanation`, `limitations[]`. Sin porcentajes de precisión.',
+    '',
+    '**Reglas de la aplicación** (`finalizeTemperature`): la IA solo propone.',
+    '',
+    '- Foto no apta según la IA → no hay conclusión; se explica el motivo y se pide otra foto.',
+    '- «Indeterminada» → «Sin información suficiente»: no se fuerza una categoría.',
+    `- Avisos graves del control previo (${SERIOUS_ISSUES.join(', ')}) → confianza máxima **baja**. Otros avisos, avisos de la propia IA o foto sin control previo → máxima **media**. Si la aplicación rebaja la confianza, se indica.`,
+    '- La tendencia secundaria solo se guarda si difiere de la principal (por ejemplo, «Neutra con tendencia cálida»).',
+    '',
+    '**Datos y trazabilidad.** Cada estimación se guarda tal cual en `color_analyses` (temperatura, tendencia, confianza, explicación, observaciones, limitaciones, calidad de la IA y del navegador, foto analizada, modelo y fecha) y nunca se modifica. El dato vigente vive en `color_profiles`: `temperature`, `temperature_source` (ia = estimación confirmada · usuario = corregida o elegida), `temperature_status` (pendiente · recopilado · validado), `temperature_analysis_id`, `temperature_updated_at` y `temperature_validated_at`. **La IA nunca escribe `color_profiles`**: una estimación nueva que no coincida con el dato validado se muestra, pero no se aplica sin una nueva confirmación. Solo cambia la temperatura; intensidad, profundidad y contraste no se tocan.',
+    '',
+    '**Privacidad.** Bucket privado `profile-private`, RLS por usuario, procesamiento en el servidor, sin URLs públicas; la foto se puede quitar y, con «borrar tras el análisis», se elimina después y se conserva solo el resultado (`photo_id` queda vacío; `photo_path` registra qué foto se analizó).',
     '',
     '## Qué se guarda de cada análisis',
     '',
@@ -127,7 +148,7 @@ export const EXAMPLE: Bundle = {
   validated: { a1: true, a2: true, a3: false, a4: true, a5: true, a6: false, a7: false },
   observations: [], blueprints: [], garments: [], references: [], chatValidated: false,
   refRatings: [['clasico-1', 'love'], ['sofisticado-1', 'love'], ['minimal-1', 'like'], ['sofisticado-2', 'represents'], ['oldmoney-2', 'like'], ['quiet-1', 'love'], ['mincont-1', 'like'], ['street-1', 'dislike'], ['hiphop-1', 'dislike'], ['italiana-2', 'admire']].map(([reference_id, rating]) => ({ reference_id, rating })),
-  styleRefs: [],
+  styleRefs: [], colorAnalyses: [],
 }
 
 export function diagnosisDoc() {
@@ -193,6 +214,8 @@ export function diagnosisDoc() {
   }
   out.push('## Instrucciones que recibe la IA', '', '### Análisis de fotos (`PHOTO_ANALYSIS`)', '', '```text', PHOTO_ANALYSIS, '```', '',
     'La salida se valida con `ObservationsSchema` (Zod) y se reintenta una vez si no cumple el formato.', '',
+    '### Temperatura cromática (`TEMPERATURE_ANALYSIS`)', '', '```text', TEMPERATURE_ANALYSIS, '```', '',
+    'La salida se valida con `TemperatureSchema` (Zod) y la aplicación la ajusta con `finalizeTemperature` antes de guardarla en `color_analyses`.', '',
     '### Estilista del chat (`STYLIST_PERSONA`)', '', '```text', STYLIST_PERSONA, '```', '',
     'Después de estas instrucciones el chat recibe el contexto de `lib/ai/context.ts`: perfil validado, conclusiones confirmadas o corregidas (con su «Qué haría un estilista»), datos sin validar, hipótesis con lo que les falta, capítulos sin datos y armario real.', '')
   return out.join('\n')
