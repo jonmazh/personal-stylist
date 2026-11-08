@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getUser } from '@/lib/supabase/server'
 import { configError, MODEL_VISION, providerId } from '@/lib/ai/client'
-import { generateStructured } from '@/lib/ai/structured'
+import { effectiveModel, generateStructured } from '@/lib/ai/structured'
 import { ObservationsSchema } from '@/lib/ai/schemas'
 import { PHOTO_ANALYSIS } from '@/lib/ai/prompts'
 
@@ -31,6 +31,7 @@ export async function POST() {
 
   try {
     const parsed = await generateStructured({
+      kind: 'vision',
       model: MODEL_VISION(),
       schema: ObservationsSchema,
       system: PHOTO_ANALYSIS,
@@ -40,7 +41,7 @@ export async function POST() {
       ],
     })
 
-    const { data: run } = await supabase.from('ai_runs').insert({ user_id: id, kind: 'photo_analysis', model: `${providerId()}:${MODEL_VISION()}`, meta: { photos: used.map((p) => p.kind) } }).select('id').single()
+    const { data: run } = await supabase.from('ai_runs').insert({ user_id: id, kind: 'photo_analysis', model: `${providerId()}:${effectiveModel('vision', MODEL_VISION())}`, meta: { photos: used.map((p) => p.kind) } }).select('id').single()
     // Se guardan como OBSERVACIONES (propuesta), nunca como dato confirmado.
     await supabase.from('observations').insert(parsed.observations.map((o) => ({ ...o, user_id: id, run_id: run?.id })))
     return NextResponse.json({ count: parsed.observations.length })

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getUser } from '@/lib/supabase/server'
 import { configError, MODEL_CHAT, providerId } from '@/lib/ai/client'
-import { generateText } from '@/lib/ai/structured'
+import { effectiveModel, generateText } from '@/lib/ai/structured'
 import { STYLIST_PERSONA } from '@/lib/ai/prompts'
 import { buildContext } from '@/lib/ai/context'
 import { loadBundle } from '@/lib/profile/data'
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   const ctx = buildContext(bundle)
   try {
     const text = await generateText(MODEL_CHAT(), `${STYLIST_PERSONA}\n\n${ctx.text}`, body.data.messages.slice(-12))
-    await user.supabase.from('ai_runs').insert({ user_id: user.id, kind: 'chat', model: `${providerId()}:${MODEL_CHAT()}`, meta: { validated: ctx.hasValidated } })
+    await user.supabase.from('ai_runs').insert({ user_id: user.id, kind: 'chat', model: `${providerId()}:${effectiveModel('chat', MODEL_CHAT())}`, meta: { validated: ctx.hasValidated } })
     return NextResponse.json({ text: text || 'No he podido generar una respuesta. Prueba a reformular la pregunta.' })
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'Error de IA' }, { status: 502 })

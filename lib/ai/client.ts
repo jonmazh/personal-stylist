@@ -28,7 +28,7 @@ const PRESETS: Record<ProviderId, Preset> = {
     label: 'Groq (gratis)',
     baseURL: 'https://api.groq.com/openai/v1',
     keyEnv: 'GROQ_API_KEY',
-    chat: 'llama-3.3-70b-versatile',
+    chat: 'openai/gpt-oss-120b',
     vision: 'qwen/qwen3.8-27b',
   },
   openrouter: {
