@@ -13,7 +13,7 @@
 | Style Blueprint versionado, cada conclusión con origen, confianza y justificación | Sí: `blueprints` + `assessment_findings` |
 | 4 buckets privados y URLs firmadas de duración limitada | Sí: `profile-private` (en uso) y los otros tres creados |
 | El chat consulta el perfil validado y no se limita a darte la razón | Sí: `lib/ai/context.ts`, `lib/ai/prompts.ts` |
-| Tailwind + shadcn/ui, React Hook Form, Gemini, pgvector | Tailwind instalado (estilos propios en CSS); el resto, pendiente |
+| Tailwind + shadcn/ui, React Hook Form, Gemini, pgvector | Tailwind instalado (estilos propios en CSS); IA gratuita (Gemini por defecto, Groq, OpenRouter, Ollama) vía `lib/ai/client.ts`; el resto, pendiente |
 
 ## 2. Documentación oficial consultada y dónde se usa
 
@@ -28,14 +28,17 @@
 - **Storage** — https://supabase.com/docs/guides/storage
 - **Migraciones locales** — https://supabase.com/docs/guides/local-development/database-migrations
 - **Next.js Proxy** (sustituye a `middleware` en Next 16) — https://nextjs.org/docs/app/getting-started/proxy
-- **OpenAI Responses API (create)** — https://developers.openai.com/api/reference/resources/responses/methods/create.md
-  Entradas de imagen con `input_image` y salidas en texto o JSON.
+- **Gemini, compatibilidad con OpenAI** — https://ai.google.dev/gemini-api/docs/openai
+- **Groq, compatibilidad con OpenAI** — https://console.groq.com/docs/openai
+- **OpenRouter** — https://openrouter.ai/docs
+- **Ollama, compatibilidad con OpenAI** — https://ollama.com/blog/openai-compatibility
+  Todos aceptan Chat Completions con `image_url` (data URL base64). Se usa el SDK `openai` cambiando `baseURL` (`lib/ai/client.ts`).
 - **Supabase AI & Vectors** (pgvector, fases futuras) — https://supabase.com/docs/guides/ai
 
 ## 3. Patrones tomados de fuentes no oficiales
 
 - **Storage privado**: bucket privado, política sobre `storage.objects` con `(storage.foldername(name))[1] = auth.uid()::text` y `createSignedUrl(s)` en lugar de `getPublicUrl` (artículos de la comunidad sobre Supabase Storage; coinciden entre sí).
-- **Structured Outputs con Zod**: `openai.responses.parse` + `zodTextFormat(schema, nombre)` y `output_parsed` (artículo de DEV Community). La imagen admite URL pública o data URL base64.
+- **Salida estructurada portable**: `response_format: json_object` + validación Zod + un reintento con el error (`lib/ai/structured.ts`). Sustituye a `responses.parse`, que solo existe en OpenAI.
 Ambos patrones compilan con las versiones instaladas, pero no se han ejecutado contra los servicios reales.
 
 ## 4. Versiones instaladas al montar el proyecto (noviembre de 2026)
@@ -48,4 +51,4 @@ next 16.4.5 · react 19.3.1 · @supabase/supabase-js 2.119.0 · @supabase/ssr 0.
 - Sin credenciales no se ha probado el flujo real: migración, login, subida de fotos, análisis y chat.
 - El historial del chat vive en el navegador; solo se guarda en `ai_runs` que hubo una consulta y si usó datos validados.
 - Los datos del prototipo web anterior (en `localStorage`) no se migran.
-- Las fotos se envían a OpenAI al analizar; revisa su política de retención antes de subir fotos corporales.
+- Las fotos se envían al proveedor de IA configurado al analizar (salvo con Ollama, que es local); en los planes gratuitos el proveedor puede usar los datos para entrenar.

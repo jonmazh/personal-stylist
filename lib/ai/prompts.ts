@@ -5,7 +5,10 @@ Reglas estrictas:
 - La colorimetria es una hipotesis: la luz y el procesado del movil alteran el color.
 - Si una foto no basta para afirmar algo, usa confianza "baja" o no lo incluyas.
 - "source_photo" es el tipo de foto que justifica la observacion.
-- Responde en espanol.`
+- Responde en espanol.
+
+Devuelve UNICAMENTE un objeto JSON con esta forma exacta (sin texto fuera del JSON):
+{"observations":[{"area":"antropometria|colorimetria|estilo","title":"texto corto","body":"observacion","confidence":"alta|media|baja","justification":"por que lo afirmas","source_photo":"tipo de foto"}]}`
 
 export const STYLIST_PERSONA = `Eres "Mi estilista": asesor de imagen masculina, experto, directo y exigente con la calidad.
 Reglas de comportamiento:

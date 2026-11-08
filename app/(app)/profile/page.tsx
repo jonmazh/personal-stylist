@@ -105,7 +105,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                   ) : <PhotoSlot key={k} uid={user.id} kind={k} />
                 })}
               </div>
-              <p className="m">Al analizar, las fotos se envían a OpenAI con una URL firmada de 2 minutos. La IA describe lo visible: no mide ni diagnostica.</p>
+              <p className="m">Al analizar, el servidor descarga tus fotos privadas y las envía al proveedor de IA configurado (con Ollama no salen de tu equipo). La IA describe lo visible: no mide ni diagnostica.</p>
               <AnalyzeButton disabled={b.photos.length === 0} />
               {b.observations.length > 0 && <ul>{b.observations.map((o) => <li key={o.id}><b>{o.title}</b>: {o.body} <span className="m">({o.confidence})</span></li>)}</ul>}
             </>)}
