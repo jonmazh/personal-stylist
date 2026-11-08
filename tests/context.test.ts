@@ -34,23 +34,23 @@ test('lo no validado va aparte, como provisional', () => {
 
 test('las conclusiones revisadas siguen en el chat tras regenerar el Blueprint', () => {
   let b = generate(sampleBundle())
-  b = review(b, 'Proporciones', 'confirm')
-  b = review(b, 'Identidad estética', 'correct', 'Clásico relajado, nada rígido')
+  b = review(b, 'Silueta y proporciones', 'confirm')
+  b = review(b, 'Dirección de estilo', 'correct', 'Clásico relajado, nada rígido')
   b = generate(b) // antes del arreglo, esto dejaba el chat sin conclusiones validadas
   const { text } = buildContext(b)
   const rev = part(text, 'CONCLUSIONES CONFIRMADAS O CORREGIDAS POR EL USUARIO')
-  assert.match(rev, /Proporciones:/)
-  assert.match(rev, /Identidad estética: Clásico relajado, nada rígido \(corregida por el usuario\)/)
+  assert.match(rev, /Silueta y proporciones:.*Qué haría un estilista:/)
+  assert.match(rev, /Dirección de estilo: Clásico relajado, nada rígido \(corregida por el usuario\)/)
   const prov = part(text, 'CONCLUSIONES PROVISIONALES')
-  assert.doesNotMatch(prov, /Proporciones|Identidad estética/)
+  assert.doesNotMatch(prov, /Silueta y proporciones|Dirección de estilo/)
   assert.match(prov, /Colorimetría: Subtono cálido/)
 })
 
 test('las conclusiones vacias no se envian como provisionales', () => {
-  const b = generate(sampleBundle({ fit: null }))
+  const b = generate(sampleBundle({ color: null }))
   const { text } = buildContext(b)
-  assert.doesNotMatch(part(text, 'CONCLUSIONES PROVISIONALES'), /Cortes que funcionan/)
-  assert.match(text, /ÁREAS SIN DATOS: Preferencias de vestuario/)
+  assert.doesNotMatch(part(text, 'CONCLUSIONES PROVISIONALES'), /Paleta: Sin paleta/)
+  assert.match(text, /ÁREAS SIN DATOS: Estudio cromático/)
 })
 
 test('perfil vacio: el chat sabe que no hay nada validado y que areas faltan', () => {

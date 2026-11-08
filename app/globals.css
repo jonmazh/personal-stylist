@@ -172,3 +172,12 @@ details.howto summary { cursor: pointer; padding: 10px 0; font: 500 12px/1.4 var
 .photo-frame.qc .btns { justify-content: flex-start !important; }
 details.howto { font-size: 14px; }
 details.howto > ul { padding-left: 18px; margin: 4px 0 14px; }
+.eyebrow.part { margin: 56px 0 0; padding-bottom: 10px; border-bottom: 1px solid var(--ink); }
+.reasons { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 28px; margin: 4px 0 12px; font-size: 15px; }
+.reasons p { margin: 0; }
+.reasons .label { font: 500 11px/1.4 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--acc); margin-bottom: 4px; }
+.swatch-group { font-size: 12px; color: var(--mut); margin: 4px 0 6px; }
+ol.steps { padding-left: 1.2em; } ol.steps li { margin: 4px 0; }
+.ledger-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 28px; font-size: 15px; }
+.ledger-cols ul { padding-left: 18px; margin: 0; } .ledger-cols li { margin: 4px 0; }
+ol.steps { font-size: clamp(18px, 3vw, 20px); padding-left: 1.4em; }

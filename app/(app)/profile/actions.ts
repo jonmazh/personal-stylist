@@ -126,16 +126,19 @@ export async function generateBlueprint() {
   const version = (b.blueprints.at(-1)?.version ?? 0) + 1
   const validated = Object.values(b.validated).filter(Boolean).length
   const { data: bp, error } = await supabase.from('blueprints').insert({ user_id: id, version, validated_areas: validated }).select('id').single()
-  if (error || !bp) throw new Error('No se pudo crear el Blueprint')
+  if (error || !bp) redirect('/blueprint?error=' + encodeURIComponent('No se pudo crear el diagnóstico: ' + (error?.message ?? '')))
   // Lo que ya revisaste en la version anterior se conserva si la conclusion no ha cambiado.
   const rows = carryReviews(b.blueprints.at(-1)?.findings ?? [], buildFindings(b)).map((x, i) => ({
-    blueprint_id: bp.id, user_id: id, position: i, title: x.title, body: x.body, origin: x.origin, confidence: x.confidence,
-    justification: x.justification, status: x.status, corrected_body: x.corrected_body,
+    blueprint_id: bp.id, user_id: id, position: i, key: x.key, section: x.section, title: x.title, body: x.body,
+    why: x.why, action: x.action, data_used: x.data_used, missing: x.missing, details: x.details ?? null,
+    origin: x.origin, confidence: x.confidence, justification: x.justification, status: x.status, corrected_body: x.corrected_body,
   }))
   const { error: fe } = await supabase.from('assessment_findings').insert(rows)
   if (fe) {
     await supabase.from('blueprints').delete().eq('id', bp.id) // no dejar una version vacia
-    throw new Error('No se pudieron guardar las conclusiones del Blueprint')
+    redirect('/blueprint?error=' + encodeURIComponent(/column|schema cache/i.test(fe.message)
+      ? 'No se pudo guardar el diagnóstico: ejecuta la migración 0003 en Supabase.'
+      : 'No se pudieron guardar las conclusiones del diagnóstico: ' + fe.message))
   }
   done()
   redirect(`/blueprint?v=${version}`)

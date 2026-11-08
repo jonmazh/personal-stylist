@@ -1,11 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { protocolDoc, questionnaireDoc } from '../scripts/docs'
+import { diagnosisDoc, protocolDoc, questionnaireDoc } from '../scripts/docs'
 
 test('docs/CUESTIONARIO.md esta al dia con el codigo (npm run docs)', () => {
   assert.equal(readFileSync('docs/CUESTIONARIO.md', 'utf8'), questionnaireDoc())
 })
 test('docs/PROTOCOLO-FOTOGRAFICO.md esta al dia con el codigo (npm run docs)', () => {
   assert.equal(readFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', 'utf8'), protocolDoc())
+})
+test('docs/MOTOR-DIAGNOSTICO.md esta al dia con el codigo (npm run docs)', () => {
+  assert.equal(readFileSync('docs/MOTOR-DIAGNOSTICO.md', 'utf8'), diagnosisDoc())
 })

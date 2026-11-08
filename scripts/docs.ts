@@ -8,6 +8,10 @@ import { QUESTIONS, type Question } from '@/lib/profile/questionnaire'
 import { GARMENT_FIELDS, GARMENT_LABEL } from '@/lib/profile/summary'
 import { COMMON_RULES, PHOTO_PROTOCOL } from '@/lib/photos/protocol'
 import { THRESHOLDS } from '@/lib/photos/quality'
+import { RULES } from '@/lib/diagnosis/rules'
+import { CONFIDENCE_LABEL, CONFIDENCE_RULE, SECTIONS, buildFindings, type Confidence } from '@/lib/profile/blueprint'
+import { PHOTO_ANALYSIS, STYLIST_PERSONA } from '@/lib/ai/prompts'
+import type { Bundle } from '@/lib/profile/data'
 
 const KIND: Record<Question['kind'], string> = {
   number: 'Número', text: 'Texto', textarea: 'Texto libre', single: 'Una opción', multi: 'Varias opciones', slider: 'Deslizador 0–100', percent: 'Porcentaje', measure: 'Medida (cm)',
@@ -97,8 +101,90 @@ export function protocolDoc() {
   return out.join('\n')
 }
 
+/** Perfil de ejemplo (ficticio) para mostrar un Blueprint completo en la documentacion. */
+export const EXAMPLE: Bundle = {
+  profile: { age: 34, height_cm: 180, city: 'Madrid', fit_pref: 'Regular' },
+  measures: Object.fromEntries([['pecho', 104], ['hombros', 47], ['cintura', 84], ['cadera', 98], ['entrepierna', 86]].map(([k, v]) => [k, { value: v as number, at: '2026-11-01T10:00:00Z', source: 'manual' }])),
+  photos: [], color: { hair_color: 'Castaño oscuro', skin_tone: 'Clara', vein_color: 'Verdosas', metal: 'Oro', temperature: 'Cálida', likes: ['Camel', 'Azul claro'], avoids: ['Mostaza'] },
+  style: { dims: { clasico: 70, minimalista: 25, estructurado: 50 }, styles: ['Casual sofisticado', 'Minimalismo escandinavo'], never_wear: 'Pantalón pitillo' },
+  life: { life: { trabajo: 50, ocio: 30, deporte: 10, citas: 10 }, work_formality: 'Smart casual', climate: 'Cuatro estaciones marcadas', laundry: 'Una o dos veces por semana', constraints: ['Camino mucho'] },
+  fit: { prefs: { pantalones: 'Recto', camisas: 'Regular', chaquetas: 'Desestructurada' } },
+  goals: { image_words: ['Limpia', 'Segura', 'Elegante'], answers: { g2: 'Una imagen cuidada sin parecer disfrazado' } },
+  validated: { a1: true, a2: true, a3: false, a4: true, a5: true, a6: false, a7: false },
+  observations: [], blueprints: [], garments: [], references: [], chatValidated: false,
+}
+
+export function diagnosisDoc() {
+  const out = [
+    '# Motor de diagnóstico y Style Blueprint',
+    '',
+    '> Documento generado desde `lib/profile/blueprint.ts`, `lib/diagnosis/rules.ts` y `lib/ai/prompts.ts` con `npm run docs`. No lo edites a mano.',
+    '',
+    '## Principios',
+    '',
+    '- **Las reglas calculan; la IA no concluye.** El diagnóstico es determinista: mismos datos, mismo resultado. La IA solo aporta observaciones visuales de las fotos (como propuestas) y conversa en el chat.',
+    '- **Nunca se inventa un dato.** Si falta, la conclusión lo dice, baja la confianza y lo lista en «Falta».',
+    '- **Separar hechos, preferencias y recomendaciones.** Cada conclusión indica su origen (medido, declarado, deducido, calculado o IA).',
+    '- **El usuario manda.** Toda conclusión se puede confirmar o corregir; al regenerar se conserva su revisión mientras sus datos no cambien.',
+    '- **Validar datos ≠ confirmar conclusiones.** Validar un capítulo dice «estos datos son correctos» y sube la confianza de lo que se calcula con ellos; confirmar una conclusión dice «este diagnóstico me describe».',
+    '',
+    '## Formato de cada conclusión',
+    '',
+    '| Campo | Contenido |', '|---|---|',
+    '| `title` | Nombre de la conclusión |',
+    '| `body` | La conclusión, en una o dos frases |',
+    '| `why` | **Por qué**: los datos concretos y las reglas profesionales que la justifican |',
+    '| `action` | **Qué haría un estilista**: la acción concreta que recomendaría |',
+    '| `data_used` | Datos del expediente que se han usado |',
+    '| `missing` | Lo que falta para concluir o afinar |',
+    '| `origin` | Medición manual · Declarado por ti · Deducido de tus respuestas · Calculado · IA · foto X |',
+    '| `confidence` | `alta` · `media` · `baja` · `sin_datos` |',
+    '| `status` | `pending` · `confirmed` · `corrected` (+ `corrected_body`) |',
+    '',
+    '## Criterios de confianza',
+    '',
+    '| Nivel | Etiqueta | Cuándo |', '|---|---|---|',
+    ...(Object.keys(CONFIDENCE_LABEL) as Confidence[]).map((c) => `| \`${c}\` | ${CONFIDENCE_LABEL[c]} | ${CONFIDENCE_RULE[c]} |`),
+    '',
+    'Las observaciones de la IA nunca superan `media`: una foto es una hipótesis visual.',
+    '',
+    '## Reglas profesionales',
+    '',
+    '| Regla | Área | Criterio |', '|---|---|---|',
+    ...Object.values(RULES).map((r) => `| \`${r.id}\` | ${r.area} | ${cell(r.text)} |`),
+    '',
+    '## Estructura del Style Blueprint',
+    '',
+    'Portada (versión, fecha, estado preliminar o completo, cita con la dirección de estilo) y, en este orden:',
+    '',
+    ...SECTIONS.map((sec) => `- **${sec.title}**`),
+    '',
+    'Cierra con **Lo que sé, lo que supongo y lo que falta** (conclusiones confirmadas o de confianza alta; hipótesis pendientes; datos que faltan).',
+    '',
+    '## Ejemplo completo',
+    '',
+    'Resultado del motor para un perfil ficticio: 34 años, 180 cm, medidas y estilo validados, colorimetría declarada sin validar, sin armario registrado.',
+    '',
+  ]
+  for (const sec of SECTIONS) {
+    const fs = buildFindings(EXAMPLE).filter((f) => f.section === sec.id)
+    if (!fs.length) continue
+    out.push(`### ${sec.title}`, '')
+    for (const f of fs) {
+      out.push(`#### ${f.title} · ${CONFIDENCE_LABEL[f.confidence]}`, '', f.body, '', `- **Por qué:** ${f.why}`, `- **Qué haría un estilista:** ${f.action}`,
+        `- **Origen:** ${f.origin}${f.data_used.length ? ` · **Datos usados:** ${f.data_used.join(', ')}` : ''}`, ...(f.missing.length ? [`- **Falta:** ${f.missing.join(', ')}`] : []), '')
+    }
+  }
+  out.push('## Instrucciones que recibe la IA', '', '### Análisis de fotos (`PHOTO_ANALYSIS`)', '', '```text', PHOTO_ANALYSIS, '```', '',
+    'La salida se valida con `ObservationsSchema` (Zod) y se reintenta una vez si no cumple el formato.', '',
+    '### Estilista del chat (`STYLIST_PERSONA`)', '', '```text', STYLIST_PERSONA, '```', '',
+    'Después de estas instrucciones el chat recibe el contexto de `lib/ai/context.ts`: perfil validado, conclusiones confirmadas o corregidas (con su «Qué haría un estilista»), datos sin validar, hipótesis con lo que les falta, capítulos sin datos y armario real.', '')
+  return out.join('\n')
+}
+
 if (process.argv[1]?.endsWith('docs.ts')) {
+  writeFileSync('docs/MOTOR-DIAGNOSTICO.md', diagnosisDoc())
   writeFileSync('docs/CUESTIONARIO.md', questionnaireDoc())
   writeFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', protocolDoc())
-  console.log('docs/CUESTIONARIO.md y docs/PROTOCOLO-FOTOGRAFICO.md actualizados')
+  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md y docs/MOTOR-DIAGNOSTICO.md actualizados')
 }
