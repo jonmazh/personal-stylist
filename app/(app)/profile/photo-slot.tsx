@@ -13,7 +13,7 @@ async function resize(file: File, max = 1024): Promise<Blob> {
   return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('No se pudo procesar la foto'))), 'image/jpeg', 0.8))
 }
 
-export function PhotoSlot({ uid, kind }: { uid: string; kind: string }) {
+export function PhotoSlot({ uid, kind, help }: { uid: string; kind: string; help?: string }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -32,9 +32,9 @@ export function PhotoSlot({ uid, kind }: { uid: string; kind: string }) {
     setBusy(false)
   }
   return (
-    <label>{kind}
-      <input type="file" accept="image/*" onChange={onChange} disabled={busy} />
-      {busy && <span className="m">Subiendo…</span>}{err && <span className="bad">{err}</span>}
+    <label className="photo-frame empty">
+      <span>{busy ? 'Subiendo…' : <>{help ?? kind}<br /><u>Añadir foto</u></>}{err && <><br /><span className="warn">{err}</span></>}</span>
+      <input type="file" accept="image/*" onChange={onChange} disabled={busy} aria-label={`Subir foto ${kind}`} />
     </label>
   )
 }

@@ -9,6 +9,12 @@ const COLORS: [string, boolean, string][] = [
   ['Marrón', true, 'c'], ['Oliva', false, 'c'], ['Burdeos', false, 'c'], ['Azul claro', false, 'f'], ['Verde bosque', false, 'n'],
   ['Rojo', false, 'c'], ['Rosa', false, 'f'], ['Lila', false, 'f'], ['Mostaza', false, 'c'],
 ]
+/** Muestra aproximada de cada color de la paleta, para dibujarla en el informe. */
+export const COLOR_HEX: Record<string, string> = {
+  Negro: '#1C1C1C', Blanco: '#F8F7F3', Gris: '#8D8D8A', 'Azul marino': '#1F2A44', Beige: '#D9C7A7', Camel: '#B08D57',
+  Marrón: '#5C4033', Oliva: '#6B6B3A', Burdeos: '#6D1F2A', 'Azul claro': '#9DB8D6', 'Verde bosque': '#2F4A36',
+  Rojo: '#B0282E', Rosa: '#D9A3AE', Lila: '#B39DC4', Mostaza: '#C99A2E',
+}
 const TEMP: Record<string, string> = { Cálida: 'c', Fría: 'f', Neutra: 'n' }
 export const confClass = (c: string) => (/^(Confirm|Alta)/.test(c) ? 'ok' : /^(Sin|Insuf)/.test(c) ? 'bad' : 'warn')
 export const IA_CONF: Record<string, string> = { alta: 'Media: hipótesis visual', media: 'Hipótesis visual pendiente de validar', baja: 'Insuficiente: hipótesis débil' }
@@ -51,7 +57,7 @@ export function buildFindings(b: Bundle): Finding[] {
     'Calculado a partir de tus datos', 'Media', 'Regla de proporción: un volumen se equilibra con una línea limpia.')
 
   const life: Record<string, number> = b.life?.life ?? {}, cons: string[] = b.life?.constraints ?? []
-  const top = Object.entries(life).sort((a, z) => z[1] - a[1]).slice(0, 2).map(([k, x]) => `${k} ${x} %`)
+  const top = Object.entries(life).filter(([, x]) => x > 0).sort((a, z) => z[1] - a[1]).slice(0, 2).map(([k, x]) => `${k[0].toUpperCase() + k.slice(1)} ${x} %`)
   if (top.length) add('Necesidades de vida', top.join(', ') + (cons.length ? `. Restricciones: ${cons.join(', ').toLowerCase()}.` : '.'),
     'Declarado por ti', v.a5 ? 'Confirmada' : 'Media: declarada por ti', 'El armario debe servir sobre todo a estos ámbitos.')
 

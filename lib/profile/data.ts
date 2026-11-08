@@ -56,4 +56,4 @@ export function filled(area: string, b: Bundle): boolean {
   return false
 }
 export const status = (area: string, b: Bundle): [string, string] =>
-  b.validated[area] ? ['Validada', 'ok'] : filled(area, b) ? ['Recopilada', 'warn'] : ['Pendiente', 'bad']
+  b.validated[area] ? ['Validado por ti', 'ok'] : filled(area, b) ? ['En curso', 'warn'] : ['Por empezar', 'bad']

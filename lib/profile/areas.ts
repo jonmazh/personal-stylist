@@ -1,13 +1,14 @@
 export const AREAS = [
-  { id: 'a1', name: 'Identidad y datos' },
-  { id: 'a2', name: 'Estudio antropométrico' },
-  { id: 'a3', name: 'Estudio cromático' },
-  { id: 'a4', name: 'Identidad estética' },
-  { id: 'a5', name: 'Estilo de vida' },
-  { id: 'a6', name: 'Preferencias de vestuario' },
-  { id: 'a7', name: 'Objetivos de imagen' },
+  { id: 'a1', slug: 'identidad', name: 'Identidad y datos', intro: 'Lo básico para empezar: quién eres, tus tallas habituales y cuánto sueles invertir en una prenda.' },
+  { id: 'a2', slug: 'cuerpo', name: 'Estudio antropométrico', intro: 'Tus medidas y tus fotografías. Las medidas las tomas tú; las fotos solo sirven para observar proporciones, nunca para medir.' },
+  { id: 'a3', slug: 'color', name: 'Estudio cromático', intro: 'Cómo se comporta el color contigo. Es una hipótesis que se valida con luz natural, no una clasificación cerrada.' },
+  { id: 'a4', slug: 'estilo', name: 'Identidad estética', intro: 'Qué quieres transmitir. No hace falta elegir una sola etiqueta: tu estilo puede ser una mezcla.' },
+  { id: 'a5', slug: 'vida', name: 'Estilo de vida', intro: 'Para qué te vistes de verdad. Un armario bonito que no sirve a tu semana no es un buen armario.' },
+  { id: 'a6', slug: 'prendas', name: 'Preferencias de vestuario', intro: 'Los cortes con los que te sientes bien, prenda a prenda.' },
+  { id: 'a7', slug: 'objetivos', name: 'Objetivos de imagen', intro: 'Hacia dónde quieres ir. Lo revisaremos en cada actualización de tu perfil.' },
 ] as const
 export type AreaId = (typeof AREAS)[number]['id']
+export const areaBySlug = (slug: string) => AREAS.find((a) => a.slug === slug)
 
 export const MEASURES: [string, string][] = [
   ['pecho', 'Pecho'], ['hombros', 'Hombros'], ['cintura', 'Cintura'], ['cadera', 'Cadera'], ['torso', 'Largo de torso'],

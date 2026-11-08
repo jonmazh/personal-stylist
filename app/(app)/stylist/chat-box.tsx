@@ -19,11 +19,12 @@ export function ChatBox() {
     setBusy(false)
   }
   return (
-    <div className="chat">
-      {msgs.map((m, i) => (
-        <div key={i} className={`msg ${m.role === 'user' ? 'u' : ''}`}><b>{m.role === 'user' ? 'Tú' : 'Estilista'}</b><br />{m.content}</div>
-      ))}
-      <form onSubmit={send} className="stack">
+    <div className="chat" aria-live="polite">
+      {msgs.map((m, i) => m.role === 'user'
+        ? <p key={i} className="note-u">{m.content}</p>
+        : <div key={i} className="note-s"><small>Tu estilista</small>{m.content}</div>)}
+      {busy && <div className="note-s"><small>Tu estilista</small><span className="m">Pensando…</span></div>}
+      <form onSubmit={send}>
         <label>Tu pregunta<input value={text} onChange={(e) => setText(e.target.value)} placeholder="¿Qué pantalón me conviene probar primero?" /></label>
         <div className="btns"><button className="btn primary" disabled={busy}>{busy ? 'Pensando…' : 'Preguntar'}</button></div>
       </form>

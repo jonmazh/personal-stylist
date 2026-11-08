@@ -15,7 +15,7 @@ export function AnalyzeButton({ disabled }: { disabled: boolean }) {
     if (r.ok) router.refresh()
   }
   return (
-    <div>
+    <div className="btns">
       <button type="button" className="btn primary" onClick={run} disabled={busy || disabled}>{busy ? 'Analizando…' : 'Analizar fotos con IA'}</button>
       {msg && <p className="msg">{msg}</p>}
     </div>
