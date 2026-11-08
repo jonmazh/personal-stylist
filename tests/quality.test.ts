@@ -29,8 +29,14 @@ test('exige vertical solo en cuerpo entero', () => {
   assert.ok(!codes(assessPhoto(img(checker(60, 190)), { width: 1600, height: 1200 }, face)).includes('orientation'))
 })
 test('detecta resolucion baja', () => assert.ok(codes(assessPhoto(img(checker(60, 190)), { width: 400, height: 520 }, body)).includes('low_res')))
-test('la dominante de color solo invalida el rostro (colorimetria)', () => {
-  const warm = img((x, y) => (((x >> 3) + (y >> 3)) % 2 ? [200, 120, 90] : [100, 50, 30]))
-  assert.ok(codes(assessPhoto(warm, big, face)).includes('cast'))
-  assert.ok(!codes(assessPhoto(warm, big, body)).includes('cast'))
+test('la dominante de color se mide en las zonas neutras claras y solo invalida el rostro', () => {
+  // mitad superior: fondo blanco tenido de amarillo por la luz; mitad inferior: damero
+  const tinted = img((x, y) => (y < 128 ? [240, 224, 192] : ((x >> 3) + (y >> 3)) % 2 ? [120, 120, 120] : [60, 60, 60]))
+  assert.ok(codes(assessPhoto(tinted, big, face)).includes('cast'))
+  assert.ok(!codes(assessPhoto(tinted, big, body)).includes('cast'))
+  const neutral = img((x, y) => (y < 128 ? [236, 236, 233] : ((x >> 3) + (y >> 3)) % 2 ? [120, 120, 120] : [60, 60, 60]))
+  assert.ok(!codes(assessPhoto(neutral, big, face)).includes('cast'))
+  // piel calida sin zonas neutras: no se puede juzgar la luz, no es una dominante
+  const skin = img((x, y) => (((x >> 3) + (y >> 3)) % 2 ? [205, 160, 135] : [165, 128, 108]))
+  assert.ok(!codes(assessPhoto(skin, big, face)).includes('cast'))
 })

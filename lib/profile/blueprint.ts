@@ -51,13 +51,9 @@ export const COLOR_HEX: Record<string, string> = {
   Rojo: '#B0282E', Rosa: '#D9A3AE', Lila: '#B39DC4', Mostaza: '#C99A2E',
 }
 
-type Temp = 'Cálida' | 'Fría' | 'Neutra'
-const PALETTES: Record<Temp, { cara: string[]; neutros: string[]; acentos: string[]; inferiores: string[] }> = {
-  'Cálida': { cara: ['Camel', 'Oliva', 'Mostaza', 'Beige', 'Burdeos'], neutros: ['Camel', 'Beige', 'Marrón', 'Azul marino', 'Gris'], acentos: ['Burdeos', 'Mostaza', 'Oliva', 'Rojo'], inferiores: ['Azul marino', 'Marrón', 'Oliva', 'Beige', 'Gris'] },
-  'Fría': { cara: ['Azul claro', 'Lila', 'Rosa', 'Verde bosque', 'Blanco'], neutros: ['Gris', 'Azul marino', 'Negro', 'Blanco'], acentos: ['Burdeos', 'Verde bosque', 'Lila', 'Rojo'], inferiores: ['Gris', 'Azul marino', 'Negro'] },
-  'Neutra': { cara: ['Azul claro', 'Verde bosque', 'Beige', 'Burdeos', 'Blanco'], neutros: ['Gris', 'Azul marino', 'Beige', 'Blanco', 'Camel'], acentos: ['Verde bosque', 'Burdeos', 'Azul claro'], inferiores: ['Azul marino', 'Gris', 'Beige', 'Marrón'] },
-}
-export const PALETTE_GROUPS: [keyof (typeof PALETTES)['Cálida'], string][] = [['cara', 'Cerca de la cara'], ['neutros', 'Neutros (base del armario)'], ['acentos', 'Acentos'], ['inferiores', 'Prendas inferiores']]
+import { PALETTES, PALETTE_GROUPS, type Temp } from '@/lib/color/palette'
+import { temperatureLabel, temperatureState } from '@/lib/color/temperature'
+export { PALETTE_GROUPS }
 
 const lower = (s: string) => s.toLowerCase()
 const list = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs.at(-1)}`)
@@ -95,13 +91,17 @@ export function colorimetry(b: Bundle) {
   add(c.sun_reaction === 'Me quemo y apenas me bronceo', -0.5, 'te quemas con facilidad (tiende a frío)')
   add(c.hair_color === 'Pelirrojo', 1, 'pelo pelirrojo (cálido)')
   const inferred: Temp | undefined = n === 0 ? undefined : score >= 1 ? 'Cálida' : score <= -1 ? 'Fría' : n >= 2 ? 'Neutra' : undefined
-  const declared = (['Cálida', 'Fría', 'Neutra'] as const).find((t) => t === c.temperature)
-  const temp = declared ?? inferred
-  const conflict = !!(declared && inferred && declared !== inferred)
+  // Temperatura (BIS 2): validada o declarada por el usuario > estimacion de la IA sin confirmar > pistas.
+  const ts = temperatureState(c, b.colorAnalyses ?? [])
+  const declared = ts.fromUser ? ts.value ?? undefined : undefined
+  const aiTemp = !ts.fromUser ? ts.value ?? undefined : undefined
+  const temp: Temp | undefined = declared ?? aiTemp ?? inferred
+  const tempSource = declared ? (ts.status === 'validado' ? 'validado' : 'declarado') : aiTemp ? 'ia' : inferred ? 'pistas' : undefined
+  const conflict = !!(temp && inferred && tempSource !== 'pistas' && temp !== inferred)
   const h = HAIR_DEPTH[c.hair_color], s = SKIN_DEPTH[c.skin_tone]
   const inferredContrast = h !== undefined && s !== undefined ? (Math.abs(h - s) >= 2 ? 'Alto' : Math.abs(h - s) === 1 ? 'Medio' : 'Bajo') : undefined
   const contrast: string | undefined = c.contrast ?? inferredContrast
-  return { temp, declared, inferred, conflict, clues, contrast, contrastInferred: !c.contrast && !!inferredContrast, depth: c.depth, intensity: c.intensity }
+  return { temp, declared, inferred, conflict, clues, contrast, contrastInferred: !c.contrast && !!inferredContrast, depth: c.depth, intensity: c.intensity, ts, tempSource, secondary: ts.secondary }
 }
 
 // ── Motor ─────────────────────────────────────────────────────────
@@ -284,18 +284,33 @@ export function buildFindings(b: Bundle): Finding[] {
     Medio: 'Combinaría un neutro claro con uno medio; el blanco y negro puro, mejor lejos de la cara.',
     Bajo: 'Combinaciones tono sobre tono; evitaría blanco y negro juntos cerca de la cara.',
   }
-  const colConf: Confidence = !col.temp ? 'sin_datos' : v.a3 ? 'alta' : !col.declared || col.conflict ? 'baja' : 'media'
+  // Confianza: validado por el usuario → alta; declarado → media; solo IA → nunca mas que media (y baja si su confianza no es alta);
+  // deducido de pistas o en conflicto → baja.
+  const aiConf = col.ts.confidence
+  const colConf: Confidence = !col.temp ? 'sin_datos'
+    : col.tempSource === 'validado' || (col.tempSource === 'declarado' && v.a3) ? 'alta'
+    : col.tempSource === 'ia' ? (aiConf === 'alta' && !col.conflict ? 'media' : 'baja')
+    : col.tempSource === 'declarado' && !col.conflict ? 'media' : 'baja'
+  const ADJ = { 'Cálida': 'cálido', 'Fría': 'frío', 'Neutra': 'neutro' } as const
+  const fromAI = col.ts.source === 'ia'
+  const SOURCE_WHY: Record<string, string> = {
+    validado: fromAI ? 'Lo validaste tú confirmando la estimación de la IA con tu foto de rostro' : col.ts.latest ? 'Lo validaste tú, corrigiendo la estimación de la IA' : 'Lo validaste tú',
+    declarado: 'Lo declaraste tú, sin validarlo todavía',
+    ia: `La IA lo estimó con tu foto de rostro (confianza ${aiConf}) y aún no lo has confirmado`,
+    pistas: `Lo deduzco de tus pistas: ${col.clues.join(', ')}`,
+  }
   add({
     key: 'colorimetria', section: 'color', title: 'Colorimetría',
     body: !col.temp ? 'Sin datos para estimar tu subtono.'
-      : `Subtono ${({ 'Cálida': 'cálido', 'Fría': 'frío', 'Neutra': 'neutro' } as const)[col.temp]}${col.contrast ? `, contraste ${lower(col.contrast)}` : ''}${col.depth ? `, profundidad ${lower(col.depth)}` : ''}${col.intensity ? `, intensidad ${lower(col.intensity)}` : ''}.${col.conflict ? ` Ojo: tus pistas apuntan a ${lower(col.inferred!)}.` : ''}`,
-    why: !col.temp ? 'No has indicado temperatura ni pistas de subtono.'
-      : `${col.declared ? `Lo declaraste tú${col.clues.length ? ` y tus pistas (${col.clues.join(', ')}) ${col.conflict ? 'apuntan a otro lado' : 'lo respaldan'}` : ''}` : `Lo deduzco de tus pistas: ${col.clues.join(', ')}`}.${col.contrastInferred ? ' El contraste lo calculo con tu color de pelo y de piel.' : ''} ${rule('subtono')} ${rule('luz')}`,
-    action: !col.temp ? 'Responde las pistas de subtono del capítulo 03 (venas, metal, sol): bastan dos minutos.'
-      : `${TEMP_ACTION[col.temp]} ${col.contrast ? CONTRAST_ACTION[col.contrast] ?? '' : ''} ${col.conflict || !col.declared ? 'Lo validaría con la foto de rostro con luz natural y un folio blanco.' : ''}`.replace(/\s+/g, ' ').trim(),
-    data_used: [col.declared && 'Temperatura declarada', col.clues.length && 'Pistas de subtono', col.contrast && (col.contrastInferred ? 'Color de pelo y piel' : 'Contraste declarado')].filter(Boolean) as string[],
-    missing: [!col.temp && 'Temperatura o pistas de subtono (capítulo 03)', !col.contrast && 'Color de pelo y tono de piel'].filter(Boolean) as string[],
-    origin: col.declared ? 'Declarado por ti' : 'Deducido de tus respuestas', confidence: colConf,
+      : `Subtono ${ADJ[col.temp]}${col.secondary && col.secondary !== col.temp ? ` con tendencia ${ADJ[col.secondary as Temp] ?? lower(col.secondary)}` : ''}${col.contrast ? `, contraste ${lower(col.contrast)}` : ''}${col.depth ? `, profundidad ${lower(col.depth)}` : ''}${col.intensity ? `, intensidad ${lower(col.intensity)}` : ''}.${col.conflict ? ` Ojo: tus pistas apuntan a ${lower(col.inferred!)}.` : ''}`,
+    why: !col.temp ? 'No hay temperatura validada, ni estimación de tu foto de rostro, ni pistas de subtono.'
+      : `${SOURCE_WHY[col.tempSource!]}.${col.tempSource !== 'pistas' && col.clues.length ? ` Tus pistas (${col.clues.join(', ')}) ${col.conflict ? 'apuntan a otro lado' : 'lo respaldan'}.` : ''}${col.ts.aiDiffers ? ` La última estimación de la IA (${lower(temperatureLabel(col.ts.latest!.temperature, col.ts.latest!.secondary_tendency))}) es distinta: manda tu dato.` : ''}${col.contrastInferred ? ' El contraste lo calculo con tu color de pelo y de piel.' : ''} Intensidad, profundidad y contraste son dimensiones aparte: la temperatura no las cambia. ${rule('subtono')} ${rule('luz')}`,
+    action: !col.temp ? 'Sube una foto de tu rostro con luz natural y te propongo una temperatura que tú confirmas; o responde las pistas de subtono del capítulo 03.'
+      : `${TEMP_ACTION[col.temp]} ${col.contrast ? CONTRAST_ACTION[col.contrast] ?? '' : ''} ${col.tempSource === 'validado' ? '' : 'Confírmalo o corrígelo en la tarjeta «Temperatura cromática» del capítulo 03.'}`.replace(/\s+/g, ' ').trim(),
+    data_used: [col.tempSource === 'validado' && 'Temperatura validada por ti', col.tempSource === 'declarado' && 'Temperatura declarada', (col.tempSource === 'ia' || fromAI) && 'Foto de rostro (estimación de la IA)', col.clues.length && 'Pistas de subtono', col.contrast && (col.contrastInferred ? 'Color de pelo y piel' : 'Contraste declarado')].filter(Boolean) as string[],
+    missing: [!col.temp && 'Temperatura cromática (capítulo 03)', col.tempSource && col.tempSource !== 'validado' && 'Validar tu temperatura cromática', !col.contrast && 'Color de pelo y tono de piel'].filter(Boolean) as string[],
+    origin: col.tempSource === 'validado' ? (fromAI ? 'Validado por ti · estimado por la IA' : 'Validado por ti') : col.tempSource === 'declarado' ? 'Declarado por ti' : col.tempSource === 'ia' ? 'IA · foto de rostro (sin confirmar)' : 'Deducido de tus respuestas',
+    confidence: colConf,
   })
 
   // ── Paleta ──
@@ -315,9 +330,9 @@ export function buildFindings(b: Bundle): Finding[] {
       key: 'paleta', section: 'color', title: 'Paleta',
       body: `Neutros: ${list(groups.neutros.map(lower))}. Cerca de la cara: ${list(groups.cara.map(lower))}. Acentos: ${list(groups.acentos.map(lower))}.`,
       why: `Sale de tu subtono ${({ 'Cálida': 'cálido', 'Fría': 'frío', 'Neutra': 'neutro' } as const)[col.temp]}${col.contrast ? ` y tu contraste ${lower(col.contrast)}` : ''}. ${rule('cara')}${removed.length ? ` He quitado lo que evitas (${list(removed.map(lower))}).` : ''}`,
-      action: `Empezaría por los neutros: son el 70 % del armario. Los acentos, en prendas pequeñas o cerca de la cara. Combinaciones para empezar: ${combosTxt.join('; ')}.${far.length ? ` ${list(far)} te gusta${far.length > 1 ? 'n' : ''}: llévalo${far.length > 1 ? 's' : ''} lejos de la cara (pantalón, calzado).` : ''}`,
+      action: `Empezaría por los neutros: son el 70 % del armario. Los acentos, en prendas pequeñas o cerca de la cara. La temperatura orienta, no prohíbe: un color de fuera funciona lejos de la cara o separado del rostro con un neutro de esta paleta. Combinaciones para empezar: ${combosTxt.join('; ')}.${far.length ? ` ${list(far)} te gusta${far.length > 1 ? 'n' : ''}: llévalo${far.length > 1 ? 's' : ''} lejos de la cara (pantalón, calzado).` : ''}`,
       data_used: ['Colorimetría', likes.length && 'Colores que te gustan', avoids.length && 'Colores que evitas'].filter(Boolean) as string[],
-      missing: colConf === 'baja' ? ['Validar la colorimetría con luz natural'] : [],
+      missing: colConf === 'baja' || colConf === 'media' ? ['Validar tu temperatura cromática'] : [],
       origin: 'Calculado a partir de tu colorimetría', confidence: colConf === 'alta' ? 'alta' : colConf,
       details: { groups, combos: combosTxt, far },
     })

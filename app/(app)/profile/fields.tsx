@@ -26,7 +26,7 @@ function Input({ q, v }: { q: Question; v: any }) {
 
 /** Campos de un capitulo, agrupados tal como los define el cuestionario. */
 export function AreaBody({ id, b }: { id: AreaId; b: Bundle }) {
-  const qs = questionsOf(id)
+  const qs = questionsOf(id).filter((q) => !q.external)
   const groups = [...new Set(qs.map((q) => q.group))]
   return (<>{groups.map((g) => {
     const items = qs.filter((q) => q.group === g)

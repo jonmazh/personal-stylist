@@ -33,3 +33,16 @@ export const ReferenceTagsSchema = z.object({
     patterns: z.string(),
   })).max(8),
 })
+
+// Temperatura cromatica (subtono de la piel) a partir de la foto de rostro. Es una PROPUESTA:
+// la validacion, el tope de confianza y la persistencia los decide la aplicacion (lib/color/temperature.ts).
+export const TemperatureSchema = z.object({
+  image_quality: z.object({ suitable: z.boolean(), issues: z.array(z.string()).max(8) }),
+  temperature: z.enum(['calida', 'fria', 'neutra', 'indeterminada']),
+  secondary_tendency: z.enum(['calida', 'fria']).nullable().default(null),
+  confidence: z.enum(['alta', 'media', 'baja']),
+  observations: z.array(z.string()).max(6),
+  explanation: z.string(),
+  limitations: z.array(z.string()).max(6),
+})
+export type TemperatureAI = z.infer<typeof TemperatureSchema>

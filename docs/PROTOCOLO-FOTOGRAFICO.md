@@ -66,9 +66,11 @@ Solo se envían al proveedor de IA cuando el usuario pulsa «Analizar».
 | Resolución | lado menor < 600 px | Resolución baja |
 | Orientación | horizontal en fotos de cuerpo entero | Debe ser vertical |
 | Exposición | luminancia media < 60 o > 210 (0–255) | Demasiado oscura / sobreexpuesta |
-| Contraste | desviación de luminancia < 25 | Silueta poco distinguible |
+| Contraste (no en rostro) | desviación de luminancia < 25 | Silueta poco distinguible |
 | Nitidez | varianza del laplaciano < 40 (imagen a 256 px) | Desenfocada o movida |
-| Dominante de color (solo rostro) | desviación de un canal > 16 % | No sirve para colorimetría |
+| Dominante de color (solo rostro) | en las zonas claras casi neutras (fondo, folio blanco), desviación de un canal > 8 %; sin zonas neutras no se juzga (la piel no es una dominante) | No sirve para colorimetría |
+| Sombras fuertes (solo rostro) | diferencia de luminancia entre mitades de la cara > 45 | Busca luz frontal y uniforme |
+| Filtro o color alterado (solo rostro) | saturación media > 0.6 o < 0.04 | Sin filtros ni retoques / foto sin color |
 
 **2. Por la IA, al analizar.** La IA devuelve primero `photo_quality` (utilizable o no, y por qué) para cada foto; las observaciones de fotos no utilizables se descartan y el motivo se muestra bajo la foto (`body_photos.quality.ai`). Los avisos del paso 1 se le pasan para que rebaje la confianza.
 
@@ -77,6 +79,23 @@ Solo se envían al proveedor de IA cuando el usuario pulsa «Analizar».
 - Por defecto las fotos se conservan hasta que el usuario las quita (una a una o «Borrar todas mis fotos»).
 - Opción «Borrar mis fotos después de cada análisis» (`profiles.delete_photos_after_analysis`): tras analizar se eliminan los ficheros y sus filas y se conservan solo los resultados estructurados (README 15).
 - Borrar fotos no borra las observaciones ya generadas: siguen en el diagnóstico como hipótesis revisables.
+
+## Temperatura cromática con la foto de rostro (BIS 2)
+
+Desde la tarjeta «Temperatura cromática» del capítulo 03: instrucciones de captura → foto de rostro (con el control de calidad de arriba) → «Analizar mi temperatura cromática» (`/api/ai/analyze-temperature`, solo se envía esa foto) → resultado → el usuario confirma o corrige. Es el **subtono** de la piel, no la temperatura física.
+
+**Contrato de la IA** (`TemperatureSchema`, Zod): `image_quality {suitable, issues[]}`, `temperature` (calida · fria · neutra · indeterminada), `secondary_tendency` (calida · fria · null), `confidence` (alta · media · baja), `observations[]`, `explanation`, `limitations[]`. Sin porcentajes de precisión.
+
+**Reglas de la aplicación** (`finalizeTemperature`): la IA solo propone.
+
+- Foto no apta según la IA → no hay conclusión; se explica el motivo y se pide otra foto.
+- «Indeterminada» → «Sin información suficiente»: no se fuerza una categoría.
+- Avisos graves del control previo (dark, bright, blurry, cast, shadow, filter) → confianza máxima **baja**. Otros avisos, avisos de la propia IA o foto sin control previo → máxima **media**. Si la aplicación rebaja la confianza, se indica.
+- La tendencia secundaria solo se guarda si difiere de la principal (por ejemplo, «Neutra con tendencia cálida»).
+
+**Datos y trazabilidad.** Cada estimación se guarda tal cual en `color_analyses` (temperatura, tendencia, confianza, explicación, observaciones, limitaciones, calidad de la IA y del navegador, foto analizada, modelo y fecha) y nunca se modifica. El dato vigente vive en `color_profiles`: `temperature`, `temperature_source` (ia = estimación confirmada · usuario = corregida o elegida), `temperature_status` (pendiente · recopilado · validado), `temperature_analysis_id`, `temperature_updated_at` y `temperature_validated_at`. **La IA nunca escribe `color_profiles`**: una estimación nueva que no coincida con el dato validado se muestra, pero no se aplica sin una nueva confirmación. Solo cambia la temperatura; intensidad, profundidad y contraste no se tocan.
+
+**Privacidad.** Bucket privado `profile-private`, RLS por usuario, procesamiento en el servidor, sin URLs públicas; la foto se puede quitar y, con «borrar tras el análisis», se elimina después y se conserva solo el resultado (`photo_id` queda vacío; `photo_path` registra qué foto se analizó).
 
 ## Qué se guarda de cada análisis
 

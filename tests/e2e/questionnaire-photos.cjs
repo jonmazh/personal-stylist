@@ -16,7 +16,7 @@ const log = (...a) => console.log('✔', ...a)
 
   // ── A · Cuestionario ──
   await go('color')
-  for (const t of ['Verde', 'Castaño oscuro', 'Clara', 'Verdosas', 'Oro', 'Cálida', 'Medio']) await pick(t)
+  for (const t of ['Verde', 'Castaño oscuro', 'Clara', 'Verdosas', 'Oro', 'Medio']) await pick(t)
   await p.locator('fieldset', { hasText: 'Colores que te gusta llevar' }).locator('label:text-is("Camel")').click()
   await p.locator('fieldset', { hasText: 'Colores que evitas' }).locator('label:text-is("Rosa")').click()
   await save(); assert.doesNotMatch(await p.locator('main').innerText(), /No se pudo/)

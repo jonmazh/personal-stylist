@@ -23,6 +23,13 @@ const goodPhoto = (w = 750, h = 1000) => png(w, h, (x, y) => { const v = ((x >> 
 /** Foto "mala": oscura y horizontal. */
 const darkPhoto = () => png(1000, 750, (x, y) => { const v = ((x >> 4) + (y >> 4)) % 2 ? 15 : 45; return [v, v, v] })
 
+/** Foto de rostro sintetica: fondo blanco neutro arriba y piel (damero suave) abajo. k < 1 la oscurece. */
+const facePhoto = (k = 1) => png(600, 720, (x, y) => {
+  if (y < 180) return [236, 236, 233].map((v) => Math.round(v * k))
+  const v = ((x >> 4) + (y >> 4)) % 2 ? 1 : 0.85
+  return [205, 160, 135].map((c) => Math.round(c * v * k))
+})
+
 async function signup(p, U) {
   const email = `e2e${Date.now()}${Math.floor(Math.random() * 1e4)}@test.local`
   await p.goto(U + '/login'); await p.fill('input[name=email]', email); await p.fill('input[name=password]', 'password123')
@@ -32,4 +39,4 @@ async function signup(p, U) {
   return email
 }
 
-module.exports = { until, png, goodPhoto, darkPhoto, signup }
+module.exports = { until, png, goodPhoto, darkPhoto, facePhoto, signup }

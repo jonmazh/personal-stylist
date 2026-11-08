@@ -6,7 +6,7 @@ Verificado: `tsc` y `next build` pasan. **No se ha probado contra un Supabase ni
 ## Puesta en marcha
 
 1. **Supabase**: crea un proyecto en https://supabase.com/dashboard.
-2. **Esquema**: pega en *SQL Editor* y ejecuta, por orden, `supabase/migrations/0001_init.sql`, `0002_questionnaire_photos.sql`, `0003_diagnosis_format.sql`, `0004_style_dna_retention.sql` y `0005_style_identity.sql` (de la 0002 en adelante se pueden repetir sin riesgo) (o `supabase link` + `supabase db push`). Crea tablas, RLS, 4 buckets privados y sus políticas.
+2. **Esquema**: pega en *SQL Editor* y ejecuta, por orden, `supabase/migrations/0001_init.sql`, `0002_questionnaire_photos.sql`, `0003_diagnosis_format.sql`, `0004_style_dna_retention.sql`, `0005_style_identity.sql` y `0006_color_temperature.sql` (de la 0002 en adelante se pueden repetir sin riesgo) (o `supabase link` + `supabase db push`). Crea tablas, RLS, 4 buckets privados y sus políticas.
 3. **Auth**: en *Authentication > Email Templates > Confirm signup* cambia `{{ .ConfirmationURL }}` por
    `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` y pon tu URL en *Site URL* (en local, `http://localhost:3000`).
 4. **Variables**: copia `.env.example` a `.env.local` y rellénalo (URL y publishable key de *Project Settings > API*; clave **gratuita** de IA, ver abajo).
@@ -42,7 +42,7 @@ Cómo funciona: el chat usa Chat Completions; el análisis de fotos descarga las
 
 - `npm test` — pruebas unitarias: revisiones entre versiones del Blueprint, contexto del chat, cuestionario (cada pregunta contra el esquema SQL), control de calidad de fotos, motor de diagnóstico y documentos al día.
 - `npm run docs` — regenera `docs/CUESTIONARIO.md`, `docs/PROTOCOLO-FOTOGRAFICO.md`, `docs/MOTOR-DIAGNOSTICO.md` y `docs/STYLE-DNA.md` desde el código.
-- Recorridos completos en la app (`tests/e2e/blueprint-review.cjs`, `questionnaire-photos.cjs` y `style-dna-retention.cjs`): expediente, Blueprint v1→v3, cuestionario, fotos con control de calidad, análisis, catálogo de estilos, identidad híbrida, Style DNA, referencias propias, borrado de fotos y chat. Necesitan Docker:
+- Recorridos completos en la app (`tests/e2e/blueprint-review.cjs`, `questionnaire-photos.cjs`, `style-dna-retention.cjs` y `temperature.cjs`): expediente, Blueprint v1→v3, cuestionario, fotos con control de calidad, análisis, temperatura cromática con foto de rostro, catálogo de estilos, identidad híbrida, Style DNA, referencias propias, borrado de fotos y chat. Necesitan Docker:
   1. `npx supabase init` en una carpeta aparte, copiar las migraciones de `supabase/migrations/` a su `supabase/migrations/` y `npx supabase start`.
   2. `.env.local` con la URL y la publishable key locales, `AI_PROVIDER=ollama`, `AI_BASE_URL=http://127.0.0.1:4600/v1`, `AI_MODEL_CHAT=mock`.
   3. `node tests/e2e/mock-ai.mjs /tmp/e2e/lastreq.json &`, `npm run build && npm start -- -p 3100 &` y `node tests/e2e/<prueba>.cjs /tmp/e2e`.

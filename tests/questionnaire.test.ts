@@ -9,7 +9,7 @@ import { sampleBundle } from './helpers'
 
 /** Columnas de cada tabla segun las migraciones (create table + alter table add column). */
 function schema() {
-  const sql = readdirSync('supabase/migrations').sort().map((f) => readFileSync(`supabase/migrations/${f}`, 'utf8')).join('\n')
+  const sql = readdirSync('supabase/migrations').sort().map((f) => readFileSync(`supabase/migrations/${f}`, 'utf8')).join('\n').replace(/--[^\n]*/g, '')
   const cols: Record<string, Set<string>> = {}
   for (const m of sql.matchAll(/create table (?:if not exists )?public\.(\w+) \(([\s\S]*?)\n\);/g)) {
     const set = (cols[m[1]] ??= new Set())
@@ -34,6 +34,8 @@ test('cada pregunta se guarda en una columna que existe en las migraciones', () 
   assert.ok(cols.profiles.has('delete_photos_after_analysis'))
   for (const c of ['influences', 'liked_elements', 'rejected_elements', 'brand_refs', 'identity_version', 'identity_updated_at']) assert.ok(cols.style_preferences.has(c), c)
   assert.ok(cols.style_reference_ratings.has('liked_elements'))
+  for (const c of ['temperature_source', 'temperature_status', 'temperature_analysis_id', 'temperature_updated_at', 'temperature_validated_at']) assert.ok(cols.color_profiles.has(c), c)
+  for (const c of ['photo_id', 'photo_path', 'temperature', 'secondary_tendency', 'confidence', 'explanation', 'observations', 'limitations', 'image_quality', 'client_quality', 'confidence_capped', 'model', 'created_at']) assert.ok(cols.color_analyses.has(c), c)
 })
 
 test('especificacion completa: ids unicos, todas las areas, opciones y proposito declarados', () => {
@@ -50,7 +52,7 @@ test('guardado: solo acepta opciones validas y separa las columnas por tabla', (
   assert.equal(rows.color_profiles!.eye_color, 'Verde')
   assert.equal(rows.color_profiles!.metal, null) // opcion inventada: se descarta
   assert.deepEqual(rows.color_profiles!.likes, ['Camel'])
-  assert.equal(rows.color_profiles!.temperature, 'Cálida')
+  assert.equal(rows.color_profiles!.temperature, undefined) // la temperatura se valida en su tarjeta (BIS 2), no con el formulario
 })
 
 test('guardado: el reparto de vida debe sumar 100 % y se guarda en jsonb por clave', () => {
