@@ -7,11 +7,13 @@
 | Subfase | Contenido | Estado |
 |---|---|---|
 | 4A · Shopping Intelligence y base del Shopping Planner | Necesidades detectadas y propias, 4 tipos, prioridad explicable y configurable, uso esperado, ocasiones, conjuntos nuevos (motor de outfits), redundancia, coste por uso, estados con historial, listas, presupuesto, preferencias | Hecha |
-| 4B en adelante | Fuentes autorizadas de tiendas, productos candidatos, comparación | Pendiente |
+| 4B · Product Discovery | Conectores (feed autorizado, buscador, URL, asistida), normalización con procedencia por campo, catálogo de candidatos, verificación de precio y tallas | Hecha |
+| 4C en adelante | Análisis de producto, compatibilidad, simulación, compras | Pendiente |
 
 ## Principios
 
-- **Primero la necesidad, después el producto.** En 4A no hay productos, tiendas externas, scraping ni enlaces: solo necesidades. Todo funciona sin ningún producto.
+- **Primero la necesidad, después el producto.** Las necesidades (4A) funcionan sin ningún producto; la búsqueda (4B) parte de una necesidad o de una petición tuya.
+- **Sin scraping.** No se rastrean tiendas. Ningún conector se salta controles de acceso, autenticación, límites ni condiciones de uso.
 - **El estilista puede decir «no compres».** Si ninguna necesidad abierta supera tu umbral, la interfaz lo dice. Tener presupuesto no obliga a gastarlo.
 - **Los deseos son legítimos**, pero se marcan como deseo, puntúan bajo en «necesidad real» y no compiten con las necesidades. El detector nunca crea deseos: solo tú.
 - **Sin segundo armario ni segundo motor de outfits.** La prenda buscada se simula como «prenda virtual» con el motor de la fase 3 (`buildCandidates`) y con la similitud de la auditoría (2D); nunca se guarda en `garments`.
@@ -85,9 +87,81 @@ Precio objetivo (máximo, si no mínimo; si no hay, tu presupuesto máximo por p
 
 ## Preferencias
 
-Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme. En 4A no se consulta ninguna tienda.
+Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme. La búsqueda de productos (4B) solo consulta tus tiendas preferidas (si has elegido alguna) y nunca las excluidas.
 
-## Datos (migración `0016_shopping_intelligence.sql`)
+## Product Discovery (4B)
+
+### Fuentes
+
+| Fuente | Qué hace |
+|---|---|
+| API autorizada (`api`) | Integración estructurada concedida por la tienda o un proveedor autorizado. |
+| Feed autorizado (`feed`) | Catálogo en CSV, JSON o XML que te da un programa de afiliación o la propia marca. |
+| Buscador de productos (`search`) | Encuentra páginas de producto y las enlaza; no descarga su contenido. |
+| Importación por URL (`url`) | Lees tú una página concreta: solo sus metadatos públicos, si la tienda y robots.txt lo permiten. |
+| Importación asistida (`manual`) | Los datos y capturas que aportas tú. |
+
+Todas cumplen la interfaz `ProductSource` (`lib/shopping/catalog/sources.ts`); el Product Source Manager (`searchAll`) las ejecuta, quita duplicados por URL canónica (gana la fuente con más datos: API > feed > URL > tus datos > buscador) y ordena por **coincidencia con lo que buscas** (tipo, color, precio, corte, material), nunca por precio, popularidad o tendencia. La coincidencia no es una recomendación de compra.
+
+### Tiendas y política de acceso
+
+| Tienda | Grupo | Dominios | Lectura de páginas |
+|---|---|---|---|
+| Zara | Inditex | zara.com | Solo enlace y tus datos |
+| Massimo Dutti | Inditex | massimodutti.com | Solo enlace y tus datos |
+| Pull&Bear | Inditex | pullandbear.com | Solo enlace y tus datos |
+| Bershka | Inditex | bershka.com | Solo enlace y tus datos |
+| Stradivarius | Inditex | stradivarius.com | Solo enlace y tus datos |
+| COS | Complementarias | cos.com | Solo metadatos públicos |
+| ARKET | Complementarias | arket.com | Solo metadatos públicos |
+| Uniqlo | Complementarias | uniqlo.com | Solo metadatos públicos |
+| Mango Man | Complementarias | mango.com | Solo metadatos públicos |
+| Selected Homme | Complementarias | selected.com | Solo metadatos públicos |
+
+- **Solo metadatos públicos** (`metadata`): Una página, a petición tuya, si robots.txt lo permite.
+- **Solo enlace y tus datos** (`manual_only`): Sus condiciones no permiten la extracción automatizada.
+- Inditex: sus condiciones prohíben bots, crawlers, scrapers y la extracción automatizada sin autorización escrita, así que sus páginas no se descargan nunca. Se pueden **enlazar** (el buscador devuelve el enlace) e importar con tus datos y capturas.
+- Las demás tiendas del catálogo tienen las condiciones **sin revisar**: solo se lee una página a petición tuya, sus metadatos públicos y si robots.txt lo permite. Puedes añadir tus propias tiendas (por defecto «solo enlace y tus datos»).
+
+### Importación por URL
+
+1. Política de la tienda (solo manual → no se descarga nada). 2. Validación de la URL: solo http(s), puertos 80/443, nunca direcciones internas, locales o de metadatos (SSRF), también tras cada redirección (máx. 3). 3. robots.txt (RFC 9309; si no se puede consultar, no se lee la página). 4. Una sola página, máx. 2 MB y 8 s, con el agente «PersonalStylistBot/1.0 (importación de una página a petición del usuario; respeta robots.txt)». 5. Solo metadatos de producto publicados para máquinas: schema.org (Product/ProductGroup con variantes) u OpenGraph. El HTML visible no se lee.
+
+Si algo de esto no se cumple, se explica el motivo y se ofrece la importación asistida con el enlace ya puesto.
+
+### Feeds autorizados
+
+CSV/TSV, JSON o XML (Google Merchant/RSS) desde una URL o subido (máx. 4 MB y 5000 productos). Hay que indicar quién autoriza su uso. Se reconocen las columnas habituales (Google Merchant, Awin, Clickwise…) y las filas con el mismo `item_group_id` se agrupan como variantes.
+
+### Buscador de productos
+
+Opcional, con clave: `SHOPPING_SEARCH_PROVIDER=brave`, `SHOPPING_SEARCH_KEY` (y `SHOPPING_SEARCH_URL`, `SHOPPING_MARKET`). Consulta solo los dominios de tus tiendas permitidas y devuelve **enlaces** a páginas de producto de tiendas conocidas; no descarga las páginas. Sin clave, se busca solo en tus feeds. Las búsquedas iguales se reutilizan durante 24 h (caché en `shopping_searches`).
+
+### Procedencia de cada dato
+
+| Procedencia | Significado |
+|---|---|
+| Tienda (`store`) | Publicado por la tienda en la página del producto. |
+| Feed (`feed`) | Viene del feed autorizado. |
+| Buscador (`search`) | Resumen del buscador: hay que confirmarlo en la tienda. |
+| Deducido (`derived`) | Deducido por reglas del nombre o la descripción de la tienda (p. ej. el tipo de prenda). |
+| Foto (`photo`) | Extraído de fotografías. |
+| IA (`ai`) | Inferencia de la IA, sin confirmar. |
+| Tú (`user`) | Introducido o confirmado por ti. |
+
+Nunca se inventan atributos: sin composición publicada con porcentajes, «composición desconocida»; sin precio, «sin comprobar». Lo que corriges tú queda como «tú» y no se sobrescribe al volver a importar.
+
+### Precios, tallas y verificación
+
+Disponibilidad: disponible, pocas unidades, agotado, reserva, sin comprobar. Cada precio y talla tiene fecha; pasados 3 días (o si nunca se ha verificado) la ficha avisa de que hay que volver a comprobarlos. La verificación vuelve a consultar la misma fuente si lo permite (página con metadatos o feed) o la haces tú con lo que ves en la tienda. Cada cambio queda en `product_price_history`.
+
+### Imágenes
+
+Las de la tienda solo se enlazan (no se copian). Tus capturas y fotos se recodifican en el navegador (sin metadatos ni GPS) y se guardan en el bucket privado `shopping-private`, servidas con URLs firmadas.
+
+## Datos
+
+Migración `0016_shopping_intelligence.sql` (4A):
 
 | Tabla | Contenido |
 |---|---|
@@ -99,6 +173,20 @@ Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umb
 | `shopping_preferences` | Preferencias de compra |
 
 RLS «own rows» en las 7 tablas; además, una evaluación, un evento o un elemento de lista solo pueden apuntar a necesidades y listas propias, y la prenda a sustituir debe ser tuya.
+
+Migración `0017_product_discovery.sql` (4B). Los productos candidatos nunca se mezclan con `garments` (lo que posees):
+
+| Tabla | Contenido |
+|---|---|
+| `retailers` | Tiendas: catálogo común (solo lectura) y las tuyas; dominios, mercado y política de acceso |
+| `product_sources` | Tus feeds o APIs autorizados, con quién lo autoriza y el estado de la última sincronización |
+| `product_feed_items` | Productos normalizados de cada feed |
+| `shopping_searches` | Historial y caché de búsquedas: consulta, estado de cada fuente y resultados |
+| `external_products` | Candidatos: fuente, tienda, necesidad, datos normalizados, procedencia por campo, imágenes, estado, motivo de descarte, fecha de verificación |
+| `external_product_variants` | Tallas y colores con disponibilidad y fecha |
+| `product_price_history` | Precios y disponibilidad observados |
+
+RLS: todas por usuario, y cada relación (necesidad, búsqueda, fuente, tienda, producto) solo con filas propias o tiendas del catálogo común. Bucket privado `shopping-private` por carpeta de usuario.
 
 ## API
 
@@ -115,14 +203,28 @@ RLS «own rows» en las 7 tablas; además, una evaluación, un evento o un eleme
 | `GET/PUT /api/shopping/budgets` | Presupuesto activo |
 | `GET/PUT /api/shopping/preferences` | Preferencias |
 | `GET /api/shopping/planner` | Vista del planificador |
+| `POST /api/shopping/search` | Busca productos para una necesidad o un texto (caché 24 h; `force` la ignora) |
+| `GET /api/shopping/search/:id`, `POST /api/shopping/search/:id/save` | Ver una búsqueda; guardar un resultado como candidato |
+| `POST /api/shopping/import` | Importación por URL o asistida (`{manual: {...}}`) |
+| `GET /api/shopping/products`, `GET/PATCH/DELETE /api/shopping/products/:id` | Candidatos; corregir datos, vincular, guardar o descartar (con motivo) |
+| `POST /api/shopping/products/:id/verify` | Volver a comprobar precio, disponibilidad y tallas (o confirmarlos tú) |
+| `POST/DELETE /api/shopping/products/:id/images` | Tus capturas |
+| `GET/POST /api/shopping/retailers`, `DELETE /api/shopping/retailers/:id` | Tiendas |
+| `GET/POST /api/shopping/sources`, `POST /api/shopping/sources/:id/sync`, `DELETE /api/shopping/sources/:id` | Feeds autorizados |
 
 ## Interfaz
 
 - `/compras` — Shopping Intelligence: analizar, veredicto («merece la pena comprar» o «no necesitas comprar nada»), necesidades por prioridad, alta de necesidades y deseos.
 - `/compras/necesidades/:id` — desglose de la prioridad, conjuntos nuevos, uso, coste por uso, redundancia, ocasiones, estados, prioridad manual, listas, edición e historial.
 - `/compras/plan` — Shopping Planner: qué merece la pena y qué puede esperar, presupuesto, listas y preferencias.
+- `/compras/buscar` — búsqueda en fuentes autorizadas, estado de cada fuente y resultados por coincidencia.
+- `/compras/importar` — por URL o asistida.
+- `/compras/productos` y `/compras/productos/:id` — candidatos con procedencia de cada dato, tallas, verificación, historial de precios, capturas, correcciones y descarte.
+- `/compras/fuentes` — tiendas con su política, feeds autorizados y estado del buscador.
 
 ## Pruebas
 
 - `tests/shopping.test.ts`: pesos y niveles, explicabilidad, deseo redundante, sustitución, coste por uso, urgencia, detección, presupuesto, migración y RLS.
 - `tests/e2e/shopping.cjs`: recorrido completo en móvil, integración con la auditoría, estados, listas, presupuesto, preferencias y aislamiento entre dos usuarios (app y RLS directa).
+- `tests/product-discovery.test.ts`: tipo y color en español e inglés, precio, composición, URL canónica, procedencia, extracción schema.org/OpenGraph, robots.txt, SSRF, feeds, búsqueda y gestor de fuentes, política de Inditex, migración.
+- `tests/e2e/product-discovery.cjs` con `tests/e2e/fake-store.mjs` (tienda y buscador de prueba locales): feed, búsqueda desde una necesidad, importación por URL y sus bloqueos, asistida con capturas, verificación con historial, descarte y aislamiento (app, RLS y Storage).

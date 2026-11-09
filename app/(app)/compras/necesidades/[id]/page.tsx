@@ -6,6 +6,8 @@ import { LEVEL_LABEL, specText } from '@/lib/shopping/priority'
 import { NEED_ORIGINS, NEED_STATUSES, NEED_TYPES, NeedSpec, PRIORITIES, label } from '@/lib/shopping/taxonomy'
 import { SpecFields } from '@/components/shopping/spec-fields'
 import { PendingButton } from '@/components/outfits/pending-button'
+import { searchAction } from '../../product-actions'
+import { listProducts } from '@/lib/shopping/catalog-service'
 import { addToListAction, createListAction, editNeedAction, needPriorityAction, needStatusAction, reassessAction } from '../../actions'
 
 type Row = Record<string, any>
@@ -19,7 +21,7 @@ export default async function NeedPage({ params, searchParams }: { params: Promi
   const user = (await getUser())!
   const n = await getNeed(user.supabase, id).catch(() => null)
   if (!n) notFound()
-  const lists = await listLists(user.supabase).catch(() => [])
+  const [lists, products] = await Promise.all([listLists(user.supabase).catch(() => []), listProducts(user.supabase, { need_id: id }).catch(() => [])])
   const a: Row | undefined = n.assessments[0]
   const spec = NeedSpec.safeParse(n.spec)
   const here = `/compras/necesidades/${id}`
@@ -61,6 +63,15 @@ export default async function NeedPage({ params, searchParams }: { params: Promi
         {(a.occasions as Row[])?.length > 0 && <p className="small">Ocasiones que cubre: {(a.occasions as Row[]).map((o) => `${o.label}${o.newlyCovered ? ' (ahora sin cubrir)' : ''}`).join(', ')}.</p>}
         <form action={reassessAction}><input type="hidden" name="id" value={id} /><PendingButton className="btn small" label="Reevaluar con el armario actual" pending="Reevaluando…" /></form>
       </section>) : <p className="m">Aún sin evaluar.</p>}
+
+      <section className="osec"><h2>Productos</h2>
+        <p className="m small">{products.length ? `${products.length} candidato${products.length === 1 ? '' : 's'} para esta necesidad.` : 'Aún no hay productos para esta necesidad.'}</p>
+        {products.length > 0 && <ul className="small">{products.map((p: Row) => <li key={p.id}><Link href={`/compras/productos/${p.id}`}>{p.product_name}</Link> <span className="m">· {p.retailers?.name ?? p.brand ?? 'tienda'}{p.current_price != null ? ` · ${p.current_price} €` : ''}</span></li>)}</ul>}
+        <div className="btns">
+          <form action={searchAction}><input type="hidden" name="need_id" value={id} /><PendingButton className="btn small primary" label="Buscar productos" pending="Buscando en las fuentes autorizadas…" /></form>
+          <Link className="btn small" href={`/compras/importar?need=${id}`}>Importar uno que hayas visto</Link>
+        </div>
+      </section>
 
       <section className="osec"><h2>Decidir</h2>
         <div className="btns">{next.map((x) => (

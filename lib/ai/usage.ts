@@ -3,7 +3,7 @@ import { providerId, PROVIDER_LABEL } from './client'
 
 const LABEL: Record<string, string> = {
   chat: 'Chat del estilista', photo_analysis: 'Análisis de fotos corporales', temperature_analysis: 'Temperatura cromática',
-  reference_analysis: 'Referencias de estilo', garment_analysis: 'Análisis de prendas', fit_assessment: 'Fit Assessment (ajuste)', wardrobe_audit: 'Auditoría del armario (reglas, sin IA)', outfit_generation: 'Generador de outfits (reglas, sin IA)', stylist_parse: 'Estilista: interpretar la petición', stylist_select: 'Estilista: elegir y explicar propuestas', stylist_chat: 'Estilista: conversación', outfit_evaluation: 'Evaluación de conjuntos', taste_extract: 'Perfil de gustos: extraer de la conversación', taste_update: 'Perfil de gustos: anotaciones (sin IA)', shopping_analysis: 'Personal Shopper: detección de necesidades (reglas, sin IA)',
+  reference_analysis: 'Referencias de estilo', garment_analysis: 'Análisis de prendas', fit_assessment: 'Fit Assessment (ajuste)', wardrobe_audit: 'Auditoría del armario (reglas, sin IA)', outfit_generation: 'Generador de outfits (reglas, sin IA)', stylist_parse: 'Estilista: interpretar la petición', stylist_select: 'Estilista: elegir y explicar propuestas', stylist_chat: 'Estilista: conversación', outfit_evaluation: 'Evaluación de conjuntos', taste_extract: 'Perfil de gustos: extraer de la conversación', taste_update: 'Perfil de gustos: anotaciones (sin IA)', shopping_analysis: 'Personal Shopper: detección de necesidades (reglas, sin IA)', product_search: 'Personal Shopper: búsqueda de productos (fuentes autorizadas, sin IA)', product_import: 'Personal Shopper: importación por URL (metadatos públicos, sin IA)',
 }
 
 /**
