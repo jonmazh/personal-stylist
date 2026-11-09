@@ -329,3 +329,44 @@ p.state { white-space: normal; }
 .afind { border: 1px solid var(--line); background: var(--paper); padding: 12px 14px; min-width: 0; }
 .afind p { margin: 6px 0; } .afind .btns { margin: 8px 0 0; }
 .afind.st-rejected { opacity: .65; }
+/* Outfit Studio (3A) */
+.ozones { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+.ozones > div { border: 1px dashed var(--line); padding: 10px 12px; display: grid; gap: 2px; }
+.ozones .st, .oinfo .st { font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+.ofilters { grid-template-columns: 2fr repeat(5, 1fr) auto auto; }
+.ogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 22px 16px; margin: 18px 0; }
+.ogrid > * { min-width: 0; }
+.ocard { position: relative; display: grid; gap: 8px; align-content: start; }
+.ocard .state { white-space: normal; }
+.collage { display: grid; gap: 2px; aspect-ratio: 1; background: var(--line); border: 1px solid var(--line); overflow: hidden; }
+.collage.n2, .collage.n3, .collage.n4 { grid-template-columns: 1fr 1fr; }
+.collage.n3 > span:first-child { grid-row: span 2; }
+.collage.big { aspect-ratio: auto; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); max-width: 720px; margin: 12px 0; }
+.collage.big > span { aspect-ratio: 3 / 4; }
+.collage > span { background: var(--paper); display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden; }
+.collage img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.collage em { font: 12px var(--sans); color: var(--mut); padding: 6px; text-align: center; font-style: normal; }
+.oitems { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; }
+.oitems li { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
+.oitems.view li { grid-template-columns: 72px 1fr; }
+.oitems li.missing { opacity: .7; }
+.oth { width: 64px; height: 80px; background: var(--paper); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.oitems.view .oth { width: 72px; height: 90px; }
+.oth img { width: 100%; height: 100%; object-fit: cover; }
+.oinfo { display: grid; gap: 3px; min-width: 0; }
+.oinfo select { padding: 4px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 14px var(--sans); }
+.oacts { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+@media (max-width: 560px) { .oitems li { grid-template-columns: 56px 1fr; } .oitems .oacts { grid-column: 1 / 3; justify-content: flex-start; } .oth { width: 56px; height: 70px; } }
+.oprob { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; font-size: 14px; }
+.oprob li { padding: 6px 10px; border-left: 3px solid var(--warn); background: var(--paper); }
+.oprob li.err { border-left-color: var(--acc); color: var(--acc); }
+.opicker { border: 1px solid var(--line); background: var(--paper); padding: 12px 14px; margin: 14px 0; }
+.opicker .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.opicker .chip[aria-pressed=true] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin: 10px 0; }
+.pcard { display: grid; gap: 4px; text-align: left; background: transparent; border: 1px solid var(--line); padding: 6px; cursor: pointer; color: var(--ink); font: 14px var(--sans); min-width: 0; }
+.pcard:disabled { opacity: .45; cursor: default; }
+.pcard .oth { width: 100%; height: auto; aspect-ratio: 3 / 4; }
+.obuilder .grid input, .obuilder .grid select { width: 100%; }
+@media (max-width: 760px) { .ofilters { grid-template-columns: 1fr 1fr; } .ofilters label:first-of-type { grid-column: 1 / 3; } }
+.collage.big.n3 > span:first-child { grid-row: auto; } .collage.big { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }

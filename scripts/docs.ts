@@ -20,6 +20,7 @@ import type { Bundle } from '@/lib/profile/data'
 import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
 import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
+import { ITEM_ROLES, MAX_ITEMS, MAX_TAGS, OUTFIT_OCCASIONS, OUTFIT_SOURCES, OUTFIT_STATUSES, SNAPSHOT_FIELDS, rolesFor } from '@/lib/outfits/taxonomy'
 import { ANALYSIS_ROLES, GARMENT_ANALYST, MAX_IMAGES, PROMPT_VERSION, SCHEMA_VERSION } from '@/lib/wardrobe/analysis'
 
 const KIND: Record<Question['kind'], string> = {
@@ -525,11 +526,92 @@ export function wardrobeDoc() {
   return out.join('\n')
 }
 
+export function outfitDoc() {
+  const ex: [string, string, string][] = [['Camisa', 'top', 'shirt'], ['Jersey', 'top', 'knit'], ['Pantalón', 'bottom', 'trousers'], ['Blazer', 'tailoring', 'blazer'], ['Abrigo', 'outerwear', 'coat'], ['Traje', 'tailoring', 'suit'], ['Mocasines', 'footwear', 'loafers'], ['Cinturón', 'accessories', 'belt']]
+  return [
+    '# Outfit Studio (Fase 3)',
+    '',
+    '> Documento generado desde `lib/outfits/taxonomy.ts` con `npm run docs`. No lo edites a mano.',
+    '',
+    '## Estado de la fase',
+    '',
+    '| Subfase | Contenido | Estado |', '|---|---|---|',
+    '| 3A · Fundamentos | Tablas `outfits` y `outfit_items`, conjuntos manuales con prendas reales, roles, sustitución, filtros, estados, ficha | Hecha |',
+    '| 3B · Motor de combinaciones | Plantillas, generación de candidatos, reglas, scoring de 100 puntos, variedad | Pendiente |',
+    '| 3C · IA estilista y ocasiones | Outfit Stylist AI, peticiones en lenguaje natural, conversación sobre una propuesta, validación de IDs | Pendiente |',
+    '| 3D · Evaluación y aprendizaje | Evaluación teórica y visual, feedback, fórmulas, registro de uso | Pendiente |',
+    '',
+    '## Punto de partida (análisis del proyecto antes de la 3A)',
+    '',
+    '- **Perfil (fase 1):** tablas `profiles`, `body_measurements`, `color_profiles`, `style_preferences`, `lifestyle_profiles`, `fit_preferences`, `style_goals`, `blueprints`; se leen juntas con `loadBundle` (`lib/profile/data.ts`). El Style Blueprint no se toca en esta fase.',
+    '- **Armario (fase 2):** `garments` (con `wardrobe_status`, `decision` y `field_sources`), `garment_images` (fotos en los buckets privados `wardrobe-originals` y `wardrobe-thumbnails`, servidas con URLs firmadas), `garment_events`, `garment_analyses`, `garment_fit_reviews`, `garment_decisions`, auditorías. Servicio en `lib/wardrobe/service.ts`; errores legibles con `WardrobeError` y `handle` (`lib/wardrobe/http.ts`).',
+    '- **Convenciones:** migraciones idempotentes numeradas, RLS «own rows» por `user_id = auth.uid()`, disparador `touch_updated_at`, listas cerradas como datos en TypeScript verificadas contra los CHECK por pruebas, documentación generada, acciones del servidor para la interfaz y rutas REST con el mismo servicio.',
+    '- **Ya existía y se reutiliza:** el bucket privado `outfits-private` (creado en 0001, sin uso) queda reservado para las fotos del conjunto puesto (evaluación visual, 3D). Las fotos de las prendas no se copian: los conjuntos firman las de `garment_images`.',
+    '',
+    '## Decisiones de arquitectura',
+    '',
+    '- **Un conjunto enlaza prendas reales** (`outfit_items.garment_id → garments`). Nunca se inventan: la aplicación comprueba que cada prenda existe en tu armario y, al añadirla, que está activa; la RLS de `outfit_items` exige además que el conjunto y la prenda sean del usuario.',
+    `- **Instantánea por prenda** (\`attribute_snapshot\`): ${SNAPSHOT_FIELDS.join(', ')}, más el título y la fecha. Si cambias la ficha, el conjunto sigue explicándose; si eliminas la prenda del armario, \`garment_id\` pasa a null y el conjunto se conserva con su instantánea. Al sustituir una prenda se guarda a cuál sustituye.`,
+    '- **Roles flexibles, no una plantilla fija:** cada prenda tiene una función; las capas y los complementos son opcionales y algunas funciones admiten varias prendas (capas intermedias, complementos).',
+    '- **Reglas estructurales, no puntuación:** errores que impiden guardar (función imposible para esa prenda, más prendas de las que admite una función, prenda repetida, traje junto a parte inferior, prenda que no existe) y avisos que no lo impiden (falta calzado o parte inferior, prenda archivada, borrador o marcada para sustituir o donar). El scoring llega en 3B.',
+    '- **Sin columnas de puntuación todavía:** `compatibility_score` y `confidence_level` se añadirán con el motor (3B) para no guardar datos que nadie calcula.',
+    '- **Separación con Personal Shopper:** Outfit Studio solo usa tu ropa; las necesidades de compra salen de la auditoría del armario (2D) y las resolverá el Personal Shopper.',
+    '',
+    '## Funciones de cada prenda',
+    '',
+    '| Función (`item_role`) | Para qué | Máximo |', '|---|---|---|',
+    ...ITEM_ROLES.map((r) => `| ${r.label} (\`${r.id}\`) | ${r.help} | ${r.max} |`),
+    '',
+    'Qué funciones puede ocupar cada tipo de prenda (ejemplos; la primera es la que se propone por defecto):',
+    '',
+    ...ex.map(([l, c, sub]) => `- **${l}:** ${rolesFor({ category: c, subcategory: sub }).map((r) => ITEM_ROLES.find((x) => x.id === r)!.label.toLowerCase()).join(', ')}`),
+    '',
+    `Un conjunto admite hasta ${MAX_ITEMS} prendas y ${MAX_TAGS} etiquetas.`,
+    '',
+    '## Datos del conjunto',
+    '',
+    `- **Ocasión:** ${OUTFIT_OCCASIONS.map((o) => `${o.label} (\`${o.id}\`)`).join(', ')}.`,
+    '- **Formalidad** 1–5, **temporadas**, **etiquetas** libres, **notas**, **favorito**.',
+    `- **Estado:** ${OUTFIT_STATUSES.map((x) => `${x.label} (\`${x.id}\`)`).join(' · ')}. Archivar es reversible; eliminar exige confirmación y nunca toca las prendas.`,
+    `- **Origen** (\`source\`): ${OUTFIT_SOURCES.join(', ')} (hoy solo manual).`,
+    '',
+    '## Datos (migración `0011_outfits.sql`)',
+    '',
+    '| Tabla | Responsabilidad |', '|---|---|',
+    '| `outfits` | Conjunto: nombre, notas, ocasión, formalidad, temporadas, etiquetas, estado, favorito, origen, fechas (`updated_at` con disparador). Índices por usuario + estado y usuario + ocasión |',
+    '| `outfit_items` | Prenda del conjunto: `garment_id` (null si se eliminó del armario), función, orden, instantánea. Única por conjunto y prenda. RLS: solo conjuntos y prendas propios |',
+    '',
+    'Las tablas de las subfases siguientes (`outfit_generations`, `outfit_generation_results`, `outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.',
+    '',
+    '## API REST',
+    '',
+    '| Ruta | Función |', '|---|---|',
+    '| `GET /api/outfits?status=&occasion=&formality=&season=&tag=&favorite=1&q=` | Listar y filtrar (`status`: active = borradores y guardados, draft, saved, archived, all) |',
+    '| `POST /api/outfits` | Crear: datos + `items: [{garment_id, role}]` |',
+    '| `GET /api/outfits/:id` | Conjunto con prendas, fotos firmadas, instantáneas y avisos |',
+    '| `PATCH /api/outfits/:id` | Editar datos, `status` y/o la lista completa de `items` (`[{id?, garment_id, role}]`) |',
+    '| `DELETE /api/outfits/:id` | Archivar; con `?mode=permanent`, eliminar |',
+    '| `POST /api/outfits/:id/items` | Añadir una prenda (`{garment_id, role?}`) |',
+    '| `POST /api/outfits/:id/replace-item` | Sustituir la prenda de una posición conservando su función (`{item_id, garment_id}`) |',
+    '',
+    '## Criterios de aceptación de la fase 3',
+    '',
+    '| Criterio | Estado |', '|---|---|',
+    '| Puedo crear y guardar outfits manualmente | Hecho (3A) |',
+    '| Cada outfit está vinculado a prendas reales de mi armario | Hecho (3A): aplicación + RLS |',
+    '| Puedo sustituir prendas sin perder el contexto del outfit | Hecho en el constructor y la API (3A); la sustitución conversacional llega en 3C |',
+    '| El motor genera outfits sin inventar prendas · respeta restricciones · consulta el Style Blueprint · puntuaciones explicables · variedad | Pendiente (3B) |',
+    '| Outfits para distintas ocasiones · conversar con el estilista sobre una propuesta | Pendiente (3C) |',
+    '| Evaluar outfits (selección y foto) · valorar y explicar rechazos · fórmulas · registro de uso · aprendizaje | Pendiente (3D) |',
+  ].join('\n')
+}
+
 if (process.argv[1]?.endsWith('docs.ts')) {
+  writeFileSync('docs/OUTFIT-STUDIO.md', outfitDoc())
   writeFileSync('docs/ARMARIO.md', wardrobeDoc())
   writeFileSync('docs/STYLE-DNA.md', styleDnaDoc())
   writeFileSync('docs/MOTOR-DIAGNOSTICO.md', diagnosisDoc())
   writeFileSync('docs/CUESTIONARIO.md', questionnaireDoc())
   writeFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', protocolDoc())
-  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md docs/STYLE-DNA.md y docs/ARMARIO.md actualizados')
+  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md, docs/STYLE-DNA.md, docs/ARMARIO.md y docs/OUTFIT-STUDIO.md actualizados')
 }
