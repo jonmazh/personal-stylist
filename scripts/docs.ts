@@ -18,7 +18,7 @@ import { SERIOUS_ISSUES } from '@/lib/color/temperature'
 import { ATTRIBUTES, COMPOSITION_SOURCES, CONDITIONS, CUTS, GARMENT_COLORS, GROUPS, IMAGE_ROLES, PATTERNS, STATUSES, SUBS } from '@/lib/wardrobe/taxonomy'
 import type { Bundle } from '@/lib/profile/data'
 import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
-import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
+import { DORMANT_DAYS, DUP_THRESHOLD, MIN_AUDIT, MIN_TRACK_DAYS, MIN_WEAR_EVENTS } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
 import { DRESS_CODES, INTENTS, RESTRICTIONS, TEMPLATES } from '@/lib/outfits/engine/context'
 import { FLAGS, FORMULA_STATUSES, RATINGS as FB_RATINGS, REASONS } from '@/lib/outfits/feedback'
@@ -28,6 +28,8 @@ import { CONTEXT_PARSER, OUTFIT_STYLIST, PARSER_VERSION, STYLIST_CHAT, STYLIST_V
 import { CRITERIA_LABEL, DEFAULT_WEIGHTS } from '@/lib/outfits/engine/scoring'
 import { ENGINE_VERSION, MAX_COMBINATIONS, MAX_USES, TOP_K } from '@/lib/outfits/engine/generate'
 import { ITEM_ROLES, MAX_ITEMS, MAX_TAGS, OUTFIT_OCCASIONS, OUTFIT_SOURCES, OUTFIT_STATUSES, SNAPSHOT_FIELDS, rolesFor } from '@/lib/outfits/taxonomy'
+import { BUDGET_PERIODS, NEED_ORIGINS, NEED_STATUSES, NEED_TYPES, OPEN_STATUSES, RETAILERS } from '@/lib/shopping/taxonomy'
+import { DEFAULT_PRIORITY_WEIGHTS, PRIORITY_LABEL, PRIORITY_VERSION, type PriorityKey } from '@/lib/shopping/priority'
 import { ANALYSIS_ROLES, GARMENT_ANALYST, MAX_IMAGES, PROMPT_VERSION, SCHEMA_VERSION } from '@/lib/wardrobe/analysis'
 
 const KIND: Record<Question['kind'], string> = {
@@ -386,7 +388,14 @@ function stylistSection() {
     '   - *guardar* la versión vigente como conjunto.',
     '',
     '   Un cambio con una prenda que no existe se rechaza y se explica. El historial reciente y los ids de las propuestas se envían en cada turno, así que el contexto no se pierde.',
-    '5. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.',
+    '5. **Perfil de gustos:** lo que dices claramente que te gusta o no te gusta, en esta conversación o en el chat «Estilista», se anota en tu perfil como preferencia declarada y te lo dice. Gustar algo lo quita de rechazados y al revés:',
+    '   - una prenda concreta → «te gusta» (el motor la favorece) o «no te gusta» (deja de proponerla; en la conversación, desde ese mismo mensaje), confirmados en Aprendizaje;',
+    '   - un tipo de prenda o rasgo («pantalones anchos», «pantalón pitillo») → rasgos preferidos o rechazados de tu identidad estética;',
+    '   - un color → colores que te gustan o que evitas del estudio cromático;',
+    '   - un corte por tipo de prenda («me gustan los pantalones anchos» → pantalones: Amplio) → corte preferido de tus preferencias de vestuario, que usa la compatibilidad.',
+    '',
+    '   En Outfit Studio va en la misma respuesta de la IA (campos `likes` y `dislikes`, validados contra tu armario y las listas cerradas; lo que aparezca en ambos se descarta). Tu opinión sobre una propuesta concreta («me gusta la P2») no es un gusto general. En el chat libre solo se hace una extracción adicional cuando el mensaje expresa un gusto o un rechazo. Todo se puede deshacer en Aprendizaje, Identidad estética, Estudio cromático o Preferencias de vestuario.',
+    '6. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.',
     '',
     '### Prompt del intérprete', '', '```text', CONTEXT_PARSER, '```', '',
     '### Prompt de Outfit Stylist AI', '', '```text', OUTFIT_STYLIST, '```', '',
@@ -436,7 +445,8 @@ function auditSection() {
     '| Necesidades prioritarias | Hasta 6, concretas: tipo + color de tu paleta que aún no tienes + tu corte preferido u ocasión (p. ej. «Calzado versátil para smart casual»), ordenadas por el peso de la ocasión en tu semana; temporadas según tu clima |',
     '| Conservación | Prendas desgastadas o dañadas |',
     '| Por revisar | Borradores, fichas incompletas, propuestas de la IA sin revisar, prendas marcadas para revisar o sin datos para valorarlas |',
-    '| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación. La frecuencia de uso queda pendiente: saldrá del registro de outfits y del diario de uso, no de las fotos |',
+    `| Prendas que no usas | Con registro suficiente (al menos ${MIN_WEAR_EVENTS} usos en ${MIN_TRACK_DAYS} días, desde «Me lo he puesto» en Outfit Studio): prendas que ya tenías y no te has puesto desde que registras (propuesta: revisar) y prendas sin usar en más de ${DORMANT_DAYS} días. En los duplicados, la que más te pones suma utilidad |`,
+    '| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación; frecuencia de uso (las que más usas, cuántas sin usar). Sale del registro de uso, nunca de las fotos |',
   ]
 }
 
@@ -755,12 +765,123 @@ export function outfitDoc() {
   ].join('\n')
 }
 
+export function shopperDoc() {
+  const keys = Object.keys(DEFAULT_PRIORITY_WEIGHTS) as PriorityKey[]
+  return [
+    '# Personal Shopper (Fase 4)',
+    '',
+    '> Documento generado desde `lib/shopping/` con `npm run docs`. No lo edites a mano.',
+    '',
+    '## Estado de la fase',
+    '',
+    '| Subfase | Contenido | Estado |', '|---|---|---|',
+    '| 4A · Shopping Intelligence y base del Shopping Planner | Necesidades detectadas y propias, 4 tipos, prioridad explicable y configurable, uso esperado, ocasiones, conjuntos nuevos (motor de outfits), redundancia, coste por uso, estados con historial, listas, presupuesto, preferencias | Hecha |',
+    '| 4B en adelante | Fuentes autorizadas de tiendas, productos candidatos, comparación | Pendiente |',
+    '',
+    '## Principios',
+    '',
+    '- **Primero la necesidad, después el producto.** En 4A no hay productos, tiendas externas, scraping ni enlaces: solo necesidades. Todo funciona sin ningún producto.',
+    '- **El estilista puede decir «no compres».** Si ninguna necesidad abierta supera tu umbral, la interfaz lo dice. Tener presupuesto no obliga a gastarlo.',
+    '- **Los deseos son legítimos**, pero se marcan como deseo, puntúan bajo en «necesidad real» y no compiten con las necesidades. El detector nunca crea deseos: solo tú.',
+    '- **Sin segundo armario ni segundo motor de outfits.** La prenda buscada se simula como «prenda virtual» con el motor de la fase 3 (`buildCandidates`) y con la similitud de la auditoría (2D); nunca se guarda en `garments`.',
+    '- **Memoria.** Una necesidad descartada (con motivo obligatorio) o rechazada en la auditoría no se vuelve a proponer: cada una tiene una clave de detección estable (`occ:`, `cat:`, `season:`, `repl:`, `impr:`), la misma que usa la auditoría.',
+    '',
+    '## Tipos de necesidad',
+    '',
+    '| Tipo | Significado |', '|---|---|',
+    ...NEED_TYPES.map((t) => `| ${t.label} (\`${t.id}\`) | ${t.help} |`),
+    '',
+    '## Origen',
+    '',
+    ...NEED_ORIGINS.map((o) => `- \`${o.id}\`: ${o.label}.`),
+    '',
+    '## Estados',
+    '',
+    '| Estado | Significado |', '|---|---|',
+    ...NEED_STATUSES.map((t) => `| ${t.label} (\`${t.id}\`) | ${t.help} |`),
+    '',
+    `Abiertos (cuentan en el diagnóstico): ${OPEN_STATUSES.map((x) => `\`${x}\``).join(', ')}. Cada cambio queda en \`shopping_need_events\` (creada, estado con motivo, prioridad, edición, lista).`,
+    '',
+    `## Prioridad (\`${PRIORITY_VERSION}\`)`,
+    '',
+    'Es una **prioridad de compra**, no una recomendación de producto. Cada criterio vale de 0 a 1, se multiplica por su peso y la suma da 0-100. Alta ≥ 70, media ≥ 45, baja < 45. Si fijas tú la prioridad, manda la tuya (la calculada se sigue viendo).',
+    '',
+    '| Criterio | Peso por defecto |', '|---|---|',
+    ...keys.map((k) => `| ${PRIORITY_LABEL[k]} | ${DEFAULT_PRIORITY_WEIGHTS[k]} |`),
+    '',
+    '- **Necesidad real:** cobertura de la categoría y de las ocasiones (auditoría 2D); sustituciones según el estado de la prenda; deseos 0,15; redundancia alta resta 0,3 (salvo sustituciones).',
+    '- **Frecuencia de uso esperada:** usos al mes en su temporada según el peso de sus ocasiones en tu semana, repartidos con las prendas parecidas que ya rotas; con registro de uso suficiente, se cita.',
+    '- **Potencial de nuevos outfits:** conjuntos válidos (≥ 60/100) que el motor de la fase 3 forma con la prenda virtual y tus prendas, simulando su temporada.',
+    '- **Adecuación al perfil:** compatibilidad personal (2C) de la prenda virtual y peso de sus ocasiones.',
+    '- **Urgencia:** temporada actual > siguiente > lejana; prenda a sustituir dañada; fecha objetivo en 30 días.',
+    '- **Confianza:** lo definida que está la prenda buscada y lo completo que está tu perfil.',
+    '',
+    'Los pesos se configuran en el planificador y se normalizan a 100 (si todos son 0, vuelven al defecto). Cada evaluación se guarda en `shopping_need_assessments` con su versión, sus pesos, los criterios con razones y datos usados, y se puede reevaluar.',
+    '',
+    '## Coste por uso (estimado)',
+    '',
+    'Precio objetivo (máximo, si no mínimo; si no hay, tu presupuesto máximo por prenda del perfil) ÷ usos esperados en su vida útil (usos al mes × meses de vida por categoría × fracción del año en temporada). Sin precio, no se estima.',
+    '',
+    '## Presupuesto',
+    '',
+    ...BUDGET_PERIODS.map((b) => `- ${b.label} (\`${b.id}\`): ventanas de ${b.months} mes${b.months === 1 ? '' : 'es'} desde la fecha de inicio.`),
+    '',
+    '- Un solo presupuesto activo; el anterior queda en el historial.',
+    '- Comprometido = precio de las necesidades aprobadas o compradas en la ventana. Avisos si lo aprobado supera el presupuesto, si lo prioritario supera lo disponible o si falta precio.',
+    '- Sin compras prioritarias: «No hay ninguna compra prioritaria: no hace falta gastar este presupuesto.»',
+    '',
+    '## Preferencias',
+    '',
+    `Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: ${RETAILERS.map((r) => r.name).join(', ')}. En 4A no se consulta ninguna tienda.`,
+    '',
+    '## Datos (migración `0016_shopping_intelligence.sql`)',
+    '',
+    '| Tabla | Contenido |', '|---|---|',
+    '| `shopping_needs` | Necesidad: título, tipo, origen, clave de detección, estado, especificación (jsonb), razón, prenda a sustituir, prendas relacionadas, precios, tiendas, fecha objetivo, prioridad calculada y la tuya, motivo de descarte |',
+    '| `shopping_need_assessments` | Evaluaciones versionadas: pesos, criterios, puntuación, confianza, uso esperado, conjuntos nuevos, redundancia, coste por uso, ocasiones |',
+    '| `shopping_need_events` | Historial de cambios |',
+    '| `shopping_lists` / `shopping_list_items` | Listas de compra y sus necesidades (sin duplicados) |',
+    '| `shopping_budgets` | Presupuestos (uno activo) |',
+    '| `shopping_preferences` | Preferencias de compra |',
+    '',
+    'RLS «own rows» en las 7 tablas; además, una evaluación, un evento o un elemento de lista solo pueden apuntar a necesidades y listas propias, y la prenda a sustituir debe ser tuya.',
+    '',
+    '## API',
+    '',
+    '| Método y ruta | Uso |', '|---|---|',
+    '| `POST /api/shopping/needs/analyze` | Detecta necesidades y reevalúa las abiertas |',
+    '| `GET /api/shopping/needs?status=open\\|all\\|<estado>` | Lista por prioridad |',
+    '| `POST /api/shopping/needs` | Crea una necesidad o un deseo |',
+    '| `GET /api/shopping/needs/:id` | Ficha con evaluaciones, historial, listas y prendas |',
+    '| `PATCH /api/shopping/needs/:id` | Edita, fija prioridad o cambia de estado (descartar exige motivo) |',
+    '| `POST /api/shopping/needs/:id/assess` | Reevalúa |',
+    '| `GET/POST /api/shopping/lists`, `DELETE /api/shopping/lists/:id` | Listas |',
+    '| `POST/DELETE /api/shopping/lists/:id/items` | Añadir o quitar una necesidad |',
+    '| `GET/PUT /api/shopping/budgets` | Presupuesto activo |',
+    '| `GET/PUT /api/shopping/preferences` | Preferencias |',
+    '| `GET /api/shopping/planner` | Vista del planificador |',
+    '',
+    '## Interfaz',
+    '',
+    '- `/compras` — Shopping Intelligence: analizar, veredicto («merece la pena comprar» o «no necesitas comprar nada»), necesidades por prioridad, alta de necesidades y deseos.',
+    '- `/compras/necesidades/:id` — desglose de la prioridad, conjuntos nuevos, uso, coste por uso, redundancia, ocasiones, estados, prioridad manual, listas, edición e historial.',
+    '- `/compras/plan` — Shopping Planner: qué merece la pena y qué puede esperar, presupuesto, listas y preferencias.',
+    '',
+    '## Pruebas',
+    '',
+    '- `tests/shopping.test.ts`: pesos y niveles, explicabilidad, deseo redundante, sustitución, coste por uso, urgencia, detección, presupuesto, migración y RLS.',
+    '- `tests/e2e/shopping.cjs`: recorrido completo en móvil, integración con la auditoría, estados, listas, presupuesto, preferencias y aislamiento entre dos usuarios (app y RLS directa).',
+    '',
+  ].join('\n')
+}
+
 if (process.argv[1]?.endsWith('docs.ts')) {
+  writeFileSync('docs/PERSONAL-SHOPPER.md', shopperDoc())
   writeFileSync('docs/OUTFIT-STUDIO.md', outfitDoc())
   writeFileSync('docs/ARMARIO.md', wardrobeDoc())
   writeFileSync('docs/STYLE-DNA.md', styleDnaDoc())
   writeFileSync('docs/MOTOR-DIAGNOSTICO.md', diagnosisDoc())
   writeFileSync('docs/CUESTIONARIO.md', questionnaireDoc())
   writeFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', protocolDoc())
-  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md, docs/STYLE-DNA.md, docs/ARMARIO.md y docs/OUTFIT-STUDIO.md actualizados')
+  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md, docs/STYLE-DNA.md, docs/ARMARIO.md, docs/OUTFIT-STUDIO.md y docs/PERSONAL-SHOPPER.md actualizados')
 }

@@ -43,6 +43,7 @@ export default async function StylistSessionPage({ params, searchParams }: { par
           )}
           {m.payload?.action === 'propose' && <div className="props">{(m.payload.results as string[]).map((rid) => { const r = s.results.get(rid); return r ? <ProposalCard key={rid} r={r} context={chips.join(' · ')} label={`P${s.numberOf.get(rid) ?? r.rank}`} back={back} current={s.currentIds.has(rid)} /> : null })}</div>}
           {m.payload?.action === 'modify' && m.payload.result_id && s.results.get(m.payload.result_id) && <div className="props"><ProposalCard r={s.results.get(m.payload.result_id)!} context={chips.join(' · ')} label={`P${m.payload.target}`} back={back} current={s.currentIds.has(m.payload.result_id)} /></div>}
+          {(m.payload?.learned ?? []).length > 0 && <p className="m small learned">Anotado en tu perfil de gustos: {(m.payload.learned as Row[]).map((l) => `${l.polarity === 'like' ? (l.kind === 'cut' ? 'corte preferido' : 'te gusta') : l.kind === 'garment' ? 'no te gusta' : l.kind === 'element' ? 'rechazas' : 'evitas'} ${l.kind === 'garment' ? `«${l.label}»` : l.label.toLowerCase()}`).join('; ')}. <Link href="/outfits/aprendizaje">Aprendizaje</Link> · <Link href="/estilos/identidad">Identidad estética</Link> · <Link href="/profile/color">Estudio cromático</Link> · <Link href="/profile/prendas">Preferencias de vestuario</Link></p>}
           {m.payload?.action === 'save' && m.payload.outfit_id && <p className="small"><Link href={`/outfits/${m.payload.outfit_id}`}>Ver el conjunto guardado</Link></p>}
         </div>
       ))}</div>

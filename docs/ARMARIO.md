@@ -246,7 +246,8 @@ Del artículo al conjunto (`lib/wardrobe/audit.ts`), bajo demanda y con al menos
 | Necesidades prioritarias | Hasta 6, concretas: tipo + color de tu paleta que aún no tienes + tu corte preferido u ocasión (p. ej. «Calzado versátil para smart casual»), ordenadas por el peso de la ocasión en tu semana; temporadas según tu clima |
 | Conservación | Prendas desgastadas o dañadas |
 | Por revisar | Borradores, fichas incompletas, propuestas de la IA sin revisar, prendas marcadas para revisar o sin datos para valorarlas |
-| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación. La frecuencia de uso queda pendiente: saldrá del registro de outfits y del diario de uso, no de las fotos |
+| Prendas que no usas | Con registro suficiente (al menos 5 usos en 30 días, desde «Me lo he puesto» en Outfit Studio): prendas que ya tenías y no te has puesto desde que registras (propuesta: revisar) y prendas sin usar en más de 90 días. En los duplicados, la que más te pones suma utilidad |
+| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación; frecuencia de uso (las que más usas, cuántas sin usar). Sale del registro de uso, nunca de las fotos |
 
 ## Datos (migraciones `0007_wardrobe_base.sql` a `0010_wardrobe_audit.sql`)
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { diagnosisDoc, outfitDoc, protocolDoc, questionnaireDoc, styleDnaDoc, wardrobeDoc } from '../scripts/docs'
+import { diagnosisDoc, outfitDoc, shopperDoc, protocolDoc, questionnaireDoc, styleDnaDoc, wardrobeDoc } from '../scripts/docs'
 
 test('docs/CUESTIONARIO.md esta al dia con el codigo (npm run docs)', () => {
   assert.equal(readFileSync('docs/CUESTIONARIO.md', 'utf8'), questionnaireDoc())
@@ -21,4 +21,8 @@ test('docs/ARMARIO.md esta al dia con el codigo (npm run docs)', () => {
 
 test('docs/OUTFIT-STUDIO.md esta al dia con el codigo (npm run docs)', () => {
   assert.equal(readFileSync('docs/OUTFIT-STUDIO.md', 'utf8'), outfitDoc())
+})
+
+test('docs/PERSONAL-SHOPPER.md esta al dia con el codigo (npm run docs)', () => {
+  assert.equal(readFileSync('docs/PERSONAL-SHOPPER.md', 'utf8'), shopperDoc())
 })
