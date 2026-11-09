@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { getUser } from '@/lib/supabase/server'
 import { WardrobeError } from '@/lib/wardrobe/service'
 import { createOutfit, deleteOutfit, setOutfitStatus, updateOutfit } from '@/lib/outfits/service'
+import { dismissProposal, runGeneration, saveProposal } from '@/lib/outfits/generate-service'
 
 async function me() {
   const u = await getUser()
@@ -47,4 +48,36 @@ export async function deleteOutfitAction(formData: FormData) {
   await deleteOutfit(supabase, oid)
   done()
   redirect('/outfits?deleted=1')
+}
+
+// ── Motor de combinaciones (3B) ──
+const list = (f: FormData, k: string) => f.getAll(k).map(String).filter(Boolean)
+const one = (f: FormData, k: string) => { const v = f.get(k); return typeof v === 'string' && v ? v : null }
+/** Formulario de generación → petición estructurada (las mismas claves que POST /api/outfits/generate). */
+export async function generateAction(formData: FormData) {
+  const { supabase, id } = await me()
+  let gid = ''
+  try {
+    gid = await runGeneration(supabase, id, {
+      occasion: one(formData, 'occasion'), dress_code: one(formData, 'dress_code'), time_of_day: one(formData, 'time_of_day'), environment: one(formData, 'environment'),
+      weather: one(formData, 'weather'), formality: one(formData, 'formality'), comfort_priority: one(formData, 'comfort_priority'), preferred_style: one(formData, 'preferred_style'),
+      restrictions: list(formData, 'restrictions'), exclude_categories: list(formData, 'exclude_categories'), required_garment_ids: list(formData, 'required_garment_ids'),
+      number_of_outfits: Number(formData.get('number_of_outfits')) || 3,
+    })
+  } catch (e) { redirect(`/outfits/generar?error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/outfits/generar?g=${gid}`)
+}
+
+export async function proposalAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const rid = String(formData.get('result_id')), gid = String(formData.get('generation_id'))
+  if (formData.get('action') === 'dismiss') {
+    try { await dismissProposal(supabase, rid) } catch (e) { redirect(`/outfits/generar?g=${gid}&error=${encodeURIComponent(msg(e))}`) }
+    done(); redirect(`/outfits/generar?g=${gid}&dismissed=1#r-${rid}`)
+  }
+  let oid = ''
+  try { oid = (await saveProposal(supabase, id, rid, one(formData, 'name'))).id } catch (e) { redirect(`/outfits/generar?g=${gid}&error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/outfits/${oid}?saved=1`)
 }

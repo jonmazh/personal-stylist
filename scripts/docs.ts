@@ -20,6 +20,9 @@ import type { Bundle } from '@/lib/profile/data'
 import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
 import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
+import { DRESS_CODES, INTENTS, RESTRICTIONS, TEMPLATES } from '@/lib/outfits/engine/context'
+import { CRITERIA_LABEL, DEFAULT_WEIGHTS } from '@/lib/outfits/engine/scoring'
+import { ENGINE_VERSION, MAX_COMBINATIONS, MAX_USES, TOP_K } from '@/lib/outfits/engine/generate'
 import { ITEM_ROLES, MAX_ITEMS, MAX_TAGS, OUTFIT_OCCASIONS, OUTFIT_SOURCES, OUTFIT_STATUSES, SNAPSHOT_FIELDS, rolesFor } from '@/lib/outfits/taxonomy'
 import { ANALYSIS_ROLES, GARMENT_ANALYST, MAX_IMAGES, PROMPT_VERSION, SCHEMA_VERSION } from '@/lib/wardrobe/analysis'
 
@@ -326,6 +329,34 @@ const ACCEPTANCE: [string, string][] = [
   ['Puedo detectar prendas potencialmente duplicadas y huecos', 'Similitud con siete factores y huecos por categoría, ocasión y temporada (2D)'],
 ]
 
+function engineSection() {
+  return [
+    `Versión \`${ENGINE_VERSION}\` (\`lib/outfits/engine\`). **Genera y valida sin IA**; la IA (3C) recibirá solo el conjunto reducido resultante para dirigirlo creativamente. Así se podrá cambiar de modelo sin reescribir el motor.`,
+    '',
+    '1. **Contexto:** ocasión, código de vestimenta, momento, entorno, clima, formalidad deseada, comodidad, intención estética y restricciones. La formalidad objetivo sale de la formalidad deseada, el código de vestimenta y la ocasión (en ese orden de prioridad); la temporada, del clima o de la fecha.',
+    `   - Códigos de vestimenta: ${DRESS_CODES.map((d) => `${d.label} (${d.formality.join('–')}/5)`).join(', ')}.`,
+    `   - Restricciones: ${RESTRICTIONS.map((r) => r.label.toLowerCase()).join(', ')}; también excluir categorías o prendas, y exigir o preferir prendas concretas.`,
+    '2. **Perfil:** identidad estética (influencias y rasgos que te gustan o rechazas), temperatura, colores preferidos y evitados, contraste, ajuste preferido, proporciones, y la compatibilidad, el ajuste real y el valor estratégico de cada prenda (fase 2C).',
+    '3. **Armario — filtros obligatorios** (una puntuación alta no los compensa): solo prendas activas; nunca las marcadas para sustituir o donar; respeta exclusiones y restricciones; nada por debajo del código de vestimenta; con calor, nada de abrigo ni punto.',
+    `4. **Candidatos:** plantillas de anatomía flexible (${TEMPLATES.map((t) => t.label.toLowerCase()).join('; ')}). Con frío o lluvia, siempre con abrigo si tienes alguno. Poda: las ${TOP_K} mejores prendas por función, como máximo ${MAX_COMBINATIONS.toLocaleString('es-ES')} combinaciones.`,
+    '5. **Puntuación (100 puntos, pesos configurables):**',
+    '',
+    '| Criterio | Peso | Qué mira |', '|---|---|---|',
+    `| ${CRITERIA_LABEL.occasion} | ${DEFAULT_WEIGHTS.occasion} | Formalidad de cada prenda frente al objetivo, mezcla de formalidades, prendas que usas para esa actividad, traje o americana si el código es formal |`,
+    `| ${CRITERIA_LABEL.color} | ${DEFAULT_WEIGHTS.color} | Base neutra y número de acentos, estampados juntos, colores que evitas, color cerca de la cara frente a tu temperatura, contraste natural |`,
+    `| ${CRITERIA_LABEL.silhouette} | ${DEFAULT_WEIGHTS.silhouette} | Equilibrio de volúmenes arriba/abajo (o tu gusto por el volumen), proporciones de tus medidas, ajuste preferido |`,
+    `| ${CRITERIA_LABEL.aesthetic} | ${DEFAULT_WEIGHTS.aesthetic} | Encaje con tu identidad híbrida y penalizaciones de criterio experto (deportivo con sastrería, zapato de vestir con pantalón informal…) |`,
+    `| ${CRITERIA_LABEL.personal} | ${DEFAULT_WEIGHTS.personal} | Ajuste real confirmado y compatibilidad de cada prenda, arreglos pendientes, favoritas, prendas que pediste |`,
+    `| ${CRITERIA_LABEL.versatility} | ${DEFAULT_WEIGHTS.versatility} | Valor estratégico de las prendas, neutralidad, comodidad si la priorizas |`,
+    '',
+    '   Cada criterio guarda sus razones, sus matices (lo que resta) y los datos usados. La confianza (alta, media, baja) depende de lo completas que estén las fichas y el perfil, de las pruebas de ajuste y de los datos de la IA sin confirmar. La puntuación ordena alternativas y explica el criterio; no es una medida científica.',
+    '6. **Criterio experto:** se descartan combinaciones con coherencia estética o adecuación muy bajas, una camisa abierta como tercera pieza que no va sobre una camiseta, o una capa intermedia que no va sobre una camisa, camiseta o polo.',
+    `7. **Selección variada:** una propuesta por intención (${INTENTS.map((i) => i.label.toLowerCase()).join(', ')}), con la que pidas primero. Se descartan las que comparten más de la mitad de las prendas con otra ya elegida, y se penaliza repetir una prenda más de ${MAX_USES} veces si hay alternativas. Validación final: solo identificadores del inventario elegible y composición sin errores.`,
+    '',
+    'Cada propuesta incluye: composición con la función de cada prenda, «por qué funciona», matices, avisos (temporada, arreglos) y hasta dos **alternativas** (cambiar una prenda por otra con una puntuación parecida).',
+  ]
+}
+
 function auditSection() {
   return [
     `Del artículo al conjunto (\`lib/wardrobe/audit.ts\`), bajo demanda y con al menos ${MIN_AUDIT} prendas activas. Reglas deterministas sobre el inventario real, el perfil y las evaluaciones de 2C, sin coste de IA. **Ninguna auditoría elimina, archiva ni decide nada**: cada hallazgo trae su porqué y los datos usados, y tú lo apruebas o lo rechazas. Aprobar una recomendación que propone una decisión la registra como tuya (motivo «Auditoría vN»); aprobar una necesidad la añade a tus necesidades (base de las compras de la fase 4). Cada hallazgo tiene una clave estable: en la siguiente auditoría se recuerda lo que aprobaste o rechazaste y no vuelve a aparecer como nuevo.`,
@@ -537,7 +568,7 @@ export function outfitDoc() {
     '',
     '| Subfase | Contenido | Estado |', '|---|---|---|',
     '| 3A · Fundamentos | Tablas `outfits` y `outfit_items`, conjuntos manuales con prendas reales, roles, sustitución, filtros, estados, ficha | Hecha |',
-    '| 3B · Motor de combinaciones | Plantillas, generación de candidatos, reglas, scoring de 100 puntos, variedad | Pendiente |',
+    '| 3B · Motor de combinaciones | Plantillas, generación de candidatos con poda, filtros obligatorios, scoring de 100 puntos explicable, variedad por intenciones, historial auditable | Hecha |',
     '| 3C · IA estilista y ocasiones | Outfit Stylist AI, peticiones en lenguaje natural, conversación sobre una propuesta, validación de IDs | Pendiente |',
     '| 3D · Evaluación y aprendizaje | Evaluación teórica y visual, feedback, fórmulas, registro de uso | Pendiente |',
     '',
@@ -581,7 +612,16 @@ export function outfitDoc() {
     '| `outfits` | Conjunto: nombre, notas, ocasión, formalidad, temporadas, etiquetas, estado, favorito, origen, fechas (`updated_at` con disparador). Índices por usuario + estado y usuario + ocasión |',
     '| `outfit_items` | Prenda del conjunto: `garment_id` (null si se eliminó del armario), función, orden, instantánea. Única por conjunto y prenda. RLS: solo conjuntos y prendas propios |',
     '',
-    'Las tablas de las subfases siguientes (`outfit_generations`, `outfit_generation_results`, `outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.',
+    '| `outfit_generations` (0012) | Petición estructurada, contexto resuelto, pesos, versión del motor, estadísticas (prendas excluidas y por qué, combinaciones evaluadas y descartadas) |',
+    '| `outfit_generation_results` (0012) | Cada propuesta: intención, prendas con instantánea, puntuación, confianza, desglose por criterio, por qué funciona, matices, avisos, alternativas, estado (propuesta, guardada, descartada) |',
+    '',
+    '`outfits` gana `compatibility_score`, `confidence_level` y `generation_result_id` (0012) para los conjuntos guardados desde el motor.',
+    '',
+    'Las tablas de las subfases siguientes (`outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.',
+    '',
+    '## Motor de combinaciones (3B)',
+    '',
+    ...engineSection(),
     '',
     '## API REST',
     '',
@@ -593,6 +633,9 @@ export function outfitDoc() {
     '| `DELETE /api/outfits/:id` | Archivar; con `?mode=permanent`, eliminar |',
     '| `POST /api/outfits/:id/items` | Añadir una prenda (`{garment_id, role?}`) |',
     '| `POST /api/outfits/:id/replace-item` | Sustituir la prenda de una posición conservando su función (`{item_id, garment_id}`) |',
+    '| `POST /api/outfits/generate` | Generar propuestas con criterios estructurados (ver arriba); `weights` opcional |',
+    '| `GET /api/outfits/generations` · `GET /api/outfits/generations/:id` | Historial de peticiones y propuestas con su desglose |',
+    '| `POST /api/outfits/generations/results/:id` | `{action: save\\|dismiss, name?}`: guardar la propuesta como conjunto o descartarla |',
     '',
     '## Criterios de aceptación de la fase 3',
     '',
@@ -600,8 +643,13 @@ export function outfitDoc() {
     '| Puedo crear y guardar outfits manualmente | Hecho (3A) |',
     '| Cada outfit está vinculado a prendas reales de mi armario | Hecho (3A): aplicación + RLS |',
     '| Puedo sustituir prendas sin perder el contexto del outfit | Hecho en el constructor y la API (3A); la sustitución conversacional llega en 3C |',
-    '| El motor genera outfits sin inventar prendas · respeta restricciones · consulta el Style Blueprint · puntuaciones explicables · variedad | Pendiente (3B) |',
-    '| Outfits para distintas ocasiones · conversar con el estilista sobre una propuesta | Pendiente (3C) |',
+    '| El motor genera outfits sin inventar prendas | Hecho (3B): solo inventario elegible + validación de salida |',
+    '| Las combinaciones respetan las restricciones del usuario | Hecho (3B): filtros obligatorios no compensables |',
+    '| El motor consulta mi Style Blueprint | Hecho (3B): identidad estética, temperatura, colores, contraste, cortes, proporciones, compatibilidad y ajuste |',
+    '| Las puntuaciones son explicables y se pueden auditar | Hecho (3B): desglose por criterio guardado con pesos y versión del motor |',
+    '| Las propuestas son variadas y no repiten sistemáticamente las mismas prendas | Hecho (3B) |',
+    '| Puedo solicitar outfits para distintas ocasiones | Hecho con petición estructurada (3B); en lenguaje natural, 3C |',
+    '| Puedo conversar con el estilista sobre una propuesta | Pendiente (3C) |',
     '| Evaluar outfits (selección y foto) · valorar y explicar rechazos · fórmulas · registro de uso · aprendizaje | Pendiente (3D) |',
   ].join('\n')
 }

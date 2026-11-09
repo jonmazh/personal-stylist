@@ -26,13 +26,14 @@ export function rolesFor(g: { category?: string | null; subcategory?: string | n
   const s = g.subcategory, c = g.category
   if (s === 'suit' || s === 'tuxedo') return ['full_body', 'third_layer']
   if (s === 'waistcoat' || s === 'gilet') return ['mid_layer', 'third_layer']
-  if (['coat', 'trench', 'parka', 'puffer'].includes(s ?? '')) return ['outer_layer', 'third_layer']
+  if (s === 'blazer') return ['third_layer']
+  if (['coat', 'trench', 'parka', 'puffer'].includes(s ?? '')) return ['outer_layer']
   if (['knit', 'cardigan', 'sweatshirt', 'hoodie', 'turtleneck'].includes(s ?? '')) return ['top_base', 'mid_layer', 'third_layer']
   if (s === 'overshirt' || s === 'shirt') return ['top_base', 'third_layer', 'mid_layer']
   switch (c) {
     case 'top': return ['top_base', 'mid_layer']
     case 'outerwear': return ['third_layer', 'outer_layer']
-    case 'tailoring': return ['third_layer', 'full_body', 'bottom', 'mid_layer']
+    case 'tailoring': return ['third_layer', 'other']
     case 'bottom': return ['bottom']
     case 'footwear': return ['footwear']
     case 'accessories': return ['accessory']
