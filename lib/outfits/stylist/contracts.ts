@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { GROUPS } from '@/lib/wardrobe/taxonomy'
 import { ITEM_ROLES, OUTFIT_OCCASIONS, roleLabel, rolesFor } from '../taxonomy'
-import { DISLIKE_RULES, DislikesSchema, tasteLists } from '@/lib/profile/tastes'
+import { EMPTY_POLARITY, TASTE_RULES, DislikesSchema, tasteLists } from '@/lib/profile/tastes'
 import { DRESS_CODES, ENVIRONMENTS, FORMALITY_WISH, INTENTS, LEVELS, RESTRICTIONS, TIMES, WEATHERS, type GenerateRequestT } from '../engine/context'
 
 /**
@@ -151,7 +151,7 @@ AHORA ESTAS EN CONVERSACION sobre unas propuestas ya mostradas al usuario (numer
 - Si quiere guardar una propuesta, action "save" con su "target".
 - "reply": tu respuesta en espanol, 1-4 frases, como un estilista; explica el efecto del cambio (caracter, formalidad, color). Si una peticion no es buena idea, dilo y propon una alternativa de su armario.
 - Mantén las demas prendas de la propuesta salvo que el usuario pida lo contrario.
-- GUSTOS: ${DISLIKE_RULES} Puedes combinarlo con cualquier accion (p. ej. "modify" para quitar esa prenda de la propuesta).`
+- GUSTOS: ${TASTE_RULES} Puedes combinarlo con cualquier accion (p. ej. "modify" para quitar esa prenda de la propuesta).`
 
 export const ChatSchema = z.object({
   reply: z.string().max(1200),
@@ -159,7 +159,8 @@ export const ChatSchema = z.object({
   target: z.number().int().min(1).max(10).nullable().default(null),
   changes: z.array(z.object({ role: z.string(), garment_id: z.string().nullable() })).max(4).default([]),
   new_context: ParsedSchema.partial().nullable().default(null),
-  dislikes: DislikesSchema.default({ garment_ids: [], elements: [], colors: [] }),
+  likes: DislikesSchema.default(EMPTY_POLARITY),
+  dislikes: DislikesSchema.default(EMPTY_POLARITY),
 })
 export type ChatOut = z.infer<typeof ChatSchema>
 
@@ -172,7 +173,7 @@ export function chatPrompt(o: { context: string; profile: string; proposals: { n
     'CONVERSACION RECIENTE:', ...o.history.slice(-8).map((m) => `${m.role === 'user' ? 'Usuario' : 'Estilista'}: ${m.content.slice(0, 500)}`), '',
     tasteLists(), '',
     `MENSAJE DEL USUARIO: """${o.message.slice(0, 1000)}"""`, '',
-    'Forma: {"reply":"...","action":"modify","target":2,"changes":[{"role":"footwear","garment_id":"<id>"}],"new_context":null,"dislikes":{"garment_ids":[],"elements":[],"colors":[]}}',
+    'Forma: {"reply":"...","action":"modify","target":2,"changes":[{"role":"footwear","garment_id":"<id>"}],"new_context":null,"likes":{"garment_ids":[],"elements":[],"colors":[],"cuts":[]},"dislikes":{"garment_ids":[],"elements":[],"colors":[],"cuts":[]}}',
   ].join('\n')
 }
 

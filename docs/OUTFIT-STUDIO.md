@@ -186,12 +186,13 @@ Regla: **el motor genera y valida; la IA interpreta, elige y explica**. Nada de 
    - *guardar* la versión vigente como conjunto.
 
    Un cambio con una prenda que no existe se rechaza y se explica. El historial reciente y los ids de las propuestas se envían en cada turno, así que el contexto no se pierde.
-5. **Perfil de gustos:** lo que dices claramente que no te gusta, en esta conversación o en el chat «Estilista», se anota en tu perfil como preferencia declarada y te lo dice:
-   - una prenda concreta → «no te gusta» confirmado en Aprendizaje: el motor y el estilista dejan de proponerla, y en la conversación deja de estar disponible desde ese mismo mensaje;
-   - un tipo de prenda o rasgo («pantalón pitillo», «camiseta gráfica») → rasgos que rechazas de tu identidad estética;
-   - un color → colores que evitas del estudio cromático.
+5. **Perfil de gustos:** lo que dices claramente que te gusta o no te gusta, en esta conversación o en el chat «Estilista», se anota en tu perfil como preferencia declarada y te lo dice. Gustar algo lo quita de rechazados y al revés:
+   - una prenda concreta → «te gusta» (el motor la favorece) o «no te gusta» (deja de proponerla; en la conversación, desde ese mismo mensaje), confirmados en Aprendizaje;
+   - un tipo de prenda o rasgo («pantalones anchos», «pantalón pitillo») → rasgos preferidos o rechazados de tu identidad estética;
+   - un color → colores que te gustan o que evitas del estudio cromático;
+   - un corte por tipo de prenda («me gustan los pantalones anchos» → pantalones: Amplio) → corte preferido de tus preferencias de vestuario, que usa la compatibilidad.
 
-   En Outfit Studio va en la misma respuesta de la IA (campo `dislikes`, validado contra tu armario y las listas cerradas). En el chat libre solo se hace una extracción adicional cuando el mensaje expresa un rechazo («no me gusta», «no soporto», «nunca me pondría»…). Todo se puede deshacer en Aprendizaje, Identidad estética o Estudio cromático.
+   En Outfit Studio va en la misma respuesta de la IA (campos `likes` y `dislikes`, validados contra tu armario y las listas cerradas; lo que aparezca en ambos se descarta). Tu opinión sobre una propuesta concreta («me gusta la P2») no es un gusto general. En el chat libre solo se hace una extracción adicional cuando el mensaje expresa un gusto o un rechazo. Todo se puede deshacer en Aprendizaje, Identidad estética, Estudio cromático o Preferencias de vestuario.
 6. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.
 
 ### Prompt del intérprete
@@ -249,11 +250,13 @@ AHORA ESTAS EN CONVERSACION sobre unas propuestas ya mostradas al usuario (numer
 - Si quiere guardar una propuesta, action "save" con su "target".
 - "reply": tu respuesta en espanol, 1-4 frases, como un estilista; explica el efecto del cambio (caracter, formalidad, color). Si una peticion no es buena idea, dilo y propon una alternativa de su armario.
 - Mantén las demas prendas de la propuesta salvo que el usuario pida lo contrario.
-- GUSTOS: Si el usuario dice CLARAMENTE que algo no le gusta (no un «hoy no» ni una duda), añadelo en "dislikes":
-- garment_ids: ids de PRENDAS de su armario que dice que no le gustan;
-- elements: ids de RASGOS (tipos de prenda o rasgos de estilo) que rechaza en general;
-- colors: colores de la lista COLORES que no le gustan.
-Si no rechaza nada, deja las listas vacias. Puedes combinarlo con cualquier accion (p. ej. "modify" para quitar esa prenda de la propuesta).
+- GUSTOS: Si el usuario expresa CLARAMENTE un gusto general o un rechazo (no un «hoy no», ni una duda, ni su opinion sobre una propuesta concreta como «me gusta la P2»), añadelo:
+- en "likes" lo que le gusta y en "dislikes" lo que no;
+- garment_ids: ids de PRENDAS de su armario;
+- elements: ids de RASGOS (tipos de prenda o rasgos de estilo), p. ej. «pantalones anchos» → leg-wide;
+- colors: colores de la lista COLORES;
+- cuts: corte preferido por tipo de prenda, solo en "likes" ({"key":"pantalones","value":"Amplio"}), con las claves y valores de CORTES.
+Si no expresa ninguno, deja las listas vacias. Puedes combinarlo con cualquier accion (p. ej. "modify" para quitar esa prenda de la propuesta).
 ```
 
 ## API REST

@@ -11,7 +11,7 @@ import { scoreEnv, scoreOutfit } from '../engine/scoring'
 import { prepareEngine, persistGeneration, saveProposal, type Prepared, type StylistMeta } from '../generate-service'
 import { garmentsWithPhotos } from '../service'
 import { checkComposition, rolesFor, snapshotOf } from '../taxonomy'
-import { isEmpty, learnedSentence, normalizeDislikes, recordDislikes } from '@/lib/profile/tastes'
+import { isEmpty, learnedSentence, normalizeTastes, recordTastes } from '@/lib/profile/tastes'
 import {
   CONTEXT_PARSER, ChatSchema, OUTFIT_STYLIST, PARSER_VERSION, ParsedSchema, STYLIST_CHAT, STYLIST_VERSION, SelectionSchema, applyChanges, chatPrompt,
   keywordParse, normalizeParsed, parserUserPrompt, selectionPrompt, validateSelection, type CandidateView,
@@ -146,11 +146,11 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
   } catch (e) { await say('No he podido responder ahora mismo. Inténtalo de nuevo en un momento.', { action: 'error', error: e instanceof Error ? e.message.slice(0, 200) : 'error' }); return }
   await log(sb, uid, 'stylist_chat', { usage, action: out.action, session_id: sessionId })
   const target = out.target ? props.find((p) => p.n === out.target) : undefined
-  // Gustos: lo que dice que no le gusta pasa a su perfil y deja de estar disponible desde ya
+  // Gustos: lo que dice que le gusta o no le gusta pasa a su perfil; lo rechazado deja de estar disponible desde ya
   const inventory = new Map(prep.garments.map((g) => [g.id as string, { title: g.title as string }]))
-  const nd = normalizeDislikes(out.dislikes, inventory)
-  const learned = isEmpty(nd) ? [] : await recordDislikes(sb, uid, nd, { inventory, source: 'conversation', message: msg, session_id: sessionId, results: props.map((p) => p.r) })
-  for (const id of nd.garments) available.delete(id)
+  const nt = normalizeTastes({ likes: out.likes, dislikes: out.dislikes }, inventory)
+  const learned = isEmpty(nt) ? [] : await recordTastes(sb, uid, nt, { inventory, source: 'conversation', message: msg, session_id: sessionId, results: props.map((p) => p.r) })
+  for (const id of nt.dislikes.garments) available.delete(id)
   const note = learnedSentence(learned)
   const say0 = say
   const sayL = async (content: string, payload: Row) => say0(note ? `${content} ${note}` : content, { ...payload, learned })

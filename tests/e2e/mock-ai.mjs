@@ -29,9 +29,12 @@ http.createServer((req, res) => {
     const tasteFrom = (msg, text) => {
       const lines = text.split('\n').filter((l) => /^[0-9a-f-]{36}: /.test(l))
       const garment_ids = lines.filter((l) => { const t = l.slice(38).split(' · ')[0].toLowerCase(); return t && msg.includes(t) }).map((l) => l.slice(0, 36))
-      const elements = [...(msg.includes('pitillo') ? ['leg-slim'] : []), ...(msg.includes('gráfica') || msg.includes('grafica') ? ['graphic-tee'] : [])]
-      const colors = ['Rosa', 'Mostaza', 'Burdeos', 'Lila'].filter((c) => msg.includes(c.toLowerCase()))
-      return { garment_ids, elements, colors }
+      const elements = [...(msg.includes('pitillo') ? ['leg-slim'] : []), ...(msg.includes('gráfica') || msg.includes('grafica') ? ['graphic-tee'] : []), ...(msg.includes('anchos') || msg.includes('amplios') ? ['leg-wide'] : [])]
+      const colors = ['Rosa', 'Mostaza', 'Burdeos', 'Lila', 'Verde bosque'].filter((c) => msg.includes(c.toLowerCase()))
+      const cuts = msg.includes('pantalones anchos') ? [{ key: 'pantalones', value: 'Amplio' }] : []
+      const empty = { garment_ids: [], elements: [], colors: [], cuts: [] }
+      const negative = /no me gust|odio|no soporto|nunca me/.test(msg)
+      return negative ? { likes: empty, dislikes: { garment_ids, elements, colors, cuts: [] } } : { likes: { garment_ids, elements, colors, cuts }, dislikes: empty }
     }
     if (sys.includes('EXTRACTOR DE GUSTOS')) {
       const m = (utext.match(/MENSAJE: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()
@@ -78,7 +81,7 @@ http.createServer((req, res) => {
       const line = (t) => avail.find((l) => l.includes(t))?.slice(0, 36)
       const prop = utext.split('\n').find((l) => l.startsWith(`P${target} `)) ?? ''
       const curShoe = prop.match(/footwear=[^(]*\(([0-9a-f-]{36})\)/)?.[1]
-      if (m.includes('no me gusta')) return reply({ reply: 'Entendido, lo tendré en cuenta a partir de ahora.', action: 'answer', target: null, changes: [], new_context: null, dislikes: tasteFrom(m, utext) })
+      if (m.includes('no me gusta') || ((m.includes('me gustan') || m.includes('me encanta')) && !/p\d|segund|primer/.test(m))) return reply({ reply: 'Entendido, lo tendré en cuenta a partir de ahora.', action: 'answer', target: null, changes: [], new_context: null, ...tasteFrom(m, utext) })
       if (m.includes('cowboy')) return reply({ reply: 'Te pongo unas botas camperas.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: '00000000-0000-4000-8000-123456789abc' }], new_context: null })
       if (m.includes('zapatillas')) return reply({ reply: 'También funciona con las zapatillas blancas, aunque cambia el carácter del look: más relajado.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: line('Zapatillas') }], new_context: null })
       if (m.includes('zapatos')) { const alt = avail.filter((l) => l.includes('footwear') && !l.includes('Zapatillas') && !l.startsWith(curShoe ?? '-'))[0]?.slice(0, 36); return reply({ reply: 'Mantendría el pantalón y la parte superior y cambiaría los zapatos: algo menos informal y con más coherencia cromática.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: alt }], new_context: null }) }
