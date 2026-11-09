@@ -21,6 +21,7 @@ import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
 import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
 import { DRESS_CODES, INTENTS, RESTRICTIONS, TEMPLATES } from '@/lib/outfits/engine/context'
+import { CONTEXT_PARSER, OUTFIT_STYLIST, PARSER_VERSION, STYLIST_CHAT, STYLIST_VERSION } from '@/lib/outfits/stylist/contracts'
 import { CRITERIA_LABEL, DEFAULT_WEIGHTS } from '@/lib/outfits/engine/scoring'
 import { ENGINE_VERSION, MAX_COMBINATIONS, MAX_USES, TOP_K } from '@/lib/outfits/engine/generate'
 import { ITEM_ROLES, MAX_ITEMS, MAX_TAGS, OUTFIT_OCCASIONS, OUTFIT_SOURCES, OUTFIT_STATUSES, SNAPSHOT_FIELDS, rolesFor } from '@/lib/outfits/taxonomy'
@@ -329,6 +330,28 @@ const ACCEPTANCE: [string, string][] = [
   ['Puedo detectar prendas potencialmente duplicadas y huecos', 'Similitud con siete factores y huecos por categoría, ocasión y temporada (2D)'],
 ]
 
+function stylistSection() {
+  return [
+    'Regla: **el motor genera y valida; la IA interpreta, elige y explica**. Nada de lo que devuelve la IA se usa sin comprobarlo, y si la IA no está configurada o falla, Outfit Studio sigue funcionando con el motor.',
+    '',
+    `1. **Intérprete de contexto** (\`${PARSER_VERSION}\`): convierte la petición («cena con compañeros, restaurante elegante, frío, sin americana») en la petición estructurada del motor. Cada valor se comprueba contra las listas cerradas y cada prenda mencionada contra el inventario disponible; lo que no encaja se descarta y se muestra en «Cómo he interpretado tu petición» junto a los supuestos. Sin IA se usan palabras clave evidentes.`,
+    `2. **Motor (3B)**: genera hasta 5 candidatas variadas, ya filtradas y puntuadas.`,
+    `3. **Outfit Stylist AI** (\`${STYLIST_VERSION}\`, prompt de la especificación): recibe el contexto, un resumen del perfil (sin medidas exactas ni fotos) y las candidatas con sus ids, y **elige** las que recomienda, en orden, con nombre, por qué funciona, cuándo usarlo y sus límites. No puede cambiar ni añadir prendas: las claves citadas se validan (una candidata inexistente se descarta) y, si elige menos de las pedidas, se completan con el orden del motor.`,
+    '4. **Conversación** sobre las propuestas (P1, P2…). La IA responde con una acción:',
+    '   - *modificar* una propuesta con funciones e ids de prendas disponibles. Cada cambio se valida (prenda existente y activa, función posible, composición, filtros de la petición). El **motor vuelve a puntuar** el resultado («compatibilidad 86 → 84») y se guarda como **nueva versión**, sin perder la anterior.',
+    '   - *responder* una pregunta.',
+    '   - *regenerar* con otras condiciones (nuevo contexto validado).',
+    '   - *guardar* la versión vigente como conjunto.',
+    '',
+    '   Un cambio con una prenda que no existe se rechaza y se explica. El historial reciente y los ids de las propuestas se envían en cada turno, así que el contexto no se pierde.',
+    '5. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.',
+    '',
+    '### Prompt del intérprete', '', '```text', CONTEXT_PARSER, '```', '',
+    '### Prompt de Outfit Stylist AI', '', '```text', OUTFIT_STYLIST, '```', '',
+    '### Instrucciones añadidas para la conversación', '', '```text', STYLIST_CHAT.slice(OUTFIT_STYLIST.length).trim(), '```',
+  ]
+}
+
 function engineSection() {
   return [
     `Versión \`${ENGINE_VERSION}\` (\`lib/outfits/engine\`). **Genera y valida sin IA**; la IA (3C) recibirá solo el conjunto reducido resultante para dirigirlo creativamente. Así se podrá cambiar de modelo sin reescribir el motor.`,
@@ -569,7 +592,7 @@ export function outfitDoc() {
     '| Subfase | Contenido | Estado |', '|---|---|---|',
     '| 3A · Fundamentos | Tablas `outfits` y `outfit_items`, conjuntos manuales con prendas reales, roles, sustitución, filtros, estados, ficha | Hecha |',
     '| 3B · Motor de combinaciones | Plantillas, generación de candidatos con poda, filtros obligatorios, scoring de 100 puntos explicable, variedad por intenciones, historial auditable | Hecha |',
-    '| 3C · IA estilista y ocasiones | Outfit Stylist AI, peticiones en lenguaje natural, conversación sobre una propuesta, validación de IDs | Pendiente |',
+    '| 3C · IA estilista y ocasiones | Peticiones en lenguaje natural, Outfit Stylist AI que elige y explica entre candidatas del motor, conversación con cambios validados y repuntuados, sesiones | Hecha |',
     '| 3D · Evaluación y aprendizaje | Evaluación teórica y visual, feedback, fórmulas, registro de uso | Pendiente |',
     '',
     '## Punto de partida (análisis del proyecto antes de la 3A)',
@@ -617,11 +640,20 @@ export function outfitDoc() {
     '',
     '`outfits` gana `compatibility_score`, `confidence_level` y `generation_result_id` (0012) para los conjuntos guardados desde el motor.',
     '',
+    '| `stylist_sessions` (0013) | Conversación: petición vigente, interpretación de la IA (supuestos, descartes, versión), generación y versión vigente de cada propuesta (P1, P2…) |',
+    '| `stylist_messages` (0013) | Mensajes con su acción y los ids de las propuestas mostradas o modificadas, errores de validación |',
+    '',
+    '`outfit_generation_results` gana `origin` (motor o cambio en la conversación), `parent_result_id` (versión anterior) y `stylist` (nombre y explicación de la IA, modelo y versión del prompt) (0013).',
+    '',
     'Las tablas de las subfases siguientes (`outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.',
     '',
     '## Motor de combinaciones (3B)',
     '',
     ...engineSection(),
+    '',
+    '## Estilista con IA (3C)',
+    '',
+    ...stylistSection(),
     '',
     '## API REST',
     '',
@@ -635,6 +667,9 @@ export function outfitDoc() {
     '| `POST /api/outfits/:id/replace-item` | Sustituir la prenda de una posición conservando su función (`{item_id, garment_id}`) |',
     '| `POST /api/outfits/generate` | Generar propuestas con criterios estructurados (ver arriba); `weights` opcional |',
     '| `GET /api/outfits/generations` · `GET /api/outfits/generations/:id` | Historial de peticiones y propuestas con su desglose |',
+    '| `POST /api/stylist/sessions` | `{message, filters?}`: petición en lenguaje natural (los filtros estructurados mandan sobre lo interpretado) → sesión con propuestas |',
+    '| `GET /api/stylist/sessions` · `GET /api/stylist/sessions/:id` | Conversaciones y su detalle (mensajes y todas las versiones de las propuestas) |',
+    '| `POST /api/stylist/sessions/:id/messages` | `{message}`: conversar (cambiar prendas, preguntar, regenerar con otras condiciones, guardar) |',
     '| `POST /api/outfits/generations/results/:id` | `{action: save\\|dismiss, name?}`: guardar la propuesta como conjunto o descartarla |',
     '',
     '## Criterios de aceptación de la fase 3',
@@ -642,14 +677,14 @@ export function outfitDoc() {
     '| Criterio | Estado |', '|---|---|',
     '| Puedo crear y guardar outfits manualmente | Hecho (3A) |',
     '| Cada outfit está vinculado a prendas reales de mi armario | Hecho (3A): aplicación + RLS |',
-    '| Puedo sustituir prendas sin perder el contexto del outfit | Hecho en el constructor y la API (3A); la sustitución conversacional llega en 3C |',
+    '| Puedo sustituir prendas sin perder el contexto del outfit | Hecho: constructor y API (3A) y conversación con versiones (3C) |',
     '| El motor genera outfits sin inventar prendas | Hecho (3B): solo inventario elegible + validación de salida |',
     '| Las combinaciones respetan las restricciones del usuario | Hecho (3B): filtros obligatorios no compensables |',
     '| El motor consulta mi Style Blueprint | Hecho (3B): identidad estética, temperatura, colores, contraste, cortes, proporciones, compatibilidad y ajuste |',
     '| Las puntuaciones son explicables y se pueden auditar | Hecho (3B): desglose por criterio guardado con pesos y versión del motor |',
     '| Las propuestas son variadas y no repiten sistemáticamente las mismas prendas | Hecho (3B) |',
-    '| Puedo solicitar outfits para distintas ocasiones | Hecho con petición estructurada (3B); en lenguaje natural, 3C |',
-    '| Puedo conversar con el estilista sobre una propuesta | Pendiente (3C) |',
+    '| Puedo solicitar outfits para distintas ocasiones | Hecho: en lenguaje natural (3C) o con filtros (3B) |',
+    '| Puedo conversar con el estilista sobre una propuesta | Hecho (3C) |',
     '| Evaluar outfits (selección y foto) · valorar y explicar rechazos · fórmulas · registro de uso · aprendizaje | Pendiente (3D) |',
   ].join('\n')
 }

@@ -8,7 +8,7 @@
 |---|---|---|
 | 3A · Fundamentos | Tablas `outfits` y `outfit_items`, conjuntos manuales con prendas reales, roles, sustitución, filtros, estados, ficha | Hecha |
 | 3B · Motor de combinaciones | Plantillas, generación de candidatos con poda, filtros obligatorios, scoring de 100 puntos explicable, variedad por intenciones, historial auditable | Hecha |
-| 3C · IA estilista y ocasiones | Outfit Stylist AI, peticiones en lenguaje natural, conversación sobre una propuesta, validación de IDs | Pendiente |
+| 3C · IA estilista y ocasiones | Peticiones en lenguaje natural, Outfit Stylist AI que elige y explica entre candidatas del motor, conversación con cambios validados y repuntuados, sesiones | Hecha |
 | 3D · Evaluación y aprendizaje | Evaluación teórica y visual, feedback, fórmulas, registro de uso | Pendiente |
 
 ## Punto de partida (análisis del proyecto antes de la 3A)
@@ -73,6 +73,11 @@ Un conjunto admite hasta 12 prendas y 8 etiquetas.
 
 `outfits` gana `compatibility_score`, `confidence_level` y `generation_result_id` (0012) para los conjuntos guardados desde el motor.
 
+| `stylist_sessions` (0013) | Conversación: petición vigente, interpretación de la IA (supuestos, descartes, versión), generación y versión vigente de cada propuesta (P1, P2…) |
+| `stylist_messages` (0013) | Mensajes con su acción y los ids de las propuestas mostradas o modificadas, errores de validación |
+
+`outfit_generation_results` gana `origin` (motor o cambio en la conversación), `parent_result_id` (versión anterior) y `stylist` (nombre y explicación de la IA, modelo y versión del prompt) (0013).
+
 Las tablas de las subfases siguientes (`outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.
 
 ## Motor de combinaciones (3B)
@@ -102,6 +107,79 @@ Versión `outfit-engine@1` (`lib/outfits/engine`). **Genera y valida sin IA**; l
 
 Cada propuesta incluye: composición con la función de cada prenda, «por qué funciona», matices, avisos (temporada, arreglos) y hasta dos **alternativas** (cambiar una prenda por otra con una puntuación parecida).
 
+## Estilista con IA (3C)
+
+Regla: **el motor genera y valida; la IA interpreta, elige y explica**. Nada de lo que devuelve la IA se usa sin comprobarlo, y si la IA no está configurada o falla, Outfit Studio sigue funcionando con el motor.
+
+1. **Intérprete de contexto** (`context-parser@1`): convierte la petición («cena con compañeros, restaurante elegante, frío, sin americana») en la petición estructurada del motor. Cada valor se comprueba contra las listas cerradas y cada prenda mencionada contra el inventario disponible; lo que no encaja se descarta y se muestra en «Cómo he interpretado tu petición» junto a los supuestos. Sin IA se usan palabras clave evidentes.
+2. **Motor (3B)**: genera hasta 5 candidatas variadas, ya filtradas y puntuadas.
+3. **Outfit Stylist AI** (`outfit-stylist@1`, prompt de la especificación): recibe el contexto, un resumen del perfil (sin medidas exactas ni fotos) y las candidatas con sus ids, y **elige** las que recomienda, en orden, con nombre, por qué funciona, cuándo usarlo y sus límites. No puede cambiar ni añadir prendas: las claves citadas se validan (una candidata inexistente se descarta) y, si elige menos de las pedidas, se completan con el orden del motor.
+4. **Conversación** sobre las propuestas (P1, P2…). La IA responde con una acción:
+   - *modificar* una propuesta con funciones e ids de prendas disponibles. Cada cambio se valida (prenda existente y activa, función posible, composición, filtros de la petición). El **motor vuelve a puntuar** el resultado («compatibilidad 86 → 84») y se guarda como **nueva versión**, sin perder la anterior.
+   - *responder* una pregunta.
+   - *regenerar* con otras condiciones (nuevo contexto validado).
+   - *guardar* la versión vigente como conjunto.
+
+   Un cambio con una prenda que no existe se rechaza y se explica. El historial reciente y los ids de las propuestas se envían en cada turno, así que el contexto no se pierde.
+5. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.
+
+### Prompt del intérprete
+
+```text
+Eres el interprete de peticiones de Personal Stylist. Conviertes lo que el usuario escribe sobre una ocasion en criterios estructurados.
+REGLAS:
+1. Usa SOLO los valores de las listas, escritos exactamente (el id, no la etiqueta).
+2. Si algo no se dice ni se deduce con claridad, devuelve null (o lista vacia). No inventes.
+3. Las prendas solo pueden referirse por los ids del INVENTARIO; si el usuario menciona una prenda que no aparece, no la incluyas y dilo en "assumptions".
+4. "assumptions": lo que has deducido (p. ej. "restaurante elegante → smart casual"), en espanol y breve.
+5. Devuelve UNICAMENTE el JSON.
+```
+
+### Prompt de Outfit Stylist AI
+
+```text
+Eres Personal Stylist, un estilista masculino profesional especializado en direccion creativa, construccion de outfits y asesoramiento personalizado de imagen.
+
+Dispones de:
+- El Style Blueprint validado del usuario.
+- Su inventario de prendas.
+- Los analisis de cada prenda.
+- Las evaluaciones de ajuste confirmadas.
+- Sus preferencias y valoraciones anteriores.
+- El contexto de la ocasion solicitada.
+
+MISION:
+Construir conjuntos coherentes, atractivos, funcionales y alineados con la identidad del usuario.
+
+PRINCIPIOS:
+1. Utiliza exclusivamente prendas cuyos identificadores esten presentes en el inventario facilitado.
+2. Nunca inventes ropa ni atribuyas al usuario prendas que no tenga registradas.
+3. Respeta los filtros obligatorios de ocasion, formalidad, disponibilidad y restricciones.
+4. Considera la armonia cromatica, las proporciones, las siluetas, las capas y la coherencia estetica.
+5. Prioriza prendas que tengan evidencias favorables de ajuste y aceptacion por parte del usuario.
+6. Diferencia entre compatibilidad estimada y ajuste real confirmado.
+7. No fuerces la incorporacion de accesorios si no aportan valor al conjunto.
+8. Busca variedad entre las propuestas.
+9. No recomiendes una compra cuando exista una alternativa adecuada en el armario.
+10. Se un experto constructivo. Discrepa cuando exista una razon de estilismo justificada.
+11. Explica por que cada conjunto funciona y cuando seria apropiado utilizarlo.
+12. No presentes puntuaciones como verdades objetivas.
+
+Responde en espanol, con lenguaje profesional y cercano. La respuesta debe cumplir estrictamente el esquema JSON proporcionado por la aplicacion.
+```
+
+### Instrucciones añadidas para la conversación
+
+```text
+AHORA ESTAS EN CONVERSACION sobre unas propuestas ya mostradas al usuario (numeradas P1, P2...).
+- Si pide cambiar algo de una propuesta, devuelve action "modify", el numero en "target" y en "changes" la funcion y el id de la prenda NUEVA (garment_id null para quitar esa funcion). Usa SOLO ids de PRENDAS DISPONIBLES y funciones validas para esa prenda.
+- Si pregunta, opina o pide tu criterio, action "answer".
+- Si cambia las condiciones (otra ocasion, clima, restricciones), action "regenerate" con "new_context" (mismos campos y valores que el interprete).
+- Si quiere guardar una propuesta, action "save" con su "target".
+- "reply": tu respuesta en espanol, 1-4 frases, como un estilista; explica el efecto del cambio (caracter, formalidad, color). Si una peticion no es buena idea, dilo y propon una alternativa de su armario.
+- Mantén las demas prendas de la propuesta salvo que el usuario pida lo contrario.
+```
+
 ## API REST
 
 | Ruta | Función |
@@ -115,6 +193,9 @@ Cada propuesta incluye: composición con la función de cada prenda, «por qué 
 | `POST /api/outfits/:id/replace-item` | Sustituir la prenda de una posición conservando su función (`{item_id, garment_id}`) |
 | `POST /api/outfits/generate` | Generar propuestas con criterios estructurados (ver arriba); `weights` opcional |
 | `GET /api/outfits/generations` · `GET /api/outfits/generations/:id` | Historial de peticiones y propuestas con su desglose |
+| `POST /api/stylist/sessions` | `{message, filters?}`: petición en lenguaje natural (los filtros estructurados mandan sobre lo interpretado) → sesión con propuestas |
+| `GET /api/stylist/sessions` · `GET /api/stylist/sessions/:id` | Conversaciones y su detalle (mensajes y todas las versiones de las propuestas) |
+| `POST /api/stylist/sessions/:id/messages` | `{message}`: conversar (cambiar prendas, preguntar, regenerar con otras condiciones, guardar) |
 | `POST /api/outfits/generations/results/:id` | `{action: save\|dismiss, name?}`: guardar la propuesta como conjunto o descartarla |
 
 ## Criterios de aceptación de la fase 3
@@ -123,12 +204,12 @@ Cada propuesta incluye: composición con la función de cada prenda, «por qué 
 |---|---|
 | Puedo crear y guardar outfits manualmente | Hecho (3A) |
 | Cada outfit está vinculado a prendas reales de mi armario | Hecho (3A): aplicación + RLS |
-| Puedo sustituir prendas sin perder el contexto del outfit | Hecho en el constructor y la API (3A); la sustitución conversacional llega en 3C |
+| Puedo sustituir prendas sin perder el contexto del outfit | Hecho: constructor y API (3A) y conversación con versiones (3C) |
 | El motor genera outfits sin inventar prendas | Hecho (3B): solo inventario elegible + validación de salida |
 | Las combinaciones respetan las restricciones del usuario | Hecho (3B): filtros obligatorios no compensables |
 | El motor consulta mi Style Blueprint | Hecho (3B): identidad estética, temperatura, colores, contraste, cortes, proporciones, compatibilidad y ajuste |
 | Las puntuaciones son explicables y se pueden auditar | Hecho (3B): desglose por criterio guardado con pesos y versión del motor |
 | Las propuestas son variadas y no repiten sistemáticamente las mismas prendas | Hecho (3B) |
-| Puedo solicitar outfits para distintas ocasiones | Hecho con petición estructurada (3B); en lenguaje natural, 3C |
-| Puedo conversar con el estilista sobre una propuesta | Pendiente (3C) |
+| Puedo solicitar outfits para distintas ocasiones | Hecho: en lenguaje natural (3C) o con filtros (3B) |
+| Puedo conversar con el estilista sobre una propuesta | Hecho (3C) |
 | Evaluar outfits (selección y foto) · valorar y explicar rechazos · fórmulas · registro de uso · aprendizaje | Pendiente (3D) |

@@ -386,3 +386,13 @@ p.state { white-space: normal; }
 .pc-score span { font: 500 10px/1.4 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--mut); }
 .pc-items li { grid-template-columns: 56px 1fr; } .pc-items .oth { width: 56px; height: 70px; }
 .pc-table td { vertical-align: top; } .pc-table ul { padding-left: 14px; }
+/* Estilista con IA (3C) */
+.askbox { border: 1px solid var(--ink); padding: 14px 16px; margin: 16px 0; background: var(--paper); }
+.askbox .st { display: block; font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--acc); margin-bottom: 6px; }
+.askbox textarea, .chatform textarea { width: 100%; font: 16px var(--sans); }
+.thread { display: grid; gap: 14px; margin: 18px 0; }
+.msg { padding: 10px 14px; border-left: 3px solid var(--line); min-width: 0; }
+.msg.user { background: var(--paper); border-left-color: var(--ink); max-width: 720px; }
+.msg.assistant { border-left-color: var(--acc); }
+.msg > p { margin: 0 0 6px; }
+.chatform { border-top: 1px solid var(--line); padding: 10px 0; margin-top: 8px; }

@@ -179,7 +179,7 @@ export function generate(req: GenerateRequestT, garments: G[], evals: Map<string
   else if (!b.candidates.length && !missingRequired.length) notes.push(`No he encontrado combinaciones completas que cumplan las condiciones. Funciones disponibles: ${Object.entries(b.perRole).filter(([, v]) => v).map(([k]) => lc(roleLabel(k))).join(', ') || 'ninguna'}.`)
   else if (proposals.length < req.number_of_outfits) notes.push(`Solo he encontrado ${proposals.length} propuesta${proposals.length === 1 ? '' : 's'} distinta${proposals.length === 1 ? '' : 's'}: con tu armario actual no hay más variedad para esta ocasión.`)
   return {
-    engine: ENGINE_VERSION, ctx: { formality: ctx.formality, formalitySource: ctx.formalitySource, season: ctx.season, seasonLabel: SEASONS.find((s) => s.id === ctx.season)?.label, seasonSource: ctx.seasonSource, forbiddenRoles: ctx.forbiddenRoles, summary: ctx.summary },
+    engine: ENGINE_VERSION, request: req, ctx: { formality: ctx.formality, formalitySource: ctx.formalitySource, season: ctx.season, seasonLabel: SEASONS.find((s) => s.id === ctx.season)?.label, seasonSource: ctx.seasonSource, forbiddenRoles: ctx.forbiddenRoles, summary: ctx.summary },
     weights: env.weights,
     stats: { garments: garments.length, eligible: pool.length, excluded, perRole: b.perRole, templates: b.templates, evaluated: b.evaluated, rejected: b.rejected, candidates: b.candidates.length },
     proposals, notes,

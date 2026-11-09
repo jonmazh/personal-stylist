@@ -3,36 +3,52 @@ import { garmentTitle } from '@/lib/wardrobe/display'
 import { evaluationsForList } from '@/lib/wardrobe/eval-service'
 import { WardrobeError, listGarments, type Sb } from '@/lib/wardrobe/service'
 import { GenerateRequest } from './engine/context'
-import { generate } from './engine/generate'
+import { generate, type GenerationResult } from './engine/generate'
 import { createOutfit, garmentsWithPhotos } from './service'
 import { snapshotOf } from './taxonomy'
 
 /** Outfit Engine (3B) con persistencia: se guarda la peticion, el contexto, los pesos, lo descartado y cada propuesta. */
 const dbErr = (m: string) => new WardrobeError(/schema cache|does not exist/i.test(m) ? 'Ejecuta la migración 0012 en Supabase.' : m, 500)
 
+/** Prepara lo que necesita el motor: armario activo (con titulo), perfil y evaluaciones de 2C. */
+export async function prepareEngine(sb: Sb, uid: string) {
+  const [rows, bundle] = await Promise.all([listGarments(sb, { status: 'active' }), loadBundle(sb, uid)])
+  const garments = rows.map((g) => ({ ...g, title: garmentTitle(g) }))
+  const evals = await evaluationsForList(sb, uid, garments, bundle)
+  return { garments, bundle, evals, byId: new Map(garments.map((g) => [g.id as string, g])) }
+}
+export type Prepared = Awaited<ReturnType<typeof prepareEngine>>
+export type StylistMeta = { name: string; why: string; when: string; limitations: string | null; model?: string; prompt_version?: string }
+
+/** Guarda la peticion y las propuestas elegidas (con el texto del estilista si lo hay). */
+export async function persistGeneration(sb: Sb, uid: string, out: GenerationResult, prep: Prepared, chosen: { p: GenerationResult['proposals'][number]; stylist?: StylistMeta }[], ms: number) {
+  const { data: gen, error } = await sb.from('outfit_generations').insert({
+    user_id: uid, engine_version: out.engine, request: out.request, context: out.ctx, weights: out.weights, stats: { ...out.stats, ms }, notes: out.notes,
+  }).select('*').single()
+  if (error) throw dbErr(error.message)
+  let ids: string[] = []
+  if (chosen.length) {
+    const { data, error: re } = await sb.from('outfit_generation_results').insert(chosen.map(({ p: x, stylist }, i) => ({
+      user_id: uid, generation_id: gen.id, rank: i + 1, intent: x.intent, name: stylist?.name || x.name, template: x.template, score: x.score, confidence: x.confidence,
+      garment_ids: x.items.map((it) => it.garment_id), items: x.items.map((it) => ({ ...it, snapshot: snapshotOf(prep.byId.get(it.garment_id)!, it.title) })),
+      breakdown: { criteria: x.criteria, confidenceWhy: x.confidenceWhy }, why: x.why, cons: x.criteria.flatMap((c) => c.cons).slice(0, 4), warnings: x.warnings, alternatives: x.alternatives,
+      stylist: stylist ?? null,
+    }))).select('id, rank')
+    if (re) throw dbErr(re.message)
+    ids = (data ?? []).sort((a, z) => a.rank - z.rank).map((r) => r.id as string)
+  }
+  return { id: gen.id as string, resultIds: ids }
+}
+
 export async function runGeneration(sb: Sb, uid: string, raw: unknown) {
   const p = GenerateRequest.safeParse(raw ?? {})
   if (!p.success) throw new WardrobeError(`Petición no válida: ${p.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
   const t0 = Date.now()
-  const [rows, bundle] = await Promise.all([listGarments(sb, { status: 'active' }), loadBundle(sb, uid)])
-  const garments = rows.map((g) => ({ ...g, title: garmentTitle(g) }))
-  const evals = await evaluationsForList(sb, uid, garments, bundle)
-  const out = generate(p.data, garments, evals, bundle)
-  const byId = new Map(garments.map((g) => [g.id, g]))
-  const { data: gen, error } = await sb.from('outfit_generations').insert({
-    user_id: uid, engine_version: out.engine, request: p.data, context: out.ctx, weights: out.weights, stats: { ...out.stats, ms: Date.now() - t0 }, notes: out.notes,
-  }).select('*').single()
-  if (error) throw dbErr(error.message)
-  if (out.proposals.length) {
-    const { error: re } = await sb.from('outfit_generation_results').insert(out.proposals.map((x) => ({
-      user_id: uid, generation_id: gen.id, rank: x.rank, intent: x.intent, name: x.name, template: x.template, score: x.score, confidence: x.confidence,
-      garment_ids: x.items.map((i) => i.garment_id), items: x.items.map((i) => ({ ...i, snapshot: snapshotOf(byId.get(i.garment_id)!, i.title) })),
-      breakdown: { criteria: x.criteria, confidenceWhy: x.confidenceWhy }, why: x.why, cons: x.criteria.flatMap((c) => c.cons).slice(0, 4), warnings: x.warnings, alternatives: x.alternatives,
-    })))
-    if (re) throw dbErr(re.message)
-  }
+  const prep = await prepareEngine(sb, uid)
+  const out = generate(p.data, prep.garments, prep.evals, prep.bundle)
+  const gen = await persistGeneration(sb, uid, out, prep, out.proposals.map((x) => ({ p: x })), Date.now() - t0)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'outfit_generation', model: 'reglas', meta: { generation_id: gen.id, proposals: out.proposals.length, evaluated: out.stats.evaluated, ms: Date.now() - t0, cached: false } })
-  return gen.id as string
+  return gen.id
 }
 
 export async function getGeneration(sb: Sb, id: string) {
