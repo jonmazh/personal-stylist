@@ -30,9 +30,9 @@ export async function evaluationFor(sb: Sb, uid: string, g: Record<string, any>,
 }
 
 /** Evaluaciones de todo el armario de una vez (tarjetas del panel). */
-export async function evaluationsForList(sb: Sb, uid: string, rows: Record<string, any>[]) {
+export async function evaluationsForList(sb: Sb, uid: string, rows: Record<string, any>[], bundle?: Bundle) {
   if (!rows.length) return new Map<string, ReturnType<typeof evaluateGarment>>()
-  const b = await loadBundle(sb, uid)
+  const b = bundle ?? await loadBundle(sb, uid)
   const { data: fr } = await sb.from('garment_fit_reviews').select('*').eq('status', 'confirmed').in('garment_id', rows.map((r) => r.id)).order('created_at', { ascending: false })
   const fit = new Map<string, Record<string, any>>()
   for (const r of fr ?? []) if (!fit.has(r.garment_id)) fit.set(r.garment_id, r)

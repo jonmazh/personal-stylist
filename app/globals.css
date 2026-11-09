@@ -316,3 +316,16 @@ p.state { white-space: normal; }
 .fdims input:not([type]) { width: 100%; }
 .fdims .chk, .fitform .chk { display: inline-flex; gap: 6px; align-items: center; }
 .wgrid > * { min-width: 0; } .wcard .state { white-space: normal; line-height: 1.5; }
+/* Auditoria (2D) */
+.stats a { padding: 14px 0 12px; display: grid; gap: 2px; color: inherit; text-decoration: none; }
+.stats a b { font: 400 clamp(30px, 6vw, 44px)/1 var(--serif); }
+.stats a span { font: 500 11px/1.4 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
+.covgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 16px; }
+.cov { border-top: 1px solid var(--ink); padding: 10px 0; display: grid; gap: 4px; min-width: 0; }
+.cov .st { font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+.cov b.state { white-space: normal; }
+.occ { list-style: none; padding: 0; } .occ li { padding: 6px 0; border-bottom: 1px solid var(--line); } .occ .state { white-space: normal; }
+.afinds { display: grid; gap: 10px; margin: 10px 0 18px; }
+.afind { border: 1px solid var(--line); background: var(--paper); padding: 12px 14px; min-width: 0; }
+.afind p { margin: 6px 0; } .afind .btns { margin: 8px 0 0; }
+.afind.st-rejected { opacity: .65; }

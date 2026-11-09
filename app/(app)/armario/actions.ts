@@ -8,6 +8,7 @@ import { analyzeGarment, confirmAnalysis } from '@/lib/wardrobe/ai-service'
 import type { Decision } from '@/lib/wardrobe/analysis'
 import { assessFit, decideGarment, discardFitProposal, saveFitReview } from '@/lib/wardrobe/eval-service'
 import { formToDims } from '@/lib/wardrobe/fit'
+import { decideFinding, generateAudit } from '@/lib/wardrobe/audit-service'
 
 async function me() {
   const u = await getUser()
@@ -148,4 +149,22 @@ export async function decideAction(formData: FormData) {
   } catch (e) { redirect(`/armario/${gid}?tab=compatibilidad&error=${encodeURIComponent(msg(e))}`) }
   done()
   redirect(`/armario/${gid}?tab=compatibilidad&decided=1`)
+}
+
+// ── Auditoria (fase 2D) ──
+export async function generateAuditAction() {
+  const { supabase, id } = await me()
+  let v = 0
+  try { v = (await generateAudit(supabase, id)).version } catch (e) { redirect(`/armario/auditoria?error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/armario/auditoria?generated=${v}`)
+}
+
+export async function decideFindingAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const fid = String(formData.get('finding_id')), action = formData.get('action') === 'accept' ? 'accept' : 'reject'
+  let q = ''
+  try { const r = await decideFinding(supabase, id, fid, action); q = r.applied ? `&applied=${r.applied}` : '' } catch (e) { redirect(`/armario/auditoria?error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/armario/auditoria?${action}=1${q}#f-${fid}`)
 }
