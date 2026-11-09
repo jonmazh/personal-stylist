@@ -13,7 +13,7 @@ import { CONDITIONS, SEASONS, familyOf, groupOf } from './taxonomy'
  * Ver docs/ARMARIO.md.
  */
 export type G = Record<string, any>
-export type FindingKind = 'review' | 'alteration' | 'replace' | 'duplicate' | 'gap' | 'need' | 'condition'
+export type FindingKind = 'review' | 'alteration' | 'replace' | 'duplicate' | 'gap' | 'need' | 'condition' | 'unused'
 export interface AuditFinding {
   key: string                // estable entre auditorias: recuerda lo que ya aprobaste o rechazaste
   kind: FindingKind
@@ -67,10 +67,33 @@ export function similarity(a: G, z: G, ctx: { combosA?: string[]; combosZ?: stri
   return { score: Math.min(100, s), same, diffs }
 }
 
+// ── 6.4 Frecuencia de uso (del registro de uso de Outfit Studio, nunca de las fotos) ──
+export const MIN_WEAR_EVENTS = 5
+export const MIN_TRACK_DAYS = 30
+export const DORMANT_DAYS = 90
+export interface WearRow { worn_on: string; garment_ids: string[] }
+export type Use = ReturnType<typeof usageStats>
+const DAY = 864e5
+/** Usos por prenda y si hay registro suficiente (al menos 5 usos en 30 días) para sacar conclusiones. */
+export function usageStats(active: G[], wears: WearRow[], now = new Date()) {
+  const per = new Map<string, { count: number; last: string }>()
+  for (const w of wears) for (const id of w.garment_ids ?? []) { const x = per.get(id); if (!x) per.set(id, { count: 1, last: w.worn_on }); else { x.count++; if (w.worn_on > x.last) x.last = w.worn_on } }
+  const since = wears.length ? wears.map((w) => w.worn_on).sort()[0] : null
+  const days = since ? Math.max(0, Math.floor((now.getTime() - new Date(since).getTime()) / DAY)) : 0
+  const tracked = wears.length >= MIN_WEAR_EVENTS && days >= MIN_TRACK_DAYS
+  const titled = (g: G) => ({ id: g.id as string, title: garmentTitle(g), ...(per.get(g.id) ?? { count: 0, last: null as string | null }) })
+  // Sin usar: prendas que ya estaban en el armario cuando empezaste a registrar y no te has puesto desde entonces
+  const unused = tracked ? active.filter((g) => !per.has(g.id) && (!g.created_at || g.created_at.slice(0, 10) <= since!)).map(titled) : []
+  const dormant = tracked ? active.filter((g) => { const x = per.get(g.id); return x && now.getTime() - new Date(x.last).getTime() > DORMANT_DAYS * DAY }).map(titled) : []
+  const top = active.filter((g) => per.has(g.id)).map(titled).sort((a, z) => z.count - a.count).slice(0, 5)
+  return { tracked, events: wears.length, since, days, per, top, unused, dormant, worn: active.filter((g) => per.has(g.id)).length }
+}
+
 /** Utilidad real (no el numero de duplicados): compatibilidad, ajuste, combinaciones, conservacion y tus decisiones. */
-function utility(g: G, ev?: Evaluation) {
+function utility(g: G, ev?: Evaluation, use?: Use) {
   const cond = g.condition === 'danado' ? -3 : g.condition === 'desgastado' ? -1.5 : 0
-  return (ev?.compat.score ?? 5) + (ev?.fit.score != null ? (ev.fit.score - 6) * 0.6 : 0) + (ev?.value.combos.length ?? 0) * 0.3 + (g.is_favorite ? 1 : 0) + (g.decision === 'keep' ? 1 : 0) + cond
+  const worn = use?.tracked ? Math.min(3, (use.per.get(g.id)?.count ?? 0) * 0.5) : 0
+  return worn + (ev?.compat.score ?? 5) + (ev?.fit.score != null ? (ev.fit.score - 6) * 0.6 : 0) + (ev?.value.combos.length ?? 0) * 0.3 + (g.is_favorite ? 1 : 0) + (g.decision === 'keep' ? 1 : 0) + cond
 }
 
 export function duplicateGroups(gs: G[], evals: Map<string, Evaluation>) {
@@ -87,10 +110,10 @@ export function duplicateGroups(gs: G[], evals: Map<string, Evaluation>) {
   return [...groups.values()].map((members) => ({ members, pairs: pairs.filter((p) => members.includes(p.a)) }))
 }
 
-function duplicateFinding(members: G[], pairs: { a: G; z: G; sim: ReturnType<typeof similarity> }[], evals: Map<string, Evaluation>): AuditFinding {
-  const ranked = [...members].sort((a, z) => utility(z, evals.get(z.id)) - utility(a, evals.get(a.id)))
+function duplicateFinding(members: G[], pairs: { a: G; z: G; sim: ReturnType<typeof similarity> }[], evals: Map<string, Evaluation>, use?: Use): AuditFinding {
+  const ranked = [...members].sort((a, z) => utility(z, evals.get(z.id), use) - utility(a, evals.get(a.id), use))
   const best = ranked[0], second = ranked[1]
-  const ub = utility(best, evals.get(best.id)), us = utility(second, evals.get(second.id))
+  const ub = utility(best, evals.get(best.id), use), us = utility(second, evals.get(second.id), use)
   const same = [...new Set(pairs.flatMap((p) => p.sim.same))]
   const diffs = [...new Set(pairs.flatMap((p) => p.sim.diffs))]
   const eb = evals.get(best.id), es = evals.get(second.id)
@@ -98,6 +121,8 @@ function duplicateFinding(members: G[], pairs: { a: G; z: G; sim: ReturnType<typ
   if ((eb?.compat.score ?? 0) > (es?.compat.score ?? 0)) reasons.push(`encaja mejor con tu perfil actual (compatibilidad ${fmt(eb?.compat.score)} frente a ${fmt(es?.compat.score)})`)
   if ((eb?.value.combos.length ?? 0) > (es?.value.combos.length ?? 0)) reasons.push(`aporta más posibilidades de combinación (${eb?.value.combos.length} frente a ${es?.value.combos.length})`)
   if (eb?.fit.score != null && (es?.fit.score == null || eb.fit.score > es.fit.score)) reasons.push(`te queda mejor según tu prueba de ajuste (${fmt(eb.fit.score)})`)
+  const wb = use?.tracked ? use.per.get(best.id)?.count ?? 0 : 0, ws = use?.tracked ? use.per.get(second.id)?.count ?? 0 : 0
+  if (wb > ws) reasons.push(`te la pones más (${wb} ${wb === 1 ? 'vez' : 'veces'} frente a ${ws})`)
   if (best.is_favorite && !second.is_favorite) reasons.push('la tienes marcada como favorita')
   if (second.condition === 'desgastado' || second.condition === 'danado') reasons.push(`«${garmentTitle(second)}» está ${lc(CONDITIONS.find((c) => c.id === second.condition)!.label)}`)
   const clear = ub - us >= 0.8 && reasons.length > 0
@@ -106,7 +131,7 @@ function duplicateFinding(members: G[], pairs: { a: G; z: G; sim: ReturnType<typ
   return {
     key: `dup:${members.map((m) => m.id).sort().join(',')}`, kind: 'duplicate', title: `Posible duplicado: ${names.join(', ')}`, body,
     why: ['No significa que debas descartar ninguna: tener varias puede tener sentido (rotación, lavados). La recomendación se basa en la utilidad real, no en el número.'],
-    data_used: ['Categoría, tipo, corte, color, material, formalidad, ocasiones y combinaciones de cada prenda', 'Compatibilidad, ajuste y valor estratégico (2C)'],
+    data_used: ['Categoría, tipo, corte, color, material, formalidad, ocasiones y combinaciones de cada prenda', 'Compatibilidad, ajuste y valor estratégico (2C)', ...(use?.tracked ? ['Tu registro de uso'] : [])],
     garment_ids: ranked.map((m) => m.id), recommendation: clear ? { decision: 'keep', garment_id: best.id } : null, priority: 2,
   }
 }
@@ -196,9 +221,10 @@ export function priorityNeeds(gs: G[], evals: Map<string, Evaluation>, b: Bundle
 }
 
 // ── Auditoria completa ──
-export interface AuditInput { active: G[]; drafts: G[]; archived: number; evals: Map<string, Evaluation>; bundle: Bundle }
-export function buildAudit({ active, drafts, archived, evals, bundle: b }: AuditInput) {
+export interface AuditInput { active: G[]; drafts: G[]; archived: number; evals: Map<string, Evaluation>; bundle: Bundle; wears?: WearRow[]; now?: Date }
+export function buildAudit({ active, drafts, archived, evals, bundle: b, wears = [], now = new Date() }: AuditInput) {
   const findings: AuditFinding[] = []
+  const use = usageStats(active, wears, now)
   const ev = (g: G) => evals.get(g.id)
   // 6.1 Clasificacion por estado
   const byDecision = { keep: 0, modify: 0, review: 0, replace: 0, donate_sell: 0, none: 0 } as Record<string, number>
@@ -226,7 +252,10 @@ export function buildAudit({ active, drafts, archived, evals, bundle: b }: Audit
   }
   // 6.2 Duplicados
   const dups = duplicateGroups(active.filter((g) => !OUT.has(g.decision)), evals)
-  for (const d of dups) findings.push(duplicateFinding(d.members, d.pairs, evals))
+  for (const d of dups) findings.push(duplicateFinding(d.members, d.pairs, evals, use))
+  // Frecuencia de uso: prendas que no te pones (solo con registro suficiente)
+  for (const u of use.unused) if (!OUT.has(active.find((g) => g.id === u.id)?.decision)) findings.push({ key: `unused:${u.id}`, kind: 'unused', title: `Sin usar: «${u.title}»`, body: `No te la has puesto en los ${use.days} días que llevas registrando tu uso (${use.events} usos). ¿Sigue teniendo sitio en tu armario?`, why: ['Una prenda que no se usa ocupa espacio y suele indicar que algo no encaja (ajuste, estilo, ocasión). Revísala antes de decidir.'], data_used: ['Registro de uso de Outfit Studio'], garment_ids: [u.id], recommendation: { decision: 'review', garment_id: u.id }, priority: 3 })
+  for (const u of use.dormant) findings.push({ key: `dormant:${u.id}`, kind: 'unused', title: `Hace tiempo que no la usas: «${u.title}»`, body: `Te la pusiste ${u.count} ${u.count === 1 ? 'vez' : 'veces'}; la última, el ${new Date(u.last!).toLocaleDateString('es-ES')} (hace más de ${DORMANT_DAYS} días).`, why: ['Puede ser de temporada; si no lo es, conviene revisar por qué ha dejado de funcionar.'], data_used: ['Registro de uso de Outfit Studio'], garment_ids: [u.id], recommendation: null, priority: 4 })
   // Conservacion
   for (const g of active) if (['desgastado', 'danado'].includes(g.condition)) findings.push({ key: `cond:${g.id}`, kind: 'condition', title: `${CONDITIONS.find((c) => c.id === g.condition)!.label}: «${garmentTitle(g)}»`, body: g.condition === 'danado' ? 'Está dañada: valora arreglarla o sustituirla.' : 'Está desgastada: tenlo en cuenta para reponerla.', why: ['Estado de conservación indicado en la ficha.'], data_used: ['Conservación'], garment_ids: [g.id], recommendation: { decision: g.condition === 'danado' ? 'modify' : 'review', garment_id: g.id }, priority: 4 })
   // 6.3 Huecos y necesidades prioritarias
@@ -246,7 +275,11 @@ export function buildAudit({ active, drafts, archived, evals, bundle: b }: Audit
     avgCompat: scores.length ? r1(scores.reduce((s, x) => s + x, 0) / scores.length) : null, evaluated: scores.length,
     fitted: active.filter((g) => ev(g)?.fit.score != null).length,
     duplicates: dups.length, categories, occasions, seasons, noSeason, locations,
-    usage: 'Pendiente: la frecuencia de uso saldrá del registro de outfits y del diario de uso (siguiente fase), no de las fotos.',
+    usage: {
+      tracked: use.tracked, events: use.events, since: use.since, days: use.days, worn: use.worn, unused: use.unused.length, dormant: use.dormant.length,
+      top: use.top.map((x) => ({ id: x.id, title: x.title, count: x.count, last: x.last })),
+      note: use.tracked ? `Según tu registro de uso de Outfit Studio (${use.events} usos en ${use.days} días), nunca deducido de fotos.` : `Aún hay poco registro de uso (${use.events} usos en ${use.days} días): la frecuencia se tendrá en cuenta a partir de ${MIN_WEAR_EVENTS} usos y ${MIN_TRACK_DAYS} días. Regístralos en la ficha de cada conjunto («Me lo he puesto»).`,
+    },
   }
   return { summary, findings: findings.sort((a, z) => a.priority - z.priority) }
 }

@@ -11,6 +11,7 @@ import { scoreEnv, scoreOutfit } from '../engine/scoring'
 import { prepareEngine, persistGeneration, saveProposal, type Prepared, type StylistMeta } from '../generate-service'
 import { garmentsWithPhotos } from '../service'
 import { checkComposition, rolesFor, snapshotOf } from '../taxonomy'
+import { isEmpty, learnedSentence, normalizeDislikes, recordDislikes } from '@/lib/profile/tastes'
 import {
   CONTEXT_PARSER, ChatSchema, OUTFIT_STYLIST, PARSER_VERSION, ParsedSchema, STYLIST_CHAT, STYLIST_VERSION, SelectionSchema, applyChanges, chatPrompt,
   keywordParse, normalizeParsed, parserUserPrompt, selectionPrompt, validateSelection, type CandidateView,
@@ -145,14 +146,22 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
   } catch (e) { await say('No he podido responder ahora mismo. Inténtalo de nuevo en un momento.', { action: 'error', error: e instanceof Error ? e.message.slice(0, 200) : 'error' }); return }
   await log(sb, uid, 'stylist_chat', { usage, action: out.action, session_id: sessionId })
   const target = out.target ? props.find((p) => p.n === out.target) : undefined
+  // Gustos: lo que dice que no le gusta pasa a su perfil y deja de estar disponible desde ya
+  const inventory = new Map(prep.garments.map((g) => [g.id as string, { title: g.title as string }]))
+  const nd = normalizeDislikes(out.dislikes, inventory)
+  const learned = isEmpty(nd) ? [] : await recordDislikes(sb, uid, nd, { inventory, source: 'conversation', message: msg, session_id: sessionId, results: props.map((p) => p.r) })
+  for (const id of nd.garments) available.delete(id)
+  const note = learnedSentence(learned)
+  const say0 = say
+  const sayL = async (content: string, payload: Row) => say0(note ? `${content} ${note}` : content, { ...payload, learned })
 
   if (out.action === 'modify') {
-    if (!target) { await say(`${out.reply} (No sé a qué propuesta te refieres: dime su número.)`, { action: 'answer' }); return }
+    if (!target) { await sayL(`${out.reply} (No sé a qué propuesta te refieres: dime su número.)`, { action: 'answer' }); return }
     const { items, errors } = applyChanges((target.r.items as Row[]).map((i) => ({ garment_id: i.garment_id, role: i.role })), out.changes, available)
     const same = JSON.stringify(items) === JSON.stringify((target.r.items as Row[]).map((i) => ({ garment_id: i.garment_id, role: i.role })))
     const comp = checkComposition(items, available).filter((p) => p.level === 'error')
     if (same || comp.length) {
-      await say(`${errors.length || comp.length ? 'No he podido aplicar ese cambio: ' : ''}${[...errors, ...comp.map((c) => c.text)].join(' ') || 'No he identificado qué cambiar.'} ${errors.length || comp.length ? 'Dime qué prenda de tu armario prefieres.' : out.reply}`.trim(), { action: 'rejected', target: target.n, errors: [...errors, ...comp.map((c) => c.text)] })
+      await sayL(`${errors.length || comp.length ? 'No he podido aplicar ese cambio: ' : ''}${[...errors, ...comp.map((c) => c.text)].join(' ') || 'No he identificado qué cambiar.'} ${errors.length || comp.length ? 'Dime qué prenda de tu armario prefieres.' : out.reply}`.trim(), { action: 'rejected', target: target.n, errors: [...errors, ...comp.map((c) => c.text)] })
       return
     }
     const env = scoreEnv(ctx, prep.bundle, prep.evals, request.weights, prep.signals)
@@ -169,7 +178,7 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
     if (error) throw dbErr(error.message)
     await sb.from('stylist_sessions').update({ current: { ...session.current, [String(target.n)]: nr.id } }).eq('id', sessionId)
     const delta = sc.total - Math.round(Number(target.r.score))
-    await say(`${out.reply}${errors.length ? ` (${errors.join(' ')})` : ''} Según el motor: compatibilidad ${Math.round(Number(target.r.score))} → ${sc.total} (${delta >= 0 ? '+' : ''}${delta}).`, { action: 'modify', target: target.n, result_id: nr.id, parent_id: target.r.id, delta, errors })
+    await sayL(`${out.reply}${errors.length ? ` (${errors.join(' ')})` : ''} Según el motor: compatibilidad ${Math.round(Number(target.r.score))} → ${sc.total} (${delta >= 0 ? '+' : ''}${delta}).`, { action: 'modify', target: target.n, result_id: nr.id, parent_id: target.r.id, delta, errors })
     return
   }
   if (out.action === 'regenerate') {
@@ -179,16 +188,16 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
     const { gen, out: eo, intro, aiNote, selectionDropped } = await propose(sb, uid, next, prep, msg)
     const current = Object.fromEntries(gen.resultIds.map((id, i) => [String(i + 1), id]))
     await sb.from('stylist_sessions').update({ request: next, generation_id: gen.id, current }).eq('id', sessionId)
-    await say([out.reply, intro, summaryLine(eo, gen.resultIds.length), ...eo.notes, aiNote].filter(Boolean).join(' '), { action: 'propose', results: gen.resultIds, generation_id: gen.id, interpretation: { parser: PARSER_VERSION, assumptions: n.assumptions, dropped: n.dropped, selection_dropped: selectionDropped } })
+    await sayL([out.reply, intro, summaryLine(eo, gen.resultIds.length), ...eo.notes, aiNote].filter(Boolean).join(' '), { action: 'propose', results: gen.resultIds, generation_id: gen.id, interpretation: { parser: PARSER_VERSION, assumptions: n.assumptions, dropped: n.dropped, selection_dropped: selectionDropped } })
     return
   }
   if (out.action === 'save') {
-    if (!target) { await say(`${out.reply} (Dime el número de la propuesta que quieres guardar.)`, { action: 'answer' }); return }
+    if (!target) { await sayL(`${out.reply} (Dime el número de la propuesta que quieres guardar.)`, { action: 'answer' }); return }
     const sv = await saveProposal(sb, uid, target.r.id)
-    await say(`${out.reply} Guardado en tus conjuntos.`, { action: 'save', target: target.n, outfit_id: sv.id })
+    await sayL(`${out.reply} Guardado en tus conjuntos.`, { action: 'save', target: target.n, outfit_id: sv.id })
     return
   }
-  await say(out.reply, { action: 'answer', target: target?.n ?? null })
+  await sayL(out.reply, { action: 'answer', target: target?.n ?? null })
 }
 
 export async function getSession(sb: Sb, id: string) {

@@ -11,8 +11,8 @@ export async function generateAudit(sb: Sb, uid: string) {
     listGarments(sb, { status: 'active' }), listGarments(sb, { status: 'draft' }), listGarments(sb, { status: 'archived' }), loadBundle(sb, uid),
   ])
   if (active.length < MIN_AUDIT) throw new WardrobeError(`La auditoría necesita al menos ${MIN_AUDIT} prendas en tu armario (ahora tienes ${active.length}).`)
-  const evals = await evaluationsForList(sb, uid, active, b)
-  const audit = buildAudit({ active, drafts, archived: archived.length, evals, bundle: b })
+  const [evals, { data: wears }] = await Promise.all([evaluationsForList(sb, uid, active, b), sb.from('outfit_wear_events').select('worn_on, garment_ids').limit(2000)])
+  const audit = buildAudit({ active, drafts, archived: archived.length, evals, bundle: b, wears: wears ?? [] })
   const { data: prev, error: pe } = await sb.from('wardrobe_audits').select('*').order('version', { ascending: false }).limit(1).maybeSingle()
   if (pe) throw new WardrobeError(missingTable(pe.message) ? 'Ejecuta la migración 0010 en Supabase.' : pe.message, 500)
   const prevFindings = prev ? (await sb.from('wardrobe_audit_findings').select('key, status, decided_at').eq('audit_id', prev.id)).data ?? [] : []

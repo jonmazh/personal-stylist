@@ -18,6 +18,7 @@ const SECTIONS: [string, string, string][] = [
   ['alteration', 'Prendas que necesitan arreglos', ''],
   ['replace', 'Prendas propuestas para sustituir o donar', 'Nada se archiva ni se borra solo: aprobar registra tu decisión; archivarla es otro paso tuyo.'],
   ['gap', 'Categorías que necesitan revisión', ''],
+  ['unused', 'Prendas que no usas', 'Según tu registro de uso en Outfit Studio. Que no la uses no obliga a nada: revisa por qué antes de decidir.'],
   ['condition', 'Estado de conservación', ''],
   ['review', 'Prendas por revisar', 'Completar estas fichas hace la auditoría más fiable.'],
 ]
@@ -107,7 +108,11 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
           {SEASONS.map((x) => [<dt key={`t${x.id}`}>{x.label}</dt>, <dd key={`d${x.id}`}>{s.seasons[x.id] ?? 0} prendas</dd>])}
           <dt>Sin temporada</dt><dd>{s.noSeason} prendas</dd>
           <dt>Ubicación</dt><dd>{Object.entries(s.locations as Record<string, number>).map(([k, v]) => `${k}: ${v}`).join(' · ')}</dd>
-          <dt>Frecuencia de uso</dt><dd>{s.usage}</dd>
+          <dt>Frecuencia de uso</dt><dd>{typeof s.usage === 'string' ? s.usage : (<>
+            {s.usage.note}
+            {s.usage.tracked && <> {s.usage.worn} de {s.garments} prendas usadas{s.usage.unused ? ` · ${s.usage.unused} sin usar` : ''}{s.usage.dormant ? ` · ${s.usage.dormant} sin usar en más de 90 días` : ''}.</>}
+            {(s.usage.top ?? []).length > 0 && <ul className="m small">{(s.usage.top as Row[]).map((x) => <li key={x.id}><Link href={`/armario/${x.id}`}>{x.title}</Link>: {x.count} {x.count === 1 ? 'uso' : 'usos'}{x.last ? ` (última: ${new Date(x.last).toLocaleDateString('es-ES')})` : ''}</li>)}</ul>}
+          </>)}</dd>
         </dl>
 
         {data!.versions.length > 1 && (<>

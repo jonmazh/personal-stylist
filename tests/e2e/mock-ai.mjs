@@ -26,6 +26,17 @@ http.createServer((req, res) => {
     }
     const reply = (obj) => res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', usage: { prompt_tokens: 700, completion_tokens: 150, total_tokens: 850 }, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(obj) } }] }))
     const utext = typeof user?.content === 'string' ? user.content : ''
+    const tasteFrom = (msg, text) => {
+      const lines = text.split('\n').filter((l) => /^[0-9a-f-]{36}: /.test(l))
+      const garment_ids = lines.filter((l) => { const t = l.slice(38).split(' · ')[0].toLowerCase(); return t && msg.includes(t) }).map((l) => l.slice(0, 36))
+      const elements = [...(msg.includes('pitillo') ? ['leg-slim'] : []), ...(msg.includes('gráfica') || msg.includes('grafica') ? ['graphic-tee'] : [])]
+      const colors = ['Rosa', 'Mostaza', 'Burdeos', 'Lila'].filter((c) => msg.includes(c.toLowerCase()))
+      return { garment_ids, elements, colors }
+    }
+    if (sys.includes('EXTRACTOR DE GUSTOS')) {
+      const m = (utext.match(/MENSAJE: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()
+      return reply(tasteFrom(m, utext))
+    }
     if (sys.includes('EVALUACION DE UN CONJUNTO')) {
       // Critica teorica: una sugerencia valida (otra prenda de calzado) y otra con un id inventado (debe descartarse)
       const avail = utext.split('\n').filter((l) => /^[0-9a-f-]{36}: /.test(l))
@@ -67,6 +78,7 @@ http.createServer((req, res) => {
       const line = (t) => avail.find((l) => l.includes(t))?.slice(0, 36)
       const prop = utext.split('\n').find((l) => l.startsWith(`P${target} `)) ?? ''
       const curShoe = prop.match(/footwear=[^(]*\(([0-9a-f-]{36})\)/)?.[1]
+      if (m.includes('no me gusta')) return reply({ reply: 'Entendido, lo tendré en cuenta a partir de ahora.', action: 'answer', target: null, changes: [], new_context: null, dislikes: tasteFrom(m, utext) })
       if (m.includes('cowboy')) return reply({ reply: 'Te pongo unas botas camperas.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: '00000000-0000-4000-8000-123456789abc' }], new_context: null })
       if (m.includes('zapatillas')) return reply({ reply: 'También funciona con las zapatillas blancas, aunque cambia el carácter del look: más relajado.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: line('Zapatillas') }], new_context: null })
       if (m.includes('zapatos')) { const alt = avail.filter((l) => l.includes('footwear') && !l.includes('Zapatillas') && !l.startsWith(curShoe ?? '-'))[0]?.slice(0, 36); return reply({ reply: 'Mantendría el pantalón y la parte superior y cambiaría los zapatos: algo menos informal y con más coherencia cromática.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: alt }], new_context: null }) }

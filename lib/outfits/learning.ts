@@ -43,6 +43,16 @@ export function detectPatterns(feedback: Row[], wears: Row[], garments: Map<stri
   for (const [o, ev] of formal) if (ev.size >= MIN_EVIDENCE) out.push({ key: `too_formal:${o}`, kind: 'too_formal', refs: [o], evidence: ev.size, label: `Para ${occLabel(o)} prefieres algo más informal`, explanation: `${ev.size} propuestas para ${occLabel(o)} te parecieron demasiado formales.`, effect: 'Bajará un punto la formalidad objetivo de esa ocasión.' })
   for (const [o, ev] of informal) if (ev.size >= MIN_EVIDENCE) out.push({ key: `too_informal:${o}`, kind: 'too_informal', refs: [o], evidence: ev.size, label: `Para ${occLabel(o)} prefieres algo más arreglado`, explanation: `${ev.size} propuestas para ${occLabel(o)} te parecieron demasiado informales.`, effect: 'Subirá un punto la formalidad objetivo de esa ocasión.' })
   for (const [pk, ev] of pairs) if (ev.size >= MIN_EVIDENCE) { const [a, b] = pk.split('|'); out.push({ key: `color_pair:${pk}`, kind: 'color_pair', refs: [a, b], evidence: ev.size, label: `No te gustan juntos ${a.toLowerCase()} y ${b.toLowerCase()}`, explanation: `${ev.size} conjuntos con esa pareja de colores no te convencieron por los colores.`, effect: 'El estilista penalizará esa combinación de colores.' }) }
+  // Preferencias declaradas (p. ej. dichas al estilista): confirmadas aunque no haya valoraciones detras
+  for (const d of decisions) {
+    if (d.status !== 'confirmed' || out.some((p) => p.key === d.key)) continue
+    const [kind, ref] = [d.key.slice(0, d.key.indexOf(':')), d.key.slice(d.key.indexOf(':') + 1)]
+    if (!['garment_dislike', 'garment_favorite', 'too_formal', 'too_informal', 'color_pair'].includes(kind)) continue
+    const said = d.evidence?.source === 'conversation' || d.evidence?.source === 'chat'
+    out.push({ key: d.key, kind: kind as PatternKind, refs: kind === 'color_pair' ? ref.split('|') : [ref], evidence: d.evidence?.count ?? 1, label: d.label,
+      explanation: said ? `Se lo dijiste al estilista${d.evidence?.message ? `: «${String(d.evidence.message).slice(0, 140)}»` : ''}.` : 'Lo indicaste tú.',
+      effect: kind === 'garment_dislike' ? 'El estilista no te la volverá a proponer.' : 'Se aplica en tus próximas propuestas.' })
+  }
   const dec = new Map(decisions.map((d) => [d.key, d.status]))
   return out.map((p) => {
     const status = (dec.get(p.key) ?? 'detected') as Pattern['status']

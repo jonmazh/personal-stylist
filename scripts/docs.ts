@@ -18,7 +18,7 @@ import { SERIOUS_ISSUES } from '@/lib/color/temperature'
 import { ATTRIBUTES, COMPOSITION_SOURCES, CONDITIONS, CUTS, GARMENT_COLORS, GROUPS, IMAGE_ROLES, PATTERNS, STATUSES, SUBS } from '@/lib/wardrobe/taxonomy'
 import type { Bundle } from '@/lib/profile/data'
 import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
-import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
+import { DORMANT_DAYS, DUP_THRESHOLD, MIN_AUDIT, MIN_TRACK_DAYS, MIN_WEAR_EVENTS } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
 import { DRESS_CODES, INTENTS, RESTRICTIONS, TEMPLATES } from '@/lib/outfits/engine/context'
 import { FLAGS, FORMULA_STATUSES, RATINGS as FB_RATINGS, REASONS } from '@/lib/outfits/feedback'
@@ -386,7 +386,13 @@ function stylistSection() {
     '   - *guardar* la versión vigente como conjunto.',
     '',
     '   Un cambio con una prenda que no existe se rechaza y se explica. El historial reciente y los ids de las propuestas se envían en cada turno, así que el contexto no se pierde.',
-    '5. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.',
+    '5. **Perfil de gustos:** lo que dices claramente que no te gusta, en esta conversación o en el chat «Estilista», se anota en tu perfil como preferencia declarada y te lo dice:',
+    '   - una prenda concreta → «no te gusta» confirmado en Aprendizaje: el motor y el estilista dejan de proponerla, y en la conversación deja de estar disponible desde ese mismo mensaje;',
+    '   - un tipo de prenda o rasgo («pantalón pitillo», «camiseta gráfica») → rasgos que rechazas de tu identidad estética;',
+    '   - un color → colores que evitas del estudio cromático.',
+    '',
+    '   En Outfit Studio va en la misma respuesta de la IA (campo `dislikes`, validado contra tu armario y las listas cerradas). En el chat libre solo se hace una extracción adicional cuando el mensaje expresa un rechazo («no me gusta», «no soporto», «nunca me pondría»…). Todo se puede deshacer en Aprendizaje, Identidad estética o Estudio cromático.',
+    '6. **Consumo:** cada llamada (interpretar, elegir, conversar) queda en `ai_runs` con sus tokens y se resume en «Estado técnico». El motor no consume IA.',
     '',
     '### Prompt del intérprete', '', '```text', CONTEXT_PARSER, '```', '',
     '### Prompt de Outfit Stylist AI', '', '```text', OUTFIT_STYLIST, '```', '',
@@ -436,7 +442,8 @@ function auditSection() {
     '| Necesidades prioritarias | Hasta 6, concretas: tipo + color de tu paleta que aún no tienes + tu corte preferido u ocasión (p. ej. «Calzado versátil para smart casual»), ordenadas por el peso de la ocasión en tu semana; temporadas según tu clima |',
     '| Conservación | Prendas desgastadas o dañadas |',
     '| Por revisar | Borradores, fichas incompletas, propuestas de la IA sin revisar, prendas marcadas para revisar o sin datos para valorarlas |',
-    '| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación. La frecuencia de uso queda pendiente: saldrá del registro de outfits y del diario de uso, no de las fotos |',
+    `| Prendas que no usas | Con registro suficiente (al menos ${MIN_WEAR_EVENTS} usos en ${MIN_TRACK_DAYS} días, desde «Me lo he puesto» en Outfit Studio): prendas que ya tenías y no te has puesto desde que registras (propuesta: revisar) y prendas sin usar en más de ${DORMANT_DAYS} días. En los duplicados, la que más te pones suma utilidad |`,
+    '| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación; frecuencia de uso (las que más usas, cuántas sin usar). Sale del registro de uso, nunca de las fotos |',
   ]
 }
 
