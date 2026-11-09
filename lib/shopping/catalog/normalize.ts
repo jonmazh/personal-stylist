@@ -36,7 +36,7 @@ const KIND_WORDS: [string, string[]][] = [
   ['hoodie', ['sudadera con capucha', 'hoodie']], ['sweatshirt', ['sudadera', 'sweatshirt']], ['cardigan', ['cardigan', 'rebeca']],
   ['turtleneck', ['cuello alto', 'turtleneck', 'roll neck']], ['knit', ['jersey', 'punto', 'sweater', 'jumper', 'knit', 'pullover']],
   ['polo', ['polo']], ['shirt', ['camisa', 'shirt', 'oxford']], ['tank', ['camiseta sin mangas', 'tank top']], ['tee', ['camiseta', 't-shirt', 'tee']],
-  ['jeans', ['vaquero', 'vaqueros', 'jeans', 'denim']], ['chinos', ['chino', 'chinos']], ['cargo', ['cargo']], ['joggers', ['jogger', 'chandal']],
+  ['jeans', ['vaquero', 'vaqueros', 'jeans', 'denim']], ['chinos', ['chino', 'chinos']], ['cargo', ['cargo']], ['joggers', ['pantalon chandal', 'jogger', 'chandal', 'sweatpants', 'sweatpant', 'track pants', 'trackpants', 'jogging']],
   ['shorts', ['bermuda', 'shorts', 'pantalon corto']], ['trousers', ['pantalon', 'trousers', 'pants']],
   ['loafers', ['mocasin', 'mocasines', 'loafer']], ['boots', ['bota', 'botas', 'botin', 'boots', 'chelsea']], ['sneakers', ['zapatilla', 'zapatillas', 'sneaker', 'trainers', 'deportiva']],
   ['derby', ['blucher', 'derby', 'oxford shoe', 'zapato', 'zapatos', 'shoes']], ['sandals', ['sandalia', 'sandals']],
@@ -63,7 +63,7 @@ export function detectKind(name?: string | null, categoryText?: string | null) {
 const COLOR_WORDS: [string, string[]][] = [
   ['Azul marino', ['azul marino', 'marino', 'navy']], ['Azul claro', ['azul claro', 'celeste', 'light blue', 'sky blue']], ['Denim claro', ['denim claro', 'light denim', 'light wash']],
   ['Denim', ['denim', 'indigo', 'azul vaquero']], ['Gris claro', ['gris claro', 'light grey', 'light gray', 'gris perla']], ['Antracita', ['antracita', 'charcoal', 'gris oscuro', 'dark grey']],
-  ['Gris', ['gris', 'grey', 'gray', 'jaspeado']], ['Negro', ['negro', 'black']], ['Blanco', ['blanco', 'white']], ['Crudo', ['crudo', 'ecru', 'off-white', 'hueso']],
+  ['Gris', ['gris', 'grey', 'gray', 'jaspeado']], ['Negro', ['negro', 'black']], ['Blanco', ['blanco', 'white']], ['Crudo', ['crudo', 'ecru', 'off-white', 'hueso', 'cream', 'crema']],
   ['Beige', ['beige', 'arena', 'sand', 'piedra', 'stone', 'tostado']], ['Camel', ['camel', 'cognac', 'coñac', 'tan']], ['Marrón', ['marron', 'brown', 'chocolate', 'tabaco', 'cuero']],
   ['Caqui', ['caqui', 'khaki']], ['Oliva', ['oliva', 'olive']], ['Verde bosque', ['verde botella', 'verde bosque', 'bottle green', 'forest green', 'verde oscuro']],
   ['Burdeos', ['burdeos', 'granate', 'burgundy', 'wine', 'maroon']], ['Rojo', ['rojo', 'red']], ['Rosa', ['rosa', 'pink']], ['Lila', ['lila', 'malva', 'lilac', 'purple']],

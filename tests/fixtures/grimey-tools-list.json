@@ -1,0 +1,52 @@
+{
+ "tools": [
+  {
+   "name": "get_checkout"
+  },
+  {
+   "name": "create_checkout"
+  },
+  {
+   "name": "update_checkout"
+  },
+  {
+   "name": "complete_checkout"
+  },
+  {
+   "name": "cancel_checkout"
+  },
+  {
+   "name": "get_cart"
+  },
+  {
+   "name": "create_cart"
+  },
+  {
+   "name": "update_cart"
+  },
+  {
+   "name": "cancel_cart"
+  },
+  {
+   "name": "get_order"
+  },
+  {
+   "name": "ask_business"
+  },
+  {
+   "name": "search_catalog"
+  },
+  {
+   "name": "lookup_catalog"
+  },
+  {
+   "name": "get_product"
+  },
+  {
+   "name": "search_locations"
+  },
+  {
+   "name": "lookup_locations"
+  }
+ ]
+}

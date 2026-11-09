@@ -88,7 +88,7 @@ Precio objetivo (máximo, si no mínimo; si no hay, tu presupuesto máximo por p
 
 ## Preferencias
 
-Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme. La búsqueda de productos (4B) solo consulta tus tiendas preferidas (si has elegido alguna) y nunca las excluidas.
+Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme, Grimey. La búsqueda de productos (4B) solo consulta tus tiendas preferidas (si has elegido alguna) y nunca las excluidas.
 
 ## Product Discovery (4B)
 
@@ -118,6 +118,7 @@ Todas cumplen la interfaz `ProductSource` (`lib/shopping/catalog/sources.ts`); e
 | Uniqlo | Complementarias | uniqlo.com | Solo metadatos públicos |
 | Mango Man | Complementarias | mango.com | Solo metadatos públicos |
 | Selected Homme | Complementarias | selected.com | Solo metadatos públicos |
+| Grimey | Conectadas por UCP | grimey.com | Solo metadatos públicos |
 
 - **Solo metadatos públicos** (`metadata`): Una página, a petición tuya, si robots.txt lo permite.
 - **Solo enlace y tus datos** (`manual_only`): Sus condiciones no permiten la extracción automatizada.
@@ -137,6 +138,53 @@ CSV/TSV, JSON o XML (Google Merchant/RSS) desde una URL o subido (máx. 4 MB y 5
 ### Buscador de productos
 
 Opcional, con clave: `SHOPPING_SEARCH_PROVIDER=brave`, `SHOPPING_SEARCH_KEY` (y `SHOPPING_SEARCH_URL`, `SHOPPING_MARKET`). Consulta solo los dominios de tus tiendas permitidas y devuelve **enlaces** a páginas de producto de tiendas conocidas; no descarga las páginas. Sin clave, se busca solo en tus feeds. Las búsquedas iguales se reutilizan durante 24 h (caché en `shopping_searches`).
+
+### Conector UCP: Grimey
+
+Grimey (tienda Shopify) publica su catálogo con el **Universal Commerce Protocol** sobre MCP. El conector (`lib/shopping/catalog/ucp.ts`) cumple la interfaz `ProductSource` y es genérico: sirve para cualquier tienda marcada con `connector = ucp` en `retailers` (migración `0019_ucp_connector.sql`).
+
+**Inspección previa (9-11-2026):**
+
+- `https://grimey.com/agents.md`: recomienda UCP/MCP o WebMCP; pide identificar el tráfico de agentes (servidor a servidor con Web Bot Auth), respetar 429/`Retry-After`, autorización del comprador para comprar y preferir las herramientas estructuradas. Permite leer HTML público con identificación. No menciona `/products.json`.
+- `https://grimey.com/robots.txt`: catálogo rastreable; bloquea carrito, checkout, cuenta, pedidos y superficies AJAX («agents should use UCP/MCP instead»).
+- `https://grimey.com/.well-known/ucp`: UCP `2026-08-25`; servicio `dev.ucp.shopping` por MCP en `https://grimeywear.myshopify.com/api/ucp/mcp` (el que anuncia el descubrimiento; `agents.md` cita `https://grimey.com/api/ucp/mcp`, que responde igual); capacidades `dev.ucp.shopping.catalog.search`, `dev.ucp.shopping.catalog.lookup` y la extensión `dev.shopify.catalog`, además de carrito, checkout, pedidos, etc.
+- `tools/list` del servidor: 16 herramientas. Se usan **solo** `search_catalog`, `get_product`, `lookup_catalog`. Nunca `create_cart`, `*_checkout`, `get_order`, `ask_business` ni las de ubicaciones.
+- Shopify (shopify.dev/docs/agents): toda llamada lleva `meta["ucp-agent"].profile` con la URL del perfil UCP del agente; la tienda lo descarga para negociar capacidades. Niveles de tráfico: Token, Firmado (RFC 9421, ECDSA P-256) y Anónimo. El catálogo está permitido en anónimo con el límite más bajo y Shopify desaconseja el anónimo para tráfico de producción.
+
+**Cómo se llama (sin inventar nada):**
+
+1. Descubrimiento: `GET {tienda}/.well-known/ucp` (caché 1 h) → endpoint MCP; se exige `dev.ucp.shopping.catalog.search` y la vinculación de autoridad (esquemas `dev.ucp.*` en ucp.dev, `dev.shopify.*` en shopify.dev).
+2. MCP (JSON-RPC sobre HTTPS, protocolo `2025-06-18`): `initialize` y `tools/list` (caché 1 h); si la tienda no publica `search_catalog`, la fuente queda no disponible.
+3. `tools/call` con `{meta: {ucp-agent: {profile}}, catalog: {...}}`: búsqueda con `query` (de la necesidad), `context` (país, idioma, moneda), `filters.price` en céntimos y `pagination.limit` = 10; detalle con `get_product` (`catalog.id` = gid de Shopify).
+4. Importar por URL de grimey.com: `get_product` no admite el handle, así que se resuelve con `search_catalog` y se completa con `get_product`. No se lee la página HTML.
+
+**Perfil UCP del agente:** la app publica el suyo en `/.well-known/ucp` (público, sin sesión ni redirecciones, `Cache-Control: public, max-age=3600`) y declara **solo** `dev.ucp.shopping.catalog.search` y `dev.ucp.shopping.catalog.lookup`. Configura `SHOPPING_UCP_PROFILE_URL=https://tu-dominio/.well-known/ucp`. Sin esa variable el conector no llama a la tienda.
+
+**Campos obtenidos y procedencia:**
+
+| Campo | De dónde sale | Procedencia |
+|---|---|---|
+| Nombre, URL, descripción, identificador (gid) | `title`, `url`, `description.html`, `id` | Tienda |
+| Precio y moneda | `price_range.min` (céntimos → euros); si varía por talla se guarda el rango | Tienda |
+| Precio anterior | `list_price_range.max` si es mayor que el precio (0 = no hay) | Tienda |
+| Tallas y disponibilidad | `variants[].options` (Talla/Size) y `availability.available`; si el detalle trae una variante, `options[].values[]` | Tienda; sin dato, «sin comprobar» |
+| Disponibilidad del producto | Alguna talla disponible | Tienda |
+| Composición | Texto literal de la descripción con porcentajes («Material: 100% COTTON», «EXTERIOR: … INTERIOR: …») | Tienda; sin porcentajes, desconocida |
+| Imágenes | `media[]` de tipo image | Solo enlazadas (no se copian ni se envían a la IA) |
+| Tipo de prenda y color | Del nombre y de colecciones/etiquetas CAT: (las categorías de Shopify vienen vacías) | Deducido |
+| Marca | UCP no la publica; si el nombre incluye «Grimey» | Deducido |
+| Fecha de consulta | `raw_attributes.fetched_at` y `last_verified_at` | — |
+
+**Límites y políticas:**
+
+- Solo bajo demanda (cuando buscas, importas o verificas). Sin recorridos del catálogo ni copia permanente; `/products.json` no se usa.
+- Por tienda: mínimo 0,4 s entre llamadas y máximo 20 por minuto en cada servidor de la app; ante 429/503 se respeta `Retry-After` sin reintentar en bucle. Caché de búsquedas con Grimey: 15 minutos (UCP pide no reutilizar respuestas entre sesiones sin revalidar); antes de decidir, «Volver a comprobar en la fuente» llama a `get_product`.
+- Se respetan tus tiendas preferidas y excluidas. El buscador genérico no repite las tiendas que ya tienen conector UCP.
+- Seguridad: el endpoint pasa la misma protección SSRF que la importación por URL; la respuesta se limita a 3 MB y 8 s.
+- Identificación: User-Agent propio y perfil UCP. **Pendiente**: firmar las peticiones (Web Bot Auth / RFC 9421), que `agents.md` pide para tráfico de servidor y Shopify recomienda para producción; hoy el tráfico es del nivel anónimo de Shopify.
+- Detrás de un proxy de salida que resuelve DNS (como en el entorno de pruebas en la nube), `SHOPPING_FETCH_VIA_PROXY=1` y `NODE_USE_ENV_PROXY=1`.
+
+**Verificado contra el catálogo real** (`GRIMEY_LIVE=1 node tests/e2e/grimey-live.cjs`): búsqueda por necesidad, ficha guardada, verificación con `get_product`, importación por URL, URL inexistente, Product Analyzer y evaluación de compra. Para esa verificación se usó como perfil el de ejemplo que publica Shopify para pruebas, porque el entorno no tiene una URL pública; en producción debe usarse el de la app.
 
 ### Procedencia de cada dato
 
@@ -315,4 +363,6 @@ RLS por usuario; un análisis o una evaluación solo sobre productos propios, y 
 - `tests/product-discovery.test.ts`: tipo y color en español e inglés, precio, composición, URL canónica, procedencia, extracción schema.org/OpenGraph, robots.txt, SSRF, feeds, búsqueda y gestor de fuentes, política de Inditex, migración.
 - `tests/purchase.test.ts`: pesos, explicación, veredictos (comprar, no comprar por redundancia, esperar), límites visibles, calidad sin precio, análisis (sin composición inventada, cita literal, procedencia, no pisa datos de la tienda), tallas, migración.
 - `tests/e2e/purchase-evaluator.cjs` (con IA simulada y la tienda de prueba): análisis y qué imágenes se envían, evaluación, talla con medidas, redundancia, comparación y aislamiento.
+- `tests/ucp.test.ts` (con respuestas reales de Grimey como datos de prueba): descubrimiento, búsqueda por necesidad, normalización, agotados, sin precio, composición desconocida, consulta por URL, errores (JSON-RPC, 424, 429, SSE, timeout), límites y políticas, perfil del agente.
+- `tests/e2e/grimey-live.cjs`: verificación contra el catálogo real (solo con `GRIMEY_LIVE=1`).
 - `tests/e2e/product-discovery.cjs` con `tests/e2e/fake-store.mjs` (tienda y buscador de prueba locales): feed, búsqueda desde una necesidad, importación por URL y sus bloqueos, asistida con capturas, verificación con historial, descarte y aislamiento (app, RLS y Storage).

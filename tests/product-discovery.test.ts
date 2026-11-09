@@ -156,7 +156,11 @@ test('migración 0017: CHECK alineados, tiendas sembradas igual que el código, 
   const list = (xs: readonly { id: string }[]) => xs.map((x) => `'${x.id}'`).join(',')
   assert.ok(sql.includes(`(${list(SOURCE_KINDS)})`)); assert.ok(sql.includes(`(${list(AVAILABILITY)})`)); assert.ok(sql.includes(`(${list(PRODUCT_STATUSES)})`)); assert.ok(sql.includes(`(${list(URL_POLICIES)})`))
   assert.ok(FIELD_ORIGINS.length >= 6)
-  for (const r of RETAILERS) assert.ok(sql.includes(`('${r.id}', '${r.name}', '${r.group}', array[${r.domains.map((d) => `'${d}'`).join(',')}], '${r.url_policy}', '${r.note}')`), r.id)
+  const sql19 = readFileSync('supabase/migrations/0019_ucp_connector.sql', 'utf8')
+  for (const r of RETAILERS) {
+    const row = `('${r.id}', '${r.name}', '${r.group}', array[${r.domains.map((d) => `'${d}'`).join(',')}], '${r.url_policy}', '${r.note}'`
+    assert.ok('connector' in r ? sql19.includes(`${row}, '${r.connector}')`) : sql.includes(`${row})`), r.id)
+  }
   for (const t of ['product_sources', 'product_feed_items', 'shopping_searches', 'external_products', 'external_product_variants', 'product_price_history']) assert.match(sql, new RegExp(`'${t}'`))
   assert.match(sql, /create policy "read retailers"[^;]*user_id is null or user_id = \(select auth\.uid\(\)\)/)
   assert.match(sql, /'shopping-private', 'shopping-private', false/)

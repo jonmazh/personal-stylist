@@ -39,9 +39,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <div key={i} className="hit">
             <span className="st">{h.retailer?.name ?? h.brand ?? 'Tienda'} · {tlabel(SOURCE_KINDS, h.source_kind)}</span>
             <h3>{h.product_name}</h3>
-            <span className="small">{fmt(h.current_price, h.currency)}{h.availability_status !== 'unknown' ? ` · ${label(AVAILABILITY, h.availability_status)}` : ''}{h.confirmed_composition ? ` · ${h.confirmed_composition}` : ''}</span>
+            <span className="small">{fmt(h.current_price, h.currency)}{h.raw_attributes?.previous_price ? ` (antes ${fmt(h.raw_attributes.previous_price.amount, h.currency)})` : ''}{h.availability_status !== 'unknown' ? ` · ${label(AVAILABILITY, h.availability_status)}` : ''}{h.confirmed_composition ? ` · ${h.confirmed_composition}` : ''}</span>
             <span className="small">Coincidencia {h.match.score}/100{h.match.matches.length ? ` · ${h.match.matches.join(' · ')}` : ''}</span>
             {h.match.unknown.length > 0 && <span className="m small">Sin confirmar: {h.match.unknown.join(', ').toLowerCase()}</span>}
+            {h.source_kind === 'api' && h.variants?.length > 0 && <span className="m small">Tallas: {(h.variants as Row[]).map((v) => `${v.size}${v.availability === 'out_of_stock' ? ' (agotada)' : ''}`).join(', ')}</span>}
             {h.source_kind === 'search' && <span className="m small">Del buscador: solo nombre y enlace; impórtalo para ver sus datos{h.retailer?.url_policy === 'manual_only' ? ' (en esta tienda, a mano)' : ''}.</span>}
             <div className="btns">
               {h.product_url && <a className="btn small" href={h.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a>}

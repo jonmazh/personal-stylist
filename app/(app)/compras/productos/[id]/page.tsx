@@ -57,7 +57,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <Field k="subcategory" name="Tipo">{p.subcategory ? subOf(p.subcategory)?.label : 'Sin identificar'}</Field>
           <Field k="primary_color" name="Color">{p.colors?.length ? p.colors.join(', ') : 'Sin indicar'}</Field>
           <Field k="confirmed_composition" name="Composición">{p.confirmed_composition ?? 'Composición desconocida'}</Field>
-          <Field k="current_price" name="Precio">{eur(p.current_price) ?? 'Sin comprobar'}</Field>
+          <Field k="current_price" name="Precio">{eur(p.current_price) ?? 'Sin comprobar'}{p.raw_attributes?.previous_price ? <span className="m small"> · antes {eur(p.raw_attributes.previous_price.amount)}</span> : null}{p.raw_attributes?.price_range && p.raw_attributes.price_range.max !== p.raw_attributes.price_range.min ? <span className="m small"> · según talla, hasta {eur(p.raw_attributes.price_range.max)}</span> : null}</Field>
           <Field k="availability_status" name="Disponibilidad">{label(AVAILABILITY, p.availability_status)}</Field>
           <Field k="description" name="Descripción">{p.description ?? '—'}</Field>
           <dt>Enlace</dt><dd>{p.product_url ? <a href={p.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a> : '—'}</dd>
