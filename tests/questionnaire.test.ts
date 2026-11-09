@@ -17,6 +17,7 @@ function schema() {
   }
   for (const m of sql.matchAll(/alter table public\.(\w+)([\s\S]*?);/g))
     for (const c of m[2].matchAll(/add column if not exists (\w+)/g)) (cols[m[1]] ??= new Set()).add(c[1])
+  for (const m of sql.matchAll(/alter table public\.(\w+) rename column (\w+) to (\w+)/g)) { cols[m[1]]?.delete(m[2]); (cols[m[1]] ??= new Set()).add(m[3]) }
   return cols
 }
 const form = (entries: [string, string][]) => { const f = new FormData(); for (const [k, v] of entries) f.append(k, v); return f }
@@ -34,6 +35,9 @@ test('cada pregunta se guarda en una columna que existe en las migraciones', () 
   assert.ok(cols.profiles.has('delete_photos_after_analysis'))
   for (const c of ['influences', 'liked_elements', 'rejected_elements', 'brand_refs', 'identity_version', 'identity_updated_at']) assert.ok(cols.style_preferences.has(c), c)
   assert.ok(cols.style_reference_ratings.has('liked_elements'))
+  for (const c of ['subcategory', 'brand', 'size_label', 'size_fit', 'primary_color', 'secondary_colors', 'cut', 'silhouette', 'pattern', 'apparent_material', 'confirmed_composition', 'composition_source', 'attributes', 'formality_level', 'seasons', 'occasions', 'style_tags', 'condition', 'wardrobe_status', 'purchase_price', 'purchase_date', 'store', 'estimated_uses', 'notes', 'is_favorite', 'archived_at', 'field_sources', 'updated_at']) assert.ok(cols.garments.has(c), `garments.${c}`)
+  for (const c of ['garment_id', 'role', 'storage_path', 'thumb_path', 'sha256', 'position']) assert.ok(cols.garment_images.has(c), c)
+  for (const c of ['garment_id', 'kind', 'changes', 'source']) assert.ok(cols.garment_events.has(c), c)
   for (const c of ['temperature_source', 'temperature_status', 'temperature_analysis_id', 'temperature_updated_at', 'temperature_validated_at']) assert.ok(cols.color_profiles.has(c), c)
   for (const c of ['photo_id', 'photo_path', 'temperature', 'secondary_tendency', 'confidence', 'explanation', 'observations', 'limitations', 'image_quality', 'client_quality', 'confidence_capped', 'model', 'created_at']) assert.ok(cols.color_analyses.has(c), c)
 })
