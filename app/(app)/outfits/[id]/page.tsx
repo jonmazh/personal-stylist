@@ -7,6 +7,12 @@ import { SEASONS } from '@/lib/wardrobe/taxonomy'
 import { WardrobeError } from '@/lib/wardrobe/service'
 import { Collage } from '@/components/outfits/collage'
 import { deleteOutfitAction, setOutfitStatusAction, toggleOutfitFavoriteAction } from '../actions'
+import { evaluateTheoreticalAction, formulaFromOutfitAction, wearAction } from '../learn-actions'
+import { outfitHistory } from '@/lib/outfits/feedback-service'
+import { listEvaluations } from '@/lib/outfits/evaluator-service'
+import { FLAGS, RATINGS, REASONS, label as lbl } from '@/lib/outfits/feedback'
+import { FeedbackForm } from '@/components/outfits/feedback-form'
+import { VisualEval } from '@/components/outfits/visual-eval'
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 const STATE: Record<string, string> = { archived: 'Archivada en tu armario', draft: 'Borrador del armario', missing: 'Ya no está en tu armario' }
@@ -18,6 +24,9 @@ export default async function OutfitPage({ params, searchParams }: { params: Pro
   const user = (await getUser())!
   let o: Awaited<ReturnType<typeof getOutfit>>
   try { o = await getOutfit(user.supabase, id) } catch (e) { if (e instanceof WardrobeError && e.status === 404) notFound(); throw e }
+  const [hist, evals] = await Promise.all([outfitHistory(user.supabase, id).catch(() => ({ feedback: [], wears: [] })), listEvaluations(user.supabase, id).catch(() => [])])
+  const today = new Date().toISOString().slice(0, 10)
+  const live = o.items.filter((i) => i.garment).map((i) => ({ id: i.garment_id, title: i.title }))
   const seasons = (o.seasons ?? []).map((s: string) => SEASONS.find((x) => x.id === s)?.label ?? s)
   return (
     <main className="wide">
@@ -27,6 +36,8 @@ export default async function OutfitPage({ params, searchParams }: { params: Pro
       {sp.saved && <p className="note" role="status">Conjunto guardado.</p>}
       {sp.status && <p className="note" role="status">{sp.status === 'archived' ? 'Archivado: no aparece entre tus conjuntos activos. Puedes recuperarlo cuando quieras.' : 'Estado actualizado.'}</p>}
       {sp.warn && <p className="note warn" role="status">{sp.warn}</p>}
+      {sp.rated && <p className="note" role="status">Valoración guardada. Gracias: así aprendo qué funciona para ti.</p>}
+      {sp.worn && <p className="note" role="status">Uso registrado.</p>}
       {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
 
       <Collage items={o.items} max={6} big />
@@ -58,6 +69,41 @@ export default async function OutfitPage({ params, searchParams }: { params: Pro
           : <form action={setOutfitStatusAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="saved" /><button className="btn">Recuperar</button></form>}
         <form action={toggleOutfitFavoriteAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="value" value={o.is_favorite ? '0' : '1'} /><button className="btn quiet">{o.is_favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}</button></form>
       </div>
+      <section className="osec">
+        <h3>Tu valoración</h3>
+        <FeedbackForm outfitId={id} garments={live} back={`/outfits/${id}`} />
+        {hist.feedback.length > 0 && <ul className="events">{hist.feedback.map((f: Record<string, any>) => (
+          <li key={f.id}><b>{f.rating ? lbl(RATINGS, f.rating) : 'Experiencia'}</b> <span className="m small">· {fmt(f.created_at)}{(f.flags ?? []).length ? ` · ${f.flags.map((x: string) => lbl(FLAGS, x).toLowerCase()).join(', ')}` : ''}{(f.reasons ?? []).length ? ` · ${f.reasons.map((x: string) => lbl(REASONS, x).toLowerCase()).join(', ')}` : ''}{f.garment_id ? ` · prenda: ${live.find((g) => g.id === f.garment_id)?.title ?? '—'}` : ''}{f.note ? ` · «${f.note}»` : ''}</span></li>
+        ))}</ul>}
+      </section>
+
+      <section className="osec">
+        <h3>Registro de uso</h3>
+        <p className="m small">{hist.wears.length ? `Te lo has puesto ${hist.wears.length} ${hist.wears.length === 1 ? 'vez' : 'veces'}; la última, el ${new Date(hist.wears[0].worn_on).toLocaleDateString('es-ES')}.` : 'Aún no has registrado que te lo hayas puesto.'} La frecuencia de uso sale de este registro, nunca de las fotos.</p>
+        <form action={wearAction} className="wearform">
+          <input type="hidden" name="outfit_id" value={id} />
+          <label>Fecha<input type="date" name="worn_on" defaultValue={today} max={today} /></label>
+          <label className="chk"><input type="checkbox" name="comfortable" /> Me sentí cómodo</label>
+          <label className="chk"><input type="checkbox" name="well_dressed" /> Me sentí bien vestido</label>
+          <label>Nota<input name="note" maxLength={500} placeholder="Cena con el equipo" /></label>
+          <div className="btns"><button className="btn small">Me lo he puesto</button></div>
+        </form>
+        {hist.wears.length > 0 && <ul className="events">{hist.wears.map((w: Record<string, any>) => <li key={w.id}>{new Date(w.worn_on).toLocaleDateString('es-ES')} <span className="m small">{[w.comfortable ? 'cómodo' : null, w.well_dressed ? 'bien vestido' : null, w.note].filter(Boolean).join(' · ')}</span></li>)}</ul>}
+      </section>
+
+      <section className="osec">
+        <h3>Evaluar este conjunto</h3>
+        <form action={evaluateTheoreticalAction} className="btns"><input type="hidden" name="outfit_id" value={id} /><button className="btn">Evaluación teórica</button><span className="m small">Combinación, colores, volúmenes, ocasión e identidad. Sin foto.</span></form>
+        <details className="howto"><summary>Evaluación con una foto tuya llevándolo</summary><VisualEval uid={user.id} outfitId={id} /></details>
+        {evals.length > 0 && <ul className="events">{evals.map((e: Record<string, any>) => <li key={e.id}><a href={`/outfits/evaluaciones/${e.id}`}>{e.mode === 'visual' ? 'Evaluación visual' : 'Evaluación teórica'}</a> <span className="m small">· {fmt(e.created_at)}{e.score != null ? ` · ${Math.round(Number(e.score))}/100` : ''}</span></li>)}</ul>}
+      </section>
+
+      <section className="osec">
+        <h3>Fórmula de estilo</h3>
+        <form action={formulaFromOutfitAction} className="btns"><input type="hidden" name="outfit_id" value={id} /><button className="btn quiet">Crear una fórmula a partir de este conjunto</button></form>
+        <p className="m small">La fórmula guarda la estructura (tipo de prenda de cada pieza), no estas prendas concretas: podrás repetirla con otras de tu armario.</p>
+      </section>
+
       <details className="howto"><summary>Eliminar definitivamente</summary>
         <form action={deleteOutfitAction}>
           <input type="hidden" name="id" value={id} />

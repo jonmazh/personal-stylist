@@ -26,6 +26,19 @@ http.createServer((req, res) => {
     }
     const reply = (obj) => res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', usage: { prompt_tokens: 700, completion_tokens: 150, total_tokens: 850 }, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(obj) } }] }))
     const utext = typeof user?.content === 'string' ? user.content : ''
+    if (sys.includes('EVALUACION DE UN CONJUNTO')) {
+      // Critica teorica: una sugerencia valida (otra prenda de calzado) y otra con un id inventado (debe descartarse)
+      const avail = utext.split('\n').filter((l) => /^[0-9a-f-]{36}: /.test(l))
+      const shoe = avail.find((l) => l.includes('footwear') && !utext.split('CONJUNTO:')[1]?.split('PUNTUACION')[0]?.includes(l.slice(0, 36)))?.slice(0, 36)
+      return reply({ verdict: 'Es un conjunto coherente: la base neutra deja que la parte superior respire.', strengths: ['Colores en armonía'], risks: ['El calzado endurece el conjunto'],
+        suggestions: [...(shoe ? [{ role: 'footwear', garment_id: shoe, reason: 'Más equilibrado con el resto' }] : []), { role: 'footwear', garment_id: '00000000-0000-4000-8000-0000000000ff', reason: 'Inventada' }] })
+    }
+    if (sys.includes('evaluando una FOTOGRAFIA') && Array.isArray(user?.content)) {
+      const planned = /CONJUNTO PREVISTO/.test(user.content[0].text)
+      return reply({ photo_quality: { suitable: true, issues: [] },
+        aspects: [{ key: 'integration', observation: 'Las prendas se integran con naturalidad', score: 8, visible: true }, { key: 'proportions', observation: 'La chaqueta equilibra el torso', score: 8, visible: true }, { key: 'lengths', observation: 'El bajo del pantalón no se ve: el encuadre corta los tobillos', score: null, visible: false }, { key: 'harmony', observation: 'Armonía cromática cuidada', score: 9, visible: true }, { key: 'inventado', observation: 'x', score: 2, visible: true }],
+        matches_plan: { value: planned ? 'si' : 'desconocido', notes: '' }, not_visible: ['El largo del pantalón y el calzado'], summary: 'El conjunto funciona sobre ti; falta ver el bajo.', suggestions: ['Haz la foto de cuerpo entero para valorar el largo'] })
+    }
     if (sys.includes('interprete de peticiones')) {
       // Interprete: deduce lo evidente, mete un valor invalido y un id inventado (la app debe descartarlos)
       const q = (utext.match(/PETICION DEL USUARIO: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()

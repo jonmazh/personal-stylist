@@ -15,6 +15,7 @@ import { EvaluationView } from '@/components/wardrobe/evaluation-view'
 import { FitView } from '@/components/wardrobe/fit-view'
 import { outfitsWithGarment } from '@/lib/outfits/service'
 import { roleLabel } from '@/lib/outfits/taxonomy'
+import { garmentWear } from '@/lib/outfits/feedback-service'
 import { deleteGarmentAction, removeImageAction, setImageRoleAction, setStatusAction, toggleFavoriteAction, updateGarmentAction } from '../actions'
 
 const TABS = [['resumen', 'Resumen'], ['analisis', 'Análisis IA'], ['caracteristicas', 'Características'], ['compatibilidad', 'Compatibilidad'], ['ajuste', 'Fit Assessment'], ['combinaciones', 'Combinaciones'], ['historial', 'Historial']] as const
@@ -42,6 +43,7 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
   const analyses = tab === 'analisis' || tab === 'resumen' ? await latestAnalysis(user.supabase, id).catch(() => []) : []
   const ev = tab === 'compatibilidad' || tab === 'ajuste' ? await evaluationFor(user.supabase, user.id, g, g.images.length) : null
   const inOutfits = tab === 'resumen' ? await outfitsWithGarment(user.supabase, id).catch(() => []) : []
+  const usage = tab === 'resumen' ? await garmentWear(user.supabase, id).catch(() => ({ count: 0, last: null })) : { count: 0, last: null }
   const decisions = tab === 'compatibilidad' ? await decisionsOf(user.supabase, id) : []
   const SRC: Record<string, string> = { usuario: 'tú', ia: 'IA, aceptado por ti', etiqueta: 'etiqueta', ficha: 'ficha comercial' }
 
@@ -100,6 +102,7 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
           {g.notes && (<><dt>Notas</dt><dd>{g.notes}</dd></>)}
         </dl>
 
+        <p className="small">{usage.count ? `Te la has puesto ${usage.count} ${usage.count === 1 ? 'vez' : 'veces'} (última: ${new Date(usage.last!).toLocaleDateString('es-ES')}), según tu registro de uso.` : 'Sin usos registrados todavía (se registran desde tus conjuntos).'}</p>
         {inOutfits.length > 0 && <p className="small">Aparece en {inOutfits.length === 1 ? 'el conjunto' : `${inOutfits.length} conjuntos`}: {inOutfits.map((o, i) => <span key={o.id}>{i ? ' · ' : ''}<Link href={`/outfits/${o.id}`}>{o.name}</Link> <span className="m">({roleLabel(o.role).toLowerCase()}{o.status === 'archived' ? ', archivado' : ''})</span></span>)}</p>}
         <div className="btns">
           {g.wardrobe_status !== 'active' && <form action={setStatusAction}><input type="hidden" name="id" value={id} /><input type="hidden" name="status" value="active" /><button className="btn primary">{g.wardrobe_status === 'archived' ? 'Recuperar al armario' : 'Confirmar y guardar en el armario'}</button></form>}

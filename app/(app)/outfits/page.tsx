@@ -7,6 +7,7 @@ import { WardrobeError } from '@/lib/wardrobe/service'
 import { Collage } from '@/components/outfits/collage'
 import { startStylistAction, toggleOutfitFavoriteAction } from './actions'
 import { listSessions } from '@/lib/outfits/stylist/service'
+import { learningView } from '@/lib/outfits/feedback-service'
 import { PendingButton } from '@/components/outfits/pending-button'
 import { configError } from '@/lib/ai/client'
 
@@ -19,6 +20,9 @@ export default async function OutfitsPage({ searchParams }: { searchParams: Prom
   const q: OutfitQuery = { status: sp.status ?? 'active', occasion: sp.occasion, formality: Number(sp.formality) || undefined, season: sp.season, tag: sp.tag, favorite: sp.favorite === '1', q: sp.q }
   let items: Awaited<ReturnType<typeof listOutfits>> = [], tags: string[] = [], error = ''
   const sessions = await listSessions(user.supabase, 5).catch(() => [])
+  const lv = await learningView(user.supabase).catch(() => null)
+  const metrics = lv?.metrics
+  const wornBy = new Map<string, number>(); for (const w of lv?.wears ?? []) wornBy.set(w.outfit_id, (wornBy.get(w.outfit_id) ?? 0) + 1)
   const aiMissing = configError()
   try { [items, tags] = await Promise.all([listOutfits(user.supabase, q), outfitTags(user.supabase)]) } catch (e) { error = e instanceof WardrobeError ? e.message : 'No se pudieron cargar los conjuntos' }
   const href = (patch: Record<string, string | undefined>) => {
@@ -41,9 +45,10 @@ export default async function OutfitsPage({ searchParams }: { searchParams: Prom
         <div className="btns"><PendingButton label="Generar propuestas" pending="El estilista está preparando tus propuestas…" /><Link className="btn quiet" href="/outfits/generar">Con filtros detallados</Link></div>
       </form>
       {sessions.length > 0 && <p className="m small">Conversaciones recientes: {sessions.map((x: Record<string, any>, i: number) => <span key={x.id}>{i ? ' · ' : ''}<Link href={`/outfits/estilista/${x.id}`}>{x.title}</Link></span>)}</p>}
-      <div className="btns"><Link className="btn" href="/outfits/nuevo">Crear conjunto a mano</Link></div>
+      <div className="btns"><Link className="btn" href="/outfits/nuevo">Crear conjunto a mano</Link><Link className="btn quiet" href="/outfits/evaluar">Evaluar un conjunto</Link></div>
       <div className="ozones">
-        <div><span className="st">Fórmulas de estilo</span><span className="m small">Pendiente · fase 3D</span></div>
+        <Link href="/outfits/formulas"><span className="st">Mis fórmulas de estilo</span><span className="m small">Estructuras que funcionan y puedes repetir</span></Link>
+        <Link href="/outfits/aprendizaje"><span className="st">Lo que he aprendido de ti</span><span className="m small">{metrics ? `${metrics.liked}/${metrics.rated} te gustan · ${metrics.wornOutfits} puestos · ${metrics.repeat} repetirías` : 'Valora conjuntos para que aprenda'}</span></Link>
       </div>
 
       <form className="filters ofilters" method="get" action="/outfits">
@@ -69,6 +74,7 @@ export default async function OutfitsPage({ searchParams }: { searchParams: Prom
               <span className="m small">{[o.occasion ? occasionLabel(o.occasion) : null, o.formality_level ? `formalidad ${o.formality_level}/5` : null, `${o.items.length} prenda${o.items.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</span>
               {o.compatibility_score != null && <span className="m small">Compatibilidad {Math.round(Number(o.compatibility_score))}/100 · confianza {o.confidence_level}</span>}
               <span className={`state ${o.status === 'saved' && !o.problems.length ? 'm' : 'warn'}`}>{o.status === 'draft' ? 'Borrador' : o.status === 'archived' ? 'Archivado' : 'Guardado'}{o.problems.length ? ` · ${o.problems.length} aviso${o.problems.length === 1 ? '' : 's'}` : ''}</span>
+              {wornBy.get(o.id) ? <span className="m small">Puesto {wornBy.get(o.id)} {wornBy.get(o.id) === 1 ? 'vez' : 'veces'}</span> : null}
               {(o.tags ?? []).length > 0 && <span className="m small">{o.tags.map((t: string) => `#${t}`).join(' ')}</span>}
             </div>
             <form action={toggleOutfitFavoriteAction} className="fav">

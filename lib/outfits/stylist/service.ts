@@ -6,7 +6,7 @@ import { styleProfileOf } from '@/lib/style/dna'
 import { styleName } from '@/lib/style/catalog'
 import { WardrobeError, type Sb } from '@/lib/wardrobe/service'
 import { GenerateRequest, resolveContext, type GenerateRequestT } from '../engine/context'
-import { eligible, generate } from '../engine/generate'
+import { eligible, generate, learnedContext } from '../engine/generate'
 import { scoreEnv, scoreOutfit } from '../engine/scoring'
 import { prepareEngine, persistGeneration, saveProposal, type Prepared, type StylistMeta } from '../generate-service'
 import { garmentsWithPhotos } from '../service'
@@ -64,7 +64,7 @@ async function interpret(sb: Sb, uid: string, text: string, prep: Prepared, over
 async function propose(sb: Sb, uid: string, request: GenerateRequestT, prep: Prepared, textRequest: string) {
   const t0 = Date.now()
   const n = request.number_of_outfits
-  const out = generate({ ...request, number_of_outfits: 5 }, prep.garments, prep.evals, prep.bundle)
+  const out = generate({ ...request, number_of_outfits: 5 }, prep.garments, prep.evals, prep.bundle, new Date(), prep.signals)
   const keys = out.proposals.map((_, i) => `C${i + 1}`)
   let chosen: { p: (typeof out.proposals)[number]; stylist?: StylistMeta }[] = out.proposals.slice(0, n).map((p) => ({ p }))
   let intro = '', aiNote: string | null = null, selectionDropped: string[] = []
@@ -126,8 +126,8 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
 
   const prep = await prepareEngine(sb, uid)
   const request = GenerateRequest.parse(session.request)
-  const ctx = resolveContext(request)
-  const pool = eligible(prep.garments, ctx).ok
+  const ctx = learnedContext(resolveContext(request), prep.signals)
+  const pool = eligible(prep.garments, ctx, prep.signals).ok
   const available = new Map(pool.map((g) => [g.id as string, g]))
   const props = await currentProposals(sb, session)
   // Las prendas que ya estan en las propuestas siguen siendo validas aunque el filtro de hoy las deje fuera
@@ -155,7 +155,7 @@ export async function sendMessage(sb: Sb, uid: string, sessionId: string, text: 
       await say(`${errors.length || comp.length ? 'No he podido aplicar ese cambio: ' : ''}${[...errors, ...comp.map((c) => c.text)].join(' ') || 'No he identificado qué cambiar.'} ${errors.length || comp.length ? 'Dime qué prenda de tu armario prefieres.' : out.reply}`.trim(), { action: 'rejected', target: target.n, errors: [...errors, ...comp.map((c) => c.text)] })
       return
     }
-    const env = scoreEnv(ctx, prep.bundle, prep.evals, request.weights)
+    const env = scoreEnv(ctx, prep.bundle, prep.evals, request.weights, prep.signals)
     const slots = items.map((i) => ({ role: i.role, g: available.get(i.garment_id)! }))
     const sc = scoreOutfit(slots, env)
     const titles = new Map(slots.map((s) => [s.g.id as string, s.g.title as string]))

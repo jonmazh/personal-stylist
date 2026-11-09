@@ -21,6 +21,9 @@ import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
 import { DUP_THRESHOLD, MIN_AUDIT } from '@/lib/wardrobe/audit'
 import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
 import { DRESS_CODES, INTENTS, RESTRICTIONS, TEMPLATES } from '@/lib/outfits/engine/context'
+import { FLAGS, FORMULA_STATUSES, RATINGS as FB_RATINGS, REASONS } from '@/lib/outfits/feedback'
+import { AUTO_EVIDENCE, MIN_EVIDENCE as LEARN_MIN } from '@/lib/outfits/learning'
+import { ASPECTS, EVALUATOR, VISUAL } from '@/lib/outfits/evaluator'
 import { CONTEXT_PARSER, OUTFIT_STYLIST, PARSER_VERSION, STYLIST_CHAT, STYLIST_VERSION } from '@/lib/outfits/stylist/contracts'
 import { CRITERIA_LABEL, DEFAULT_WEIGHTS } from '@/lib/outfits/engine/scoring'
 import { ENGINE_VERSION, MAX_COMBINATIONS, MAX_USES, TOP_K } from '@/lib/outfits/engine/generate'
@@ -330,6 +333,45 @@ const ACCEPTANCE: [string, string][] = [
   ['Puedo detectar prendas potencialmente duplicadas y huecos', 'Similitud con siete factores y huecos por categoría, ocasión y temporada (2D)'],
 ]
 
+function learningSection() {
+  return [
+    '### Outfit Evaluator',
+    '',
+    '- **Modo A · teórico:** eliges prendas (o un conjunto guardado) y el contexto. El motor puntúa con los 6 criterios. La IA, con el prompt de Outfit Stylist, opina (veredicto, a favor, riesgos) y sugiere cambios; las sugerencias que citan prendas inexistentes o funciones imposibles se descartan y se dice.',
+    `- **Modo B · visual:** una foto tuya con el conjunto puesto. Se reduce y se le quitan los metadatos en el navegador, se sube al bucket privado \`outfits-private\` y, salvo que pidas conservarla, se borra tras el análisis. Aspectos: ${ASPECTS.map((a) => a.label.toLowerCase()).join(', ')}, y si corresponde al conjunto previsto. Lo que no se ve queda «no observable», sin puntuación, y se lista en «lo que la foto no permite verificar».`,
+    '',
+    '### Valoraciones y uso real',
+    '',
+    `- **Valoración:** ${FB_RATINGS.map((r) => r.label.toLowerCase()).join(' / ')}.`,
+    `- **Experiencia:** ${FLAGS.map((f) => f.label.toLowerCase()).join(', ')}.`,
+    `- **Motivos** (solo si no convence): ${REASONS.map((r) => r.label.toLowerCase()).join('; ')}.`,
+    '- Se valoran conjuntos guardados y propuestas del motor o del estilista. «Me lo he puesto» registra el uso (y, si es una propuesta, la guarda como conjunto).',
+    '- El **registro de uso** es la fuente de la frecuencia de uso de cada prenda: la ficha de la prenda muestra cuántas veces te la has puesto, nunca deducido de una foto.',
+    '',
+    '### Aprendizaje',
+    '',
+    `Una valoración suelta no cambia nada. Un patrón observado en al menos ${LEARN_MIN} valoraciones se te **propone**; desde ${AUTO_EVIDENCE} el motor lo tiene en cuenta de forma **suave** aunque no lo hayas confirmado. Si lo **confirmas**, se aplica del todo; si lo **descartas**, nunca. Puedes deshacerlo. **Tu Style Blueprint no se modifica.**`,
+    '',
+    '| Patrón | Efecto en el motor |', '|---|---|',
+    '| Una prenda que señalas como la que no te gusta | Penalización suave; confirmado, el motor y el estilista dejan de proponerla |',
+    '| Una prenda presente en conjuntos que te gustan, repetirías o te pones | Bonificación (sin repetirla siempre: la variedad sigue mandando) |',
+    '| «Demasiado formal» o «demasiado informal» para una ocasión | La formalidad objetivo de esa ocasión baja o sube un punto |',
+    '| Una pareja de colores que no te convence | Penalización en armonía cromática, con el motivo visible |',
+    '',
+    'Métricas: cuántos conjuntos te gustan, cuántos te pones, cuántos repetirías y cuántas propuestas del estilista te has puesto.',
+    '',
+    '### Fórmulas de estilo',
+    '',
+    '- Una fórmula es una **estructura por tipo de prenda** (función, tipo, corte, colores y formalidad admitidos), no una prenda concreta: si cambias tu polo por otro, la fórmula sigue funcionando.',
+    '- **Origen:** las creas tú (a mano o desde un conjunto) o las detecta el estilista cuando la misma estructura aparece en 2 o más conjuntos que te gustaron, repetirías o te pusiste.',
+    `- **Estados:** ${FORMULA_STATUSES.map((x) => x.label.toLowerCase()).join(', ')}. Pasa sola de pendiente a probada cuando te pones un conjunto creado desde ella.`,
+    '- **Probar:** muestra las mejores combinaciones de tu armario que la cumplen, puntuadas por el motor y distintas entre sí, y cuántas variaciones permite. Cualquiera se puede guardar como conjunto enlazado a la fórmula.',
+    '',
+    '### Prompt de evaluación teórica (añadido al de Outfit Stylist)', '', '```text', EVALUATOR.slice(OUTFIT_STYLIST.length).trim(), '```', '',
+    '### Prompt de evaluación visual', '', '```text', VISUAL, '```',
+  ]
+}
+
 function stylistSection() {
   return [
     'Regla: **el motor genera y valida; la IA interpreta, elige y explica**. Nada de lo que devuelve la IA se usa sin comprobarlo, y si la IA no está configurada o falla, Outfit Studio sigue funcionando con el motor.',
@@ -593,7 +635,7 @@ export function outfitDoc() {
     '| 3A · Fundamentos | Tablas `outfits` y `outfit_items`, conjuntos manuales con prendas reales, roles, sustitución, filtros, estados, ficha | Hecha |',
     '| 3B · Motor de combinaciones | Plantillas, generación de candidatos con poda, filtros obligatorios, scoring de 100 puntos explicable, variedad por intenciones, historial auditable | Hecha |',
     '| 3C · IA estilista y ocasiones | Peticiones en lenguaje natural, Outfit Stylist AI que elige y explica entre candidatas del motor, conversación con cambios validados y repuntuados, sesiones | Hecha |',
-    '| 3D · Evaluación y aprendizaje | Evaluación teórica y visual, feedback, fórmulas, registro de uso | Pendiente |',
+    '| 3D · Evaluación y aprendizaje | Outfit Evaluator (teórico y con foto), valoraciones con motivos, registro de uso, fórmulas de estilo, aprendizaje por patrones confirmables | Hecha |',
     '',
     '## Punto de partida (análisis del proyecto antes de la 3A)',
     '',
@@ -645,11 +687,23 @@ export function outfitDoc() {
     '',
     '`outfit_generation_results` gana `origin` (motor o cambio en la conversación), `parent_result_id` (versión anterior) y `stylist` (nombre y explicación de la IA, modelo y versión del prompt) (0013).',
     '',
-    'Las tablas de las subfases siguientes (`outfit_contexts`, `outfit_feedback`, `outfit_wear_events`, `style_formulas`, `style_formula_slots`, `outfit_evaluations`) se crearán cuando se implementen.',
+    '| `outfit_feedback` (0014) | Valoración de un conjunto o una propuesta: me encanta / me gusta / no me convence, experiencia (puesto, cómodo, bien vestido, repetiría), motivos, prenda que no gusta, nota y prendas del momento |',
+    '| `outfit_wear_events` (0014) | Uso real: fecha, ocasión, prendas, comodidad, confianza, nota |',
+    '| `outfit_evaluations` (0014) | Evaluaciones teóricas (puntuación y desglose del motor, crítica de la IA) y visuales (análisis de la foto; la ruta de la foto solo si la conservas) |',
+    '| `style_formulas`, `style_formula_slots` (0014) | Fórmulas: nombre, origen, estado, conjunto de origen, firma; huecos por función con tipos, colores, cortes y formalidad admitidos |',
+    '| `style_learning` (0014) | Patrones que confirmaste o descartaste (los detectados se calculan en cada consulta) |',
+    '',
+    '`outfits` gana `formula_id` (0014).',
+    '',
+    'No se ha creado `outfit_contexts`: el contexto vive en la petición de cada generación o conversación y en la ocasión, formalidad y temporadas del conjunto, sin duplicarlo.',
     '',
     '## Motor de combinaciones (3B)',
     '',
     ...engineSection(),
+    '',
+    '## Evaluación y aprendizaje (3D)',
+    '',
+    ...learningSection(),
     '',
     '## Estilista con IA (3C)',
     '',
@@ -670,6 +724,13 @@ export function outfitDoc() {
     '| `POST /api/stylist/sessions` | `{message, filters?}`: petición en lenguaje natural (los filtros estructurados mandan sobre lo interpretado) → sesión con propuestas |',
     '| `GET /api/stylist/sessions` · `GET /api/stylist/sessions/:id` | Conversaciones y su detalle (mensajes y todas las versiones de las propuestas) |',
     '| `POST /api/stylist/sessions/:id/messages` | `{message}`: conversar (cambiar prendas, preguntar, regenerar con otras condiciones, guardar) |',
+    '| `POST /api/outfits/:id/feedback` · `POST /api/outfits/feedback` | Valorar un conjunto o una propuesta (`result_id`); «puesto» registra el uso |',
+    '| `POST /api/outfits/:id/wear` | Registrar uso real |',
+    '| `POST /api/outfits/:id/evaluate` · `POST /api/outfits/evaluate` | Evaluación teórica o visual (`mode: visual`, `photo_path`, `keep_photo`) |',
+    '| `GET` · `DELETE /api/outfits/evaluations/:id` | Consultar una evaluación · borrar su foto |',
+    '| `GET` · `POST /api/style-formulas` · `POST /api/style-formulas/from-outfit` | Fórmulas (con variaciones posibles y detectadas) · crear · crear desde un conjunto |',
+    '| `PATCH` · `DELETE /api/style-formulas/:id` · `POST /api/style-formulas/:id/try` | Estado · eliminar · probar con tu armario o guardar una combinación |',
+    '| `GET` · `POST /api/outfits/learning` | Patrones y métricas · confirmar, descartar o deshacer un patrón |',
     '| `POST /api/outfits/generations/results/:id` | `{action: save\\|dismiss, name?}`: guardar la propuesta como conjunto o descartarla |',
     '',
     '## Criterios de aceptación de la fase 3',
@@ -685,7 +746,12 @@ export function outfitDoc() {
     '| Las propuestas son variadas y no repiten sistemáticamente las mismas prendas | Hecho (3B) |',
     '| Puedo solicitar outfits para distintas ocasiones | Hecho: en lenguaje natural (3C) o con filtros (3B) |',
     '| Puedo conversar con el estilista sobre una propuesta | Hecho (3C) |',
-    '| Evaluar outfits (selección y foto) · valorar y explicar rechazos · fórmulas · registro de uso · aprendizaje | Pendiente (3D) |',
+    '| Puedo evaluar outfits mediante selección manual de prendas | Hecho (3D): motor + estilista |',
+    '| Puedo subir fotografías para una evaluación visual | Hecho (3D): foto privada, borrada tras el análisis salvo que la conserves; lo no visible se indica |',
+    '| Puedo valorar las propuestas y explicar mis rechazos | Hecho (3D): conjuntos y propuestas, con motivos |',
+    '| Puedo crear y guardar fórmulas de estilo | Hecho (3D): manuales, desde un conjunto o detectadas |',
+    '| Puedo registrar outfits que realmente he utilizado | Hecho (3D): diario de uso; frecuencia por prenda |',
+    '| Las valoraciones quedan disponibles para mejorar futuras recomendaciones | Hecho (3D): patrones con evidencia que el motor y el estilista aplican |',
   ].join('\n')
 }
 

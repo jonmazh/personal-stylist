@@ -42,7 +42,7 @@ const photo = (rgb) => png(600, 800, (x, y) => (((x >> 5) + (y >> 5)) % 2 ? rgb 
   // ── Crear un conjunto a mano ──
   await go('/outfits')
   let t = await p.locator('main').innerText()
-  assert.match(t, /Aún no tienes conjuntos/i); assert.match(t, /Pedírselo al estilista en tus palabras\s*Pendiente/i)
+  assert.match(t, /Aún no tienes conjuntos/i); assert.match(t, /Fórmulas de estilo\s*Pendiente/i); assert.match(t, /¿Qué necesitas hoy\?/i)
   await p.click('text=Crear conjunto'); await p.waitForURL(/outfits\/nuevo/)
   const picker = await p.locator('.opicker').innerText()
   assert.match(picker, /Camisa oxford blanca/i); assert.doesNotMatch(picker, /Polo viejo/i, 'las archivadas no se ofrecen'); assert.doesNotMatch(picker, /Borrador gorra/i, 'los borradores no se ofrecen')

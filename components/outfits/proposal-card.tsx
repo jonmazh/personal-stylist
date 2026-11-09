@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { proposalAction } from '@/app/(app)/outfits/actions'
 import { INTENTS } from '@/lib/outfits/engine/context'
 import { roleLabel } from '@/lib/outfits/taxonomy'
+import { FeedbackForm } from './feedback-form'
 
 type Row = Record<string, any>
 const CONF: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' }
@@ -45,7 +46,9 @@ export function ProposalCard({ r, context, label, back, current = true }: { r: R
           <button className="btn primary" name="action" value="save">Guardar como conjunto</button>
           <button className="btn quiet" name="action" value="dismiss">Descartar</button>
         </form>
-      ) : r.status === 'saved' && r.saved_outfit_id ? <p className="state ok">Guardado · <Link href={`/outfits/${r.saved_outfit_id}`}>ver conjunto</Link></p> : <p className="state m">Descartada</p>}
+      ) : null}
+      {current && <FeedbackForm resultId={r.id} garments={(r.items as Row[]).map((i) => ({ id: i.garment_id, title: i.title }))} back={back ?? `/outfits/generar?g=${r.generation_id}`} compact />}
+      {!current || r.status === 'proposed' ? null : r.status === 'saved' && r.saved_outfit_id ? <p className="state ok">Guardado · <Link href={`/outfits/${r.saved_outfit_id}`}>ver conjunto</Link></p> : <p className="state m">Descartada</p>}
     </article>
   )
 }

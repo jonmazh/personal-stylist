@@ -8,6 +8,7 @@ import { garmentElements, occasionsOf, type Evaluation } from '@/lib/wardrobe/co
 import { OUTFIT_OCCASIONS, roleLabel } from '../taxonomy'
 import { LIFE } from '@/lib/profile/areas'
 import type { Ctx, IntentId } from './context'
+import { emptySignals, type Signals } from '../learning'
 
 /**
  * Outfit Engine · etapa 5: puntuar combinaciones (100 puntos, pesos configurables).
@@ -45,9 +46,9 @@ const lc = (s: string) => s.toLowerCase()
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
 const title = (g: G) => g.title ?? g.name ?? 'Prenda'
 
-export interface ScoreEnv { ctx: Ctx; bundle: Bundle; evals: Map<string, Evaluation>; weights: Record<WeightKey, number>; profile?: StyleProfile; temp?: string | null }
-export function scoreEnv(ctx: Ctx, bundle: Bundle, evals: Map<string, Evaluation>, weights?: Record<string, number>): ScoreEnv {
-  return { ctx, bundle, evals, weights: normalizeWeights(weights), profile: styleProfileOf(bundle), temp: colorimetry(bundle).temp ?? null }
+export interface ScoreEnv { ctx: Ctx; bundle: Bundle; evals: Map<string, Evaluation>; weights: Record<WeightKey, number>; profile?: StyleProfile; temp?: string | null; signals: Signals }
+export function scoreEnv(ctx: Ctx, bundle: Bundle, evals: Map<string, Evaluation>, weights?: Record<string, number>, signals: Signals = emptySignals()): ScoreEnv {
+  return { ctx, bundle, evals, weights: normalizeWeights(weights), profile: styleProfileOf(bundle), temp: colorimetry(bundle).temp ?? null, signals }
 }
 
 function occasionCrit(items: Slot[], env: ScoreEnv): Omit<Crit, 'key' | 'label' | 'weight' | 'points'> {
@@ -94,6 +95,7 @@ function colorCrit(items: Slot[], env: ScoreEnv) {
     if (env.temp && NEAR_FACE.has(s.role)) { const f = colorFit(env.temp as never, col, { nearFace: true, liked: likes.includes(col) }); if (f.verdict === 'con matices' && s.role === 'top_base') { v -= 0.1; neg(f.reason) } else if (f.verdict === 'favorece' && s.role === 'top_base') { v += 0.05; neg(`Cerca de la cara, ${lc(col)} armoniza con tu temperatura ${lc(env.temp)}.`) } }
   }
   if (likes.length && cols.some((x) => likes.includes(x))) v += 0.03
+  for (const pr of env.signals.pairs) if (cols.includes(pr.a) && cols.includes(pr.b)) { v -= 0.25 * pr.weight; neg(`Por tus valoraciones, no te gustan juntos ${lc(pr.a)} y ${lc(pr.b)}.`) }
   const light = cols.filter((x) => LIGHT.has(x)).length, dark = cols.filter((x) => DARK.has(x)).length
   const contrast = c.contrast as string | undefined
   if (contrast === 'Bajo' && cols.includes('Negro') && cols.includes('Blanco')) { v -= 0.1; neg('El contraste negro-blanco es fuerte para tu contraste natural bajo.') }
@@ -171,8 +173,9 @@ function personalCrit(items: Slot[], env: ScoreEnv) {
   const fav = items.filter((s) => s.g.is_favorite)
   if (fav.length) { v += 0.03 * fav.length; reasons.push(`Incluye favoritas: ${fav.map((s) => title(s.g)).join(', ')}.`) }
   if (env.ctx.req.preferred_garment_ids.length) { const hit = items.filter((s) => env.ctx.req.preferred_garment_ids.includes(s.g.id)); if (hit.length) { v += 0.05 * hit.length; reasons.push(`Usa prendas que querías llevar: ${hit.map((s) => title(s.g)).join(', ')}.`) } }
+  for (const s of items) { const w = env.signals.garment.get(s.g.id); if (!w) continue; v += 0.08 * w; (w > 0 ? (t: string) => reasons.push(t) : neg)(w > 0 ? `«${title(s.g)}» ha funcionado bien en tus conjuntos (lo dicen tus valoraciones).` : `«${title(s.g)}» no te ha convencido en otros conjuntos.`) }
   if (!known.length) neg('Sin compatibilidad ni ajuste calculados para estas prendas: valoración neutra.')
-  return { value: clamp01(v), reasons, cons, data_used: ['Compatibilidad personal y Fit Assessment de cada prenda (fase 2C)', 'Favoritas y decisiones'] }
+  return { value: clamp01(v), reasons, cons, data_used: ['Compatibilidad personal y Fit Assessment de cada prenda (fase 2C)', 'Favoritas y decisiones', ...(env.signals.garment.size ? ['Tus valoraciones y usos'] : [])] }
 }
 
 function versatilityCrit(items: Slot[], env: ScoreEnv) {
