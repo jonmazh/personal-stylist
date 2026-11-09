@@ -3,7 +3,10 @@ import { AREAS } from '@/lib/profile/areas'
 import { describeArea } from '@/lib/profile/summary'
 import { garmentTitle } from '@/lib/wardrobe/display'
 import { subOf } from '@/lib/wardrobe/taxonomy'
+import { compatibility, decisionLabel } from '@/lib/wardrobe/compatibility'
 
+/** Compatibilidad calculada por reglas (no incluye ajuste real). */
+const compatScore = (g: Record<string, any>, b: Bundle) => { const c = compatibility(g, b); return c.score === null ? 'compatibilidad pendiente' : `compatibilidad ${c.score}/10${c.provisional ? ' (provisional)' : ''}` }
 const section = (title: string, lines: string[], empty = '(nada)') => `${title}:\n${lines.length ? lines.join('\n') : empty}`
 
 /**
@@ -34,7 +37,7 @@ export function buildContext(b: Bundle) {
     section('CONCLUSIONES PROVISIONALES (hipótesis pendientes de revisar)',
       pending.map((f) => `- ${f.title}: ${f.body} (confianza: ${f.confidence}; origen: ${f.origin}${f.missing?.length ? `; falta: ${f.missing.join(', ')}` : ''})`), '(ninguna)'),
     `ÁREAS SIN DATOS: ${empty.join(', ') || 'ninguna'}`,
-    section('ARMARIO REAL (prendas confirmadas; usa su id al proponer outfits)', b.garments.map((g) => `- [${String(g.id).slice(0, 8)}] ${garmentTitle(g)} (${[subOf(g.subcategory)?.label ?? g.category, g.primary_color, g.cut, g.formality_level ? `formalidad ${g.formality_level}/5` : null, (g.seasons ?? []).join('/') || null, g.confirmed_composition ? `composición ${g.confirmed_composition}` : g.apparent_material ? `parece ${g.apparent_material}` : null].filter(Boolean).join(', ')})`), '(vacío)'),
+    section('ARMARIO REAL (prendas confirmadas; usa su id al proponer outfits)', b.garments.map((g) => `- [${String(g.id).slice(0, 8)}] ${garmentTitle(g)} (${[subOf(g.subcategory)?.label ?? g.category, g.primary_color, g.cut, g.formality_level ? `formalidad ${g.formality_level}/5` : null, (g.seasons ?? []).join('/') || null, g.confirmed_composition ? `composición ${g.confirmed_composition}` : g.apparent_material ? `parece ${g.apparent_material}` : null, compatScore(g, b), g.decision ? `decisión: ${decisionLabel(g.decision).toLowerCase()}` : null].filter(Boolean).join(', ')})`), '(vacío)'),
   ].join('\n\n')
 
   return { text, hasValidated: valAreas.length > 0 || reviewed.length > 0 }

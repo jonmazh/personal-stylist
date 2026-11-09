@@ -6,6 +6,8 @@ import { formToGarment } from '@/lib/wardrobe/schema'
 import { WardrobeError, addImage, createGarment, deleteGarment, removeImage, setImageRole, updateGarment } from '@/lib/wardrobe/service'
 import { analyzeGarment, confirmAnalysis } from '@/lib/wardrobe/ai-service'
 import type { Decision } from '@/lib/wardrobe/analysis'
+import { assessFit, decideGarment, discardFitProposal, saveFitReview } from '@/lib/wardrobe/eval-service'
+import { formToDims } from '@/lib/wardrobe/fit'
 
 async function me() {
   const u = await getUser()
@@ -111,4 +113,39 @@ export async function confirmAnalysisAction(formData: FormData) {
   } catch (e) { redirect(`/armario/${gid}?tab=analisis&error=${encodeURIComponent(msg(e))}`) }
   done()
   redirect(`/armario/${gid}?tab=analisis&${q}`)
+}
+
+// ── Evaluacion personal (fase 2C) ──
+export async function assessFitAction(garmentId: string): Promise<{ error?: string }> {
+  const { supabase, id } = await me()
+  try { await assessFit(supabase, id, garmentId); done(); return {} } catch (e) { return { error: msg(e) } }
+}
+
+/** Formulario de ajuste: s_<dim> (1-10 o vacío = no lo sé), n_<dim> nota, f_<dim> arreglable; proposal_id si confirma la propuesta de la IA. */
+export async function saveFitReviewAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const gid = String(formData.get('id'))
+  if (formData.get('discard')) {
+    await discardFitProposal(supabase, gid, String(formData.get('proposal_id')))
+    done(); redirect(`/armario/${gid}?tab=ajuste&discarded=1`)
+  }
+  let q = ''
+  try {
+    const { data: g } = await supabase.from('garments').select('*').eq('id', gid).maybeSingle()
+    if (!g) throw new WardrobeError('Prenda no encontrada', 404)
+    const r = await saveFitReview(supabase, id, gid, { dims: formToDims(formData, g), notes: String(formData.get('notes') ?? '').trim() || null, proposalId: String(formData.get('proposal_id') ?? '') || null })
+    q = `fit=${r.overall}`
+  } catch (e) { redirect(`/armario/${gid}?tab=ajuste&error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/armario/${gid}?tab=ajuste&${q}`)
+}
+
+export async function decideAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const gid = String(formData.get('id'))
+  try {
+    await decideGarment(supabase, id, gid, { decision: String(formData.get('decision') ?? ''), reason: String(formData.get('reason') ?? '').trim() || null, alteration: String(formData.get('alteration') ?? '').trim() || null })
+  } catch (e) { redirect(`/armario/${gid}?tab=compatibilidad&error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/armario/${gid}?tab=compatibilidad&decided=1`)
 }
