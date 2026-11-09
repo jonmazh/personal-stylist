@@ -32,7 +32,7 @@ export async function loadBundle(sb: SupabaseClient, uid: string): Promise<Bundl
     q('color_profiles').maybeSingle(), q('style_preferences').maybeSingle(), q('lifestyle_profiles').maybeSingle(),
     q('fit_preferences').maybeSingle(), q('style_goals').maybeSingle(), q('area_states'),
     q('observations').order('created_at', { ascending: false }),
-    q('blueprints').order('version'), q('assessment_findings').order('position'), q('garments'),
+    q('blueprints').order('version'), q('assessment_findings').order('position'), q('garments').eq('wardrobe_status', 'active'), // borradores y archivadas no cuentan
     sb.from('ai_runs').select('id').eq('kind', 'chat').contains('meta', { validated: true }).limit(1),
     q('reference_garments').order('created_at'), // vacio si aun no se ha ejecutado la migracion 0002
     q('style_reference_ratings'), q('style_references').order('created_at'), // migracion 0004

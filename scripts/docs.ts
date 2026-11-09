@@ -15,6 +15,7 @@ import { BRAND_UNIVERSES, ELEMENTS, ELEMENT_GROUPS, STYLE_CATALOG, STYLE_GROUPS,
 import { CONFIDENCE_LABEL, CONFIDENCE_RULE, SECTIONS, buildFindings, type Confidence } from '@/lib/profile/blueprint'
 import { PHOTO_ANALYSIS, STYLIST_PERSONA, TEMPERATURE_ANALYSIS } from '@/lib/ai/prompts'
 import { SERIOUS_ISSUES } from '@/lib/color/temperature'
+import { ATTRIBUTES, COMPOSITION_SOURCES, CONDITIONS, CUTS, GARMENT_COLORS, GROUPS, IMAGE_ROLES, PATTERNS, STATUSES, SUBS } from '@/lib/wardrobe/taxonomy'
 import type { Bundle } from '@/lib/profile/data'
 
 const KIND: Record<Question['kind'], string> = {
@@ -303,10 +304,95 @@ export function styleDnaDoc() {
   return out.join('\n')
 }
 
+export function wardrobeDoc() {
+  const out = [
+    '# Armario digital (Fase 2)',
+    '',
+    '> Documento generado desde `lib/wardrobe/taxonomy.ts` con `npm run docs`. No lo edites a mano.',
+    '',
+    '## Principios',
+    '',
+    '- **Un solo sistema.** El armario tiene sus tablas, pero consulta el expediente y el Style Blueprint; no duplica datos personales.',
+    '- **Nada se da por confirmado sin comprobarlo.** El corte de una prenda no dice cómo te queda (eso es el Fit Assessment, con fotos llevándola) y el material aparente no es la composición (que solo se confirma con etiqueta, ficha comercial o tu palabra).',
+    '- **Trazabilidad.** Cada campo guarda quién lo estableció y cuándo (`field_sources`: usuario, ia, etiqueta, ficha) y cada cambio queda en `garment_events`.',
+    '- **Nada se borra solo.** Archivar es reversible; eliminar exige confirmación explícita.',
+    '- **Imágenes privadas.** Buckets privados por usuario, URLs firmadas de vida corta, nunca públicas.',
+    '',
+    '## Estado de la fase',
+    '',
+    '| Subfase | Contenido | Estado |', '|---|---|---|',
+    '| 2A · Base del armario | Tablas, Storage, alta con varias fotos (cámara o galería), edición, archivo, búsqueda, filtros, orden, historial | Hecha |',
+    '| 2B · Garment AI | Análisis de visión, prompt especializado, esquema, revisión y confirmación (`garment_analyses`) | Pendiente |',
+    '| 2C · Evaluación personal | Compatibilidad con el Blueprint, Fit Assessment, decisiones | Pendiente |',
+    '| 2D · Auditoría | Duplicados, huecos, informes | Pendiente |',
+    '',
+    '## Taxonomía',
+    '',
+    '| Categoría (`category`) | En la primera interfaz | Tipos (`subcategory`) |', '|---|---|---|',
+    ...GROUPS.map((g) => `| ${g.label} (\`${g.id}\`) | ${g.primary ? 'Sí' : 'En «Más categorías»'} | ${g.subs.map((x) => `${x.label} (\`${x.id}\`)`).join(', ')} |`),
+    '',
+    '## Características técnicas por familia de prenda',
+    '',
+    'Se guardan en `garments.attributes` (jsonb); el corte va en la columna `cut`. Solo se aceptan las de la familia del tipo de prenda.',
+    '',
+    ...(Object.keys(ATTRIBUTES) as (keyof typeof ATTRIBUTES)[]).filter((f) => ATTRIBUTES[f].length || CUTS[f].length).flatMap((f) => [
+      `### ${({ bottom: 'Pantalones y parte inferior', jacket: 'Chaquetas, abrigos y sastrería', shirt: 'Camisas y sobrecamisas', top: 'Camisetas, polos, punto y sudaderas', footwear: 'Calzado', accessory: 'Complementos', basic: 'Básicos' } as Record<string, string>)[f]} (\`${f}\`)`,
+      '', `- **Tipos:** ${SUBS.filter((x) => x.family === f).map((x) => x.label).join(', ')}`,
+      ...(CUTS[f].length ? [`- **Corte:** ${CUTS[f].join(' · ')}`] : []),
+      ...ATTRIBUTES[f].map((d) => `- **${d.label}** (\`${d.key}\`): ${d.options.join(' · ')}`), '',
+    ]),
+    '## Ficha de la prenda',
+    '',
+    '| Bloque | Campos |', '|---|---|',
+    '| Identificación | nombre, categoría, tipo, color principal y secundarios, estampado, corte, silueta, estilo (ids del catálogo), formalidad 1–5, temporadas, ocasiones |',
+    `| Características técnicas | según la familia (arriba) |`,
+    `| Materiales | material aparente (estimación) · composición confirmada + origen (${COMPOSITION_SOURCES.map((x) => x.label.toLowerCase()).join(', ')}) |`,
+    '| Comercial y personal | marca, talla de etiqueta, talla que te funciona (son distintas), precio, fecha de compra, tienda, conservación, usos estimados, ubicación, notas, favorita |',
+    `| Estado | ${STATUSES.map((x) => `${x.label} (\`${x.id}\`)`).join(' · ')}: los borradores y las archivadas no cuentan en el armario activo ni en el diagnóstico |`,
+    '',
+    `Colores admitidos: ${GARMENT_COLORS.join(', ')}. Estampados: ${PATTERNS.join(', ')}. Conservación: ${CONDITIONS.map((x) => x.label).join(', ')}.`,
+    '',
+    'Una ficha está **completa** cuando tiene tipo de prenda, color principal (salvo complementos) y al menos una foto o un nombre; si no, aparece «por revisar».',
+    '',
+    '## Fotografías',
+    '',
+    `Funciones: ${IMAGE_ROLES.map((r) => r.label).join(' · ')}. En el navegador cada foto se reduce a 2048 px y se recodifica en JPEG (lo que elimina metadatos y ubicación), se genera una miniatura WebP de 480 px y se calcula su SHA-256 para detectar fotos repetidas y no analizar dos veces la misma (fase 2B).`,
+    '',
+    '```text', 'wardrobe-originals/<usuario>/<prenda>/<uuid>.jpg', 'wardrobe-thumbnails/<usuario>/<prenda>/<uuid>.webp', '```',
+    '',
+    '## Datos (migración `0007_wardrobe_base.sql`)',
+    '',
+    '| Tabla | Responsabilidad | Subfase |', '|---|---|---|',
+    '| `garments` | Registro principal (evoluciona la tabla mínima de la fase 1: CHECK, índices por usuario/categoría/estado, `updated_at` con disparador, `field_sources`) | 2A |',
+    '| `garment_images` | Fotos, función, dimensiones y hash | 2A |',
+    '| `garment_events` | Incorporaciones, cambios campo a campo, estados, fotos | 2A |',
+    '| `garment_analyses` | Resultados de IA versionados (modelo, versión de prompt y de esquema, estado) | 2B |',
+    '| `garment_fit_reviews`, `garment_decisions` | Ajuste real y decisiones (conservar, modificar, revisar, sustituir, donar/vender) | 2C |',
+    '| `wardrobe_audits`, `wardrobe_audit_findings` | Auditorías y hallazgos | 2D |',
+    '',
+    'Los atributos técnicos viven en `garments.attributes` (jsonb validado contra la taxonomía) en lugar de una tabla `garment_attributes`: cada prenda solo tiene los de su familia y su origen queda en `field_sources`.',
+    '',
+    '## API REST',
+    '',
+    '| Ruta | Función |', '|---|---|',
+    '| `GET /api/wardrobe/items?q=&category=&status=&favorite=1&sort=` | Listar, buscar, filtrar y ordenar |',
+    '| `POST /api/wardrobe/items` | Crear ficha (`status`: draft o active) |',
+    '| `GET /api/wardrobe/items/:id` | Ficha con fotos (URLs firmadas) e historial |',
+    '| `PATCH /api/wardrobe/items/:id` | Editar cualquier campo |',
+    '| `DELETE /api/wardrobe/items/:id` | Archivar (por defecto) o eliminar con `?mode=permanent` |',
+    '| `POST /api/wardrobe/items/:id/images` | Asociar una foto ya subida (ruta dentro de la carpeta del usuario y la prenda) |',
+    '',
+    'Las rutas de análisis, confirmación, Fit Assessment y auditoría llegan en 2B–2D. La interfaz usa el mismo servicio (`lib/wardrobe/service.ts`) mediante acciones del servidor.',
+    '',
+  ]
+  return out.join('\n')
+}
+
 if (process.argv[1]?.endsWith('docs.ts')) {
+  writeFileSync('docs/ARMARIO.md', wardrobeDoc())
   writeFileSync('docs/STYLE-DNA.md', styleDnaDoc())
   writeFileSync('docs/MOTOR-DIAGNOSTICO.md', diagnosisDoc())
   writeFileSync('docs/CUESTIONARIO.md', questionnaireDoc())
   writeFileSync('docs/PROTOCOLO-FOTOGRAFICO.md', protocolDoc())
-  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md y docs/STYLE-DNA.md actualizados')
+  console.log('docs/CUESTIONARIO.md, docs/PROTOCOLO-FOTOGRAFICO.md, docs/MOTOR-DIAGNOSTICO.md docs/STYLE-DNA.md y docs/ARMARIO.md actualizados')
 }
