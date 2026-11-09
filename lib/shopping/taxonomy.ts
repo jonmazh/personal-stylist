@@ -32,12 +32,24 @@ export const PRIORITIES = [{ id: 'high', label: 'Alta' }, { id: 'medium', label:
 export const BUDGET_PERIODS = [
   { id: 'monthly', label: 'Mensual', months: 1 }, { id: 'quarterly', label: 'Trimestral', months: 3 }, { id: 'season', label: 'Por temporada', months: 6 },
 ] as const
-/** Tiendas y marcas para las preferencias (en 4B pasarán a la tabla retailers con sus fuentes autorizadas). */
+/**
+ * Tiendas y marcas del catálogo común (la migración 0017 las siembra en la tabla retailers; una prueba lo verifica).
+ * url_policy: «metadata» = a petición tuya se lee UNA página y solo sus metadatos públicos (schema.org/OpenGraph), si robots.txt lo permite;
+ * «manual_only» = sus condiciones prohíben la extracción automatizada: solo se guarda el enlace y los datos que aportes.
+ */
+const INDITEX = 'Las condiciones de Inditex prohíben la extracción automatizada sin autorización escrita: solo enlace y datos que aportes.'
+const UNREVIEWED = 'Condiciones sin revisar: solo metadatos públicos de una página, a petición tuya y si robots.txt lo permite.'
 export const RETAILERS = [
-  { id: 'zara', name: 'Zara', group: 'Inditex' }, { id: 'massimo-dutti', name: 'Massimo Dutti', group: 'Inditex' }, { id: 'pull-and-bear', name: 'Pull&Bear', group: 'Inditex' },
-  { id: 'bershka', name: 'Bershka', group: 'Inditex' }, { id: 'stradivarius', name: 'Stradivarius', group: 'Inditex' },
-  { id: 'cos', name: 'COS', group: 'Complementarias' }, { id: 'arket', name: 'ARKET', group: 'Complementarias' }, { id: 'uniqlo', name: 'Uniqlo', group: 'Complementarias' },
-  { id: 'mango-man', name: 'Mango Man', group: 'Complementarias' }, { id: 'selected-homme', name: 'Selected Homme', group: 'Complementarias' },
+  { id: 'zara', name: 'Zara', group: 'Inditex', domains: ['zara.com'], url_policy: 'manual_only', note: INDITEX },
+  { id: 'massimo-dutti', name: 'Massimo Dutti', group: 'Inditex', domains: ['massimodutti.com'], url_policy: 'manual_only', note: INDITEX },
+  { id: 'pull-and-bear', name: 'Pull&Bear', group: 'Inditex', domains: ['pullandbear.com'], url_policy: 'manual_only', note: INDITEX },
+  { id: 'bershka', name: 'Bershka', group: 'Inditex', domains: ['bershka.com'], url_policy: 'manual_only', note: INDITEX },
+  { id: 'stradivarius', name: 'Stradivarius', group: 'Inditex', domains: ['stradivarius.com'], url_policy: 'manual_only', note: INDITEX },
+  { id: 'cos', name: 'COS', group: 'Complementarias', domains: ['cos.com'], url_policy: 'metadata', note: UNREVIEWED },
+  { id: 'arket', name: 'ARKET', group: 'Complementarias', domains: ['arket.com'], url_policy: 'metadata', note: UNREVIEWED },
+  { id: 'uniqlo', name: 'Uniqlo', group: 'Complementarias', domains: ['uniqlo.com'], url_policy: 'metadata', note: UNREVIEWED },
+  { id: 'mango-man', name: 'Mango Man', group: 'Complementarias', domains: ['mango.com'], url_policy: 'metadata', note: UNREVIEWED },
+  { id: 'selected-homme', name: 'Selected Homme', group: 'Complementarias', domains: ['selected.com'], url_policy: 'metadata', note: UNREVIEWED },
 ] as const
 export const label = (xs: readonly { id: string; label?: string; name?: string }[], id?: string | null) => { const x = xs.find((y) => y.id === id); return x?.label ?? x?.name ?? id ?? '—' }
 

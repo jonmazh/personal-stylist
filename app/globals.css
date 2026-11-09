@@ -433,3 +433,13 @@ p.state { white-space: normal; }
 .pcrit > b { grid-area: l; } .pcrit > div { grid-area: d; } .pcrit > span { grid-area: p; text-align: right; }
 .pcrit .bar { margin-top: 7px; }
 @media (max-width: 560px) { .pcrit { grid-template-columns: 1fr 60px; grid-template-areas: 'l p' 'd d'; gap: 4px 10px; } }
+
+/* ── Product Discovery (fase 4B) ── */
+.src { display: inline-block; font: 500 10px/1.5 var(--sans); letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; margin-left: 6px; border: 1px solid var(--line); border-radius: 99px; color: var(--mut); vertical-align: middle; }
+.src-store, .src-feed { color: var(--olive); border-color: var(--olive); } .src-user { color: var(--acc); border-color: var(--acc); } .src-search, .src-derived, .src-ai { border-style: dashed; }
+.pfields { display: grid; grid-template-columns: minmax(90px, 160px) 1fr; gap: 6px 14px; margin: 12px 0; font-size: 14px; } .pfields dt { color: var(--mut); } .pfields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.hit { border: 1px solid var(--line); background: var(--paper); padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.hit h3 { font: 400 20px/1.2 var(--serif); margin: 2px 0; text-transform: none; letter-spacing: 0; color: var(--ink); overflow-wrap: anywhere; }
+.hit .st { font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--acc); }
+.shots { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; } .shots img { width: 110px; height: 140px; object-fit: cover; border: 1px solid var(--line); }
+.srcs { display: grid; gap: 4px; margin: 10px 0; font-size: 13px; }
