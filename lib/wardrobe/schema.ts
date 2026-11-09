@@ -14,7 +14,7 @@ const text = (max: number) => z.string().trim().max(max).transform((v) => v || n
 
 export const GarmentInput = z.object({
   name: text(120).optional(),
-  category: z.enum(ids(GROUPS)),
+  category: z.enum(ids(GROUPS)).nullable(),
   subcategory: z.string().nullable().optional(),
   brand: text(80).optional(),
   size_label: text(40).optional(),
@@ -76,6 +76,7 @@ export function normalizeGarment<T extends Partial<GarmentInputT>>(g: T, current
 /** Ficha completa para entrar en el armario: tipo, color y al menos una foto o un nombre que la identifique. */
 export function completeness(g: Record<string, any>, imageCount: number) {
   const missing: string[] = []
+  if (!g.category) missing.push('Categoría')
   if (!g.subcategory) missing.push('Tipo de prenda')
   if (!g.primary_color && !['accessories'].includes(g.category)) missing.push('Color principal')
   if (!imageCount && !g.name) missing.push('Una foto o un nombre')
@@ -100,7 +101,7 @@ export function formToGarment(f: FormData) {
   const attributes: Record<string, string> = {}
   for (const [k, v] of f.entries()) if (k.startsWith('attr_') && typeof v === 'string' && v) attributes[k.slice(5)] = v
   return {
-    name: sOrNull(f.get('name')), category: String(f.get('category') ?? ''), subcategory: sOrNull(f.get('subcategory')),
+    name: sOrNull(f.get('name')), category: sOrNull(f.get('category')), subcategory: sOrNull(f.get('subcategory')),
     brand: sOrNull(f.get('brand')), size_label: sOrNull(f.get('size_label')), size_fit: sOrNull(f.get('size_fit')),
     primary_color: sOrNull(f.get('primary_color')), secondary_colors: f.getAll('secondary_colors').map(String),
     cut: sOrNull(f.get('cut')), silhouette: sOrNull(f.get('silhouette')), pattern: sOrNull(f.get('pattern')),

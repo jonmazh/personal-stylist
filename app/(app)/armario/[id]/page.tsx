@@ -7,9 +7,11 @@ import { garmentTitle } from '@/lib/wardrobe/display'
 import { STYLE_CATALOG, styleName } from '@/lib/style/catalog'
 import { GarmentFields } from '@/components/wardrobe/garment-fields'
 import { AddPhotos } from '@/components/wardrobe/add-photos'
+import { AnalysisReview } from '@/components/wardrobe/analysis-review'
+import { latestAnalysis } from '@/lib/wardrobe/ai-service'
 import { deleteGarmentAction, removeImageAction, setImageRoleAction, setStatusAction, toggleFavoriteAction, updateGarmentAction } from '../actions'
 
-const TABS = [['resumen', 'Resumen'], ['caracteristicas', 'Características'], ['compatibilidad', 'Compatibilidad'], ['ajuste', 'Fit Assessment'], ['combinaciones', 'Combinaciones'], ['historial', 'Historial']] as const
+const TABS = [['resumen', 'Resumen'], ['analisis', 'Análisis IA'], ['caracteristicas', 'Características'], ['compatibilidad', 'Compatibilidad'], ['ajuste', 'Fit Assessment'], ['combinaciones', 'Combinaciones'], ['historial', 'Historial']] as const
 const FIELD: Record<string, string> = {
   name: 'Nombre', category: 'Categoría', subcategory: 'Tipo', brand: 'Marca', size_label: 'Talla de etiqueta', size_fit: 'Talla que te funciona', primary_color: 'Color principal',
   secondary_colors: 'Colores secundarios', cut: 'Corte', silhouette: 'Silueta', pattern: 'Estampado', apparent_material: 'Material aparente', confirmed_composition: 'Composición',
@@ -17,7 +19,7 @@ const FIELD: Record<string, string> = {
   condition: 'Conservación', location: 'Ubicación', purchase_price: 'Precio', purchase_date: 'Fecha de compra', store: 'Tienda', estimated_uses: 'Usos estimados', notes: 'Notas',
   wardrobe_status: 'Estado', is_favorite: 'Favorita',
 }
-const EVENT: Record<string, string> = { created: 'Incorporada', updated: 'Ficha editada', status: 'Cambio de estado', favorite: 'Favorita', image_added: 'Foto añadida', image_removed: 'Foto quitada', archived: 'Archivada', restored: 'Recuperada del archivo' }
+const EVENT: Record<string, string> = { analyzed: 'Analizada con IA', analysis_reviewed: 'Propuesta de la IA revisada', created: 'Incorporada', updated: 'Ficha editada', status: 'Cambio de estado', favorite: 'Favorita', image_added: 'Foto añadida', image_removed: 'Foto quitada', archived: 'Archivada', restored: 'Recuperada del archivo' }
 const label = (xs: { id: string; label: string }[], id?: string | null) => xs.find((x) => x.id === id)?.label ?? id
 const fmt = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 const show = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : Array.isArray(v) ? v.join(', ') || '—' : typeof v === 'object' ? Object.entries(v as object).map(([k, x]) => `${k}: ${x}`).join('; ') || '—' : String(v))
@@ -31,15 +33,18 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
   const tab = TABS.some(([t]) => t === sp.tab) ? sp.tab! : 'resumen'
   const family = familyOf(g.subcategory, g.category)
   const attrs = ATTRIBUTES[family].filter((d) => g.attributes?.[d.key])
+  const analyses = tab === 'analisis' || tab === 'resumen' ? await latestAnalysis(user.supabase, id).catch(() => []) : []
+  const SRC: Record<string, string> = { usuario: 'tú', ia: 'IA, aceptado por ti', etiqueta: 'etiqueta', ficha: 'ficha comercial' }
 
   return (
     <main className="wide">
-      <p className="eyebrow">{groupOf(g.category)?.label}{g.subcategory ? ` · ${subOf(g.subcategory)?.label}` : ''}</p>
+      <p className="eyebrow">{groupOf(g.category)?.label ?? 'Sin categoría'}{g.subcategory ? ` · ${subOf(g.subcategory)?.label}` : ''}</p>
       <h1 className="display">{garmentTitle(g)}</h1>
       <p className={`state ${g.wardrobe_status === 'active' && g.complete ? 'ok' : 'warn'}`}>
         {label(STATUSES, g.wardrobe_status)}{g.wardrobe_status !== 'archived' && !g.complete ? ` · falta: ${g.missing.join(', ').toLowerCase()}` : ''}{g.is_favorite ? ' · ★ favorita' : ''}
       </p>
-      {sp.nuevo && <p className="note" role="status">Prenda creada{g.wardrobe_status === 'draft' ? ' como borrador' : ' en tu armario'}. Revisa la ficha cuando quieras.</p>}
+      {sp.nuevo && <p className="note" role="status">Prenda creada{g.wardrobe_status === 'draft' ? ' como borrador' : ' en tu armario'}. {tab === 'analisis' ? 'Revisa lo que propone la IA.' : 'Revisa la ficha cuando quieras.'}</p>}
+      {tab !== 'analisis' && analyses[0]?.status === 'proposed' && <p className="note" role="status">Hay una propuesta de la IA sin revisar. <Link href={`/armario/${id}?tab=analisis`}>Revisarla</Link></p>}
       {sp.saved && <p className="note" role="status">Guardado.</p>}
       {sp.status && <p className="note" role="status">{sp.status === 'archived' ? 'Archivada: ya no cuenta en tu armario activo. Puedes recuperarla cuando quieras.' : sp.status === 'active' ? 'La prenda está en tu armario.' : 'Estado actualizado.'}</p>}
       {sp.dup && <p className="note warn" role="status">Alguna de estas fotos ya estaba en tu armario: puede que sea la misma prenda.</p>}
@@ -65,7 +70,7 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
           ))}
           {!g.images.length && <p className="m">Sin fotografías todavía.</p>}
         </div>
-        <section className="addphotos"><h3>Añadir fotografías</h3><AddPhotos uid={user.id} garmentId={id} roles={IMAGE_ROLES} /></section>
+        <section className="addphotos" id="fotos"><h3>Añadir fotografías</h3><AddPhotos uid={user.id} garmentId={id} roles={IMAGE_ROLES} /></section>
 
         <dl className="kv">
           <dt>Color</dt><dd>{show([g.primary_color, ...(g.secondary_colors ?? [])].filter(Boolean))}</dd>
@@ -102,10 +107,12 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
         </details>
       </>)}
 
+      {tab === 'analisis' && <AnalysisReview g={g} analyses={analyses} flags={sp} />}
+
       {tab === 'caracteristicas' && (
         <form action={updateGarmentAction}>
           <input type="hidden" name="id" value={id} />
-          <GarmentFields initial={g} styles={STYLE_CATALOG.map((s) => ({ id: s.id, name: s.name }))} />
+          <GarmentFields initial={g} allowEmptyCategory={!g.category} styles={STYLE_CATALOG.map((s) => ({ id: s.id, name: s.name }))} />
           <div className="btns">
             <button className="btn primary">Guardar cambios</button>
             {g.wardrobe_status === 'draft' && <button className="btn" name="status" value="active">Guardar y confirmar en el armario</button>}
@@ -128,12 +135,14 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
       {tab === 'historial' && (
         <ul className="events">
           {g.events.map((e) => (
-            <li key={e.id}><b>{EVENT[e.kind] ?? e.kind}</b> <span className="m small">· {fmt(e.created_at)} · {e.source === 'usuario' ? 'por ti' : e.source}</span>
+            <li key={e.id}><b>{EVENT[e.kind] ?? e.kind}</b> <span className="m small">· {fmt(e.created_at)} · {e.source === 'usuario' ? 'por ti' : e.source === 'ia' ? 'por la IA' : e.source}</span>
               {e.kind === 'updated' && e.changes && <ul className="m small">{Object.entries(e.changes as Record<string, [unknown, unknown]>).map(([k, [a, b]]) => <li key={k}>{FIELD[k] ?? k}: {show(a)} → {show(b)}</li>)}</ul>}
+              {e.kind === 'analyzed' && e.changes && <span className="m small"> · {String((e.changes as Record<string, unknown>).fields ?? 0)} datos propuestos</span>}
+              {e.kind === 'analysis_reviewed' && e.changes && <span className="m small"> · {String((e.changes as Record<string, unknown>).accepted ?? 0)} aceptados, {String((e.changes as Record<string, unknown>).corrected ?? 0)} corregidos, {String((e.changes as Record<string, unknown>).rejected ?? 0)} descartados</span>}
               {e.kind !== 'updated' && e.changes && (e.changes as Record<string, unknown>).role ? <span className="m small"> · {label(IMAGE_ROLES, String((e.changes as Record<string, unknown>).role))}</span> : null}
             </li>
           ))}
-          {Object.keys(g.field_sources ?? {}).length > 0 && <li className="m small">Origen actual de los datos: {Object.entries(g.field_sources).map(([k, v]) => `${FIELD[k] ?? k} (${(v as { source: string }).source === 'usuario' ? 'tú' : (v as { source: string }).source})`).join(', ')}.</li>}
+          {Object.keys(g.field_sources ?? {}).length > 0 && <li className="m small">Origen actual de los datos: {Object.entries(g.field_sources).map(([k, v]) => `${FIELD[k] ?? k} (${SRC[(v as { source: string }).source] ?? (v as { source: string }).source})`).join(', ')}.</li>}
         </ul>
       )}
       <p className="m small" style={{ marginTop: 28 }}><Link href="/armario">← Volver al armario</Link></p>

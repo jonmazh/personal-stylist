@@ -46,13 +46,19 @@ function extractJson(text: string): unknown {
   throw new Error('La respuesta no contiene JSON')
 }
 
-async function complete(kind: ModelKind, configured: string, messages: Msg[], json: boolean, triedFallback = false): Promise<string> {
+/** Consumo acumulado de una operacion: llamadas, tokens (si el proveedor los devuelve) y tiempo. */
+export interface Usage { calls: number; prompt: number; completion: number; ms: number }
+export const newUsage = (): Usage => ({ calls: 0, prompt: 0, completion: 0, ms: 0 })
+
+async function complete(kind: ModelKind, configured: string, messages: Msg[], json: boolean, triedFallback = false, usage?: Usage): Promise<string> {
   const model = effectiveModel(kind, configured)
   try {
+    const t0 = Date.now()
     const r = await ai().chat.completions.create({
       model, messages, temperature: 0.3,
       ...(json ? { response_format: { type: 'json_object' as const } } : {}),
     })
+    if (usage) { usage.calls++; usage.prompt += r.usage?.prompt_tokens ?? 0; usage.completion += r.usage?.completion_tokens ?? 0; usage.ms += Date.now() - t0 }
     return stripThinking(r.choices[0]?.message?.content ?? '')
   } catch (e) {
     if (isModelMissing(e)) {
@@ -60,12 +66,12 @@ async function complete(kind: ModelKind, configured: string, messages: Msg[], js
       if (alt) {
         console.warn(`[ai] El modelo "${model}" no esta disponible; se usa "${alt}". Fijalo con AI_MODEL_${kind.toUpperCase()} en .env.local.`)
         resolved[kind] = alt
-        return complete(kind, configured, messages, json, true)
+        return complete(kind, configured, messages, json, true, usage)
       }
       throw new Error(`El modelo "${model}" no esta disponible en tu proveedor y no se encontro otro compatible. Indica uno con AI_MODEL_${kind.toUpperCase()} en .env.local. Detalle: ${(e as Error).message.slice(0, 300)}`)
     }
     // Algunos modelos gratuitos no aceptan response_format: se reintenta sin el.
-    if (json && e instanceof Error && /response_format|json/i.test(e.message)) return complete(kind, configured, messages, false, triedFallback)
+    if (json && e instanceof Error && /response_format|json/i.test(e.message)) return complete(kind, configured, messages, false, triedFallback, usage)
     if (e instanceof Error && /^(402|429)\b|credits|quota|billing|RESOURCE_EXHAUSTED/i.test(e.message))
       throw new Error(`Tu proveedor de IA ha rechazado la peticion por saldo o cuota agotados. Usa uno gratuito (AI_PROVIDER=groq u ollama en .env.local) o espera a que se renueve la cuota. Detalle: ${e.message.slice(0, 300)}`)
     throw e
@@ -83,6 +89,7 @@ export async function generateStructured<T extends z.ZodType>(opts: {
   schema: T
   system: string
   user: OpenAI.Chat.Completions.ChatCompletionUserMessageParam['content']
+  usage?: Usage
 }): Promise<z.infer<T>> {
   const messages: Msg[] = [
     { role: 'system', content: opts.system },
@@ -90,7 +97,7 @@ export async function generateStructured<T extends z.ZodType>(opts: {
   ]
   let lastErr = ''
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await complete(opts.kind, opts.model, messages, true)
+    const text = await complete(opts.kind, opts.model, messages, true, false, opts.usage)
     try {
       const parsed = opts.schema.safeParse(extractJson(text))
       if (parsed.success) return parsed.data

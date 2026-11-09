@@ -62,20 +62,33 @@ export async function listGarments(sb: Sb, query: ListQuery = {}) {
     const { data: signed } = await sb.storage.from(THUMBS).createSignedUrls(thumbs, 600)
     for (const s of signed ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl)
   }
+  // Propuestas de la IA pendientes de revisar (si la migracion 0008 no esta aplicada, simplemente no hay)
+  const { data: pend } = rows.length ? await sb.from('garment_analyses').select('garment_id').eq('status', 'proposed') : { data: [] }
+  const pending = new Set((pend ?? []).map((x) => x.garment_id))
   return rows.map((g) => {
     const c = cover(g)
     const imgs = g.garment_images ?? []
     delete g.garment_images
-    return { ...g, image_count: imgs.length, thumb_url: c?.thumb_path ? urls.get(c.thumb_path) ?? null : null, ...completeness(g, imgs.length) }
+    return { ...g, image_count: imgs.length, pending_review: pending.has(g.id), thumb_url: c?.thumb_path ? urls.get(c.thumb_path) ?? null : null, ...completeness(g, imgs.length) }
   })
 }
 
 export async function wardrobeSummary(sb: Sb) {
-  const { data, error } = await sb.from('garments').select('category, wardrobe_status, is_favorite, subcategory, primary_color, name, garment_images(id)')
+  const { data, error } = await sb.from('garments').select('id, category, wardrobe_status, is_favorite, subcategory, primary_color, name, garment_images(id)')
   if (error) throw dbError(error.message)
   const rows = data ?? []
   const active = rows.filter((g) => g.wardrobe_status === 'active')
+  const { data: an } = await sb.from('garment_analyses').select('garment_id, status')
+  const live = new Set(rows.filter((g) => g.wardrobe_status !== 'archived').map((g) => g.id))
+  // Por revisar: borradores, fichas activas incompletas y prendas con una propuesta de la IA sin revisar (sin contar dos veces)
+  const review = new Set([
+    ...rows.filter((g) => g.wardrobe_status === 'draft').map((g) => g.id),
+    ...active.filter((g) => !completeness(g, (g.garment_images ?? []).length).complete).map((g) => g.id),
+    ...(an ?? []).filter((a) => a.status === 'proposed' && live.has(a.garment_id)).map((a) => a.garment_id),
+  ])
   return {
+    review: review.size,
+    analyzed: new Set((an ?? []).filter((a) => live.has(a.garment_id)).map((a) => a.garment_id)).size,
     active: active.length,
     drafts: rows.filter((g) => g.wardrobe_status === 'draft').length,
     archived: rows.filter((g) => g.wardrobe_status === 'archived').length,
@@ -113,6 +126,7 @@ export async function createGarment(sb: Sb, uid: string, raw: unknown, status: '
   const parsed = GarmentInput.safeParse(raw)
   if (!parsed.success) throw new WardrobeError(zodMessage(parsed.error))
   const { data: norm, warnings } = normalizeGarment(parsed.data)
+  if (status === 'active' && !norm.category) throw new WardrobeError('Indica la categoría para guardarla en el armario, o guárdala como borrador y deja que la IA la identifique.')
   const { sources } = diffAndSources(null, norm)
   const row = { ...norm, user_id: uid, wardrobe_status: status, field_sources: sources }
   const { data, error } = await sb.from('garments').insert(row).select('id').single()
@@ -121,7 +135,9 @@ export async function createGarment(sb: Sb, uid: string, raw: unknown, status: '
   return { id: data.id as string, warnings }
 }
 
-export async function updateGarment(sb: Sb, uid: string, id: string, raw: unknown) {
+export interface UpdateOpts { sources?: Record<string, Record<string, unknown>> }
+
+export async function updateGarment(sb: Sb, uid: string, id: string, raw: unknown, opts: UpdateOpts = {}) {
   const parsed = GarmentPatch.safeParse(raw)
   if (!parsed.success) throw new WardrobeError(zodMessage(parsed.error))
   const { data: cur, error: ge } = await sb.from('garments').select('*').eq('id', id).maybeSingle()
@@ -133,7 +149,10 @@ export async function updateGarment(sb: Sb, uid: string, id: string, raw: unknow
     const { data: re } = normalizeGarment({ attributes: cur.attributes ?? {}, subcategory: norm.subcategory, category: norm.category ?? cur.category })
     norm.attributes = re.attributes
   }
+  if (norm.wardrobe_status === 'active' && !(norm.category ?? cur.category)) throw new WardrobeError('Indica la categoría antes de guardarla en el armario.')
   const { changes, sources } = diffAndSources(cur, norm)
+  // Origen explicito (p. ej. propuesta de la IA aceptada por el usuario) para los campos que cambian
+  for (const [k, v] of Object.entries(opts.sources ?? {})) if (k in changes || k === 'composition_source') sources[k] = v as { source: string; at: string }
   const statusChanged = norm.wardrobe_status && norm.wardrobe_status !== cur.wardrobe_status
   const favChanged = norm.is_favorite !== undefined && norm.is_favorite !== cur.is_favorite
   if (!Object.keys(changes).length && !statusChanged && !favChanged) return { id, warnings, changed: false }
