@@ -43,9 +43,9 @@ export async function checkUrl(raw: string): Promise<URL> {
   return u
 }
 
-export interface Fetched { url: string; status: number; contentType: string; body: string }
+export interface Fetched { url: string; status: number; contentType: string; body: string; bytes?: Buffer }
 /** GET seguro: revalida cada redirección, corta por tiempo y tamaño, y solo acepta los tipos indicados. */
-export async function safeFetch(raw: string, opts: { maxBytes?: number; accept?: RegExp; timeoutMs?: number } = {}): Promise<Fetched> {
+export async function safeFetch(raw: string, opts: { maxBytes?: number; accept?: RegExp; timeoutMs?: number; binary?: boolean } = {}): Promise<Fetched> {
   const maxBytes = opts.maxBytes ?? FETCH_LIMITS.maxBytes
   let current = raw
   for (let hop = 0; hop <= FETCH_LIMITS.maxRedirects; hop++) {
@@ -61,7 +61,8 @@ export async function safeFetch(raw: string, opts: { maxBytes?: number; accept?:
       const len = Number(res.headers.get('content-length') ?? 0); if (len > maxBytes) throw new FetchBlocked('La página es demasiado grande.', 'size')
       const reader = res.body?.getReader(); const chunks: Uint8Array[] = []; let size = 0
       if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > maxBytes) { await reader.cancel(); throw new FetchBlocked('La página es demasiado grande.', 'size') } chunks.push(value) }
-      return { url: u.toString(), status: res.status, contentType, body: new TextDecoder().decode(Buffer.concat(chunks)) }
+      const buf = Buffer.concat(chunks)
+      return opts.binary ? { url: u.toString(), status: res.status, contentType, body: '', bytes: buf } : { url: u.toString(), status: res.status, contentType, body: new TextDecoder().decode(buf) }
     } catch (e) { if (e instanceof FetchBlocked) throw e; throw new FetchBlocked('La tienda cortó la respuesta.', 'timeout') }
     finally { clearTimeout(timer) }
   }

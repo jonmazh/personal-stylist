@@ -4,6 +4,7 @@
 // - Analisis de referencias: etiqueta cada imagen como Workwear contemporáneo (incluye un color y un elemento fuera del vocabulario para probar el filtro).
 // - Fit Assessor: ajuste bueno salvo el largo del pantalon (arreglable) y una dimension no observable.
 // - Garment Analyst: propone un pantalon gris (con valores invalidos para probar la normalizacion).
+// - Product Analyst (4C): ficha de un pantalon gris con trampas: estilo fuera del catalogo, calidad «documentada» sin cita y composicion inventada.
 // - Analisis de fotos (peticion con imagenes): marca "lateral" como no utilizable y devuelve una observacion por foto.
 import http from 'node:http'; import fs from 'node:fs'
 const out = process.argv[2]
@@ -99,6 +100,23 @@ http.createServer((req, res) => {
       })
       res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', usage: { prompt_tokens: 900, completion_tokens: 200, total_tokens: 1100 }, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }))
       return
+    }
+    if (sys.includes('Eres Product Analyst')) {
+      const text = Array.isArray(user?.content) ? user.content[0].text : utext
+      const imgs = Array.isArray(user?.content) ? user.content.length - 1 : 0
+      const trousers = /Nombre: [^\n]*pantal/i.test(text)
+      return reply({
+        category: { value: trousers ? 'bottom' : 'top', confidence: 0.95 }, subcategory: { value: trousers ? 'trousers' : 'shirt', confidence: 0.9 },
+        primary_color: { value: 'Gris', confidence: 0.8 }, secondary_colors: [], pattern: { value: 'Liso', confidence: 0.9 },
+        cut: { value: 'Recto', confidence: 0.8 }, silhouette: { value: 'Regular', confidence: 0.7 }, apparent_material: { value: 'Lana peinada con caída', confidence: 0.6 },
+        composition: { value: '80% lana 20% cachemir', confidence: 0.9, source: 'label' }, label: null, attributes: [{ key: 'rise', value: 'Medio', confidence: 0.7 }],
+        formality: { value: 4, confidence: 0.85 }, seasons: ['otono', 'invierno'], observations: ['Pernera recta sin pinzas'], inferences: ['Apto para oficina'],
+        unknown: [{ field: 'composition', reason: 'No se ve la etiqueta', photo: 'label' }], additional_photos_requested: [],
+        field_origins: { subcategory: 'text', category: 'text', primary_color: imgs ? 'photo' : 'text', cut: 'inference', silhouette: 'photo', formality_level: 'inference' },
+        style_tags: [{ id: 'smart-casual', confidence: 0.8 }, { id: 'estilo-inventado', confidence: 0.9 }],
+        quality: { documented: ['«100% lana» según la tienda', 'Tejido premium de gran durabilidad'], apparent: ['Tejido con buena caída'], unknown: ['Calidad de las costuras'] },
+        model_photos: imgs > 0,
+      })
     }
     if (sys.includes('Garment Analyst') && Array.isArray(user?.content)) {
       // Pantalon: valores validos, uno fuera de taxonomia, un atributo de otra familia, silueta con poca confianza.
