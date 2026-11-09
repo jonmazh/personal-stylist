@@ -234,7 +234,7 @@ p.state { white-space: normal; }
 .tempphoto { display: grid; grid-template-columns: minmax(140px, 200px) 1fr; gap: 18px; align-items: start; margin-top: 12px; }
 @media (max-width: 520px) { .tempphoto { grid-template-columns: 1fr; } .tempcard { padding: 4px 14px 16px; } }
 /* ── Armario ── */
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 6px 0 4px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 6px 0 4px; }
 .stats div { padding: 14px 0 12px; display: grid; gap: 2px; }
 .stats b { font: 400 clamp(30px, 6vw, 44px)/1 var(--serif); }
 .stats span { font: 500 11px/1.4 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--mut); }
@@ -270,3 +270,19 @@ p.state { white-space: normal; }
 .pending { border: 1px dashed var(--line); padding: 18px 20px; background: var(--paper); }
 .events { list-style: none; padding: 0; } .events li { border-top: 1px solid var(--line); padding: 10px 0; font-size: 14px; }
 .wimgs .rolef { display: grid; gap: 2px; } .wimgs .rolef .btn { justify-self: start; }
+.usage { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0 24px; } .usage th, .usage td { text-align: left; padding: 8px 6px; border-top: 1px solid var(--line); } .usage th { font: 500 11px/1.4 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--mut); } @media (max-width: 560px) { .usage { font-size: 12px; } }
+/* Garment AI: revision de la propuesta */
+.analysis .prop { display: grid; gap: 10px; margin: 14px 0; }
+.analysis .pf { border: 1px solid var(--line); border-left: 3px solid var(--line); padding: 10px 12px; margin: 0; min-width: 0; }
+.analysis .pf.lv-alta { border-left-color: var(--ok, #4a7a52); } .analysis .pf.lv-media { border-left-color: #b58a3c; } .analysis .pf.lv-baja { border-left-color: #a8584a; }
+.analysis .pf legend { font: 500 11px/1.4 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--mut); padding: 0 4px; }
+.analysis .pv b { font-size: 16px; } .analysis .conf { font-size: 12px; color: var(--mut); white-space: nowrap; }
+.analysis .acts { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 8px; font-size: 14px; }
+.analysis .acts label { display: inline-flex; gap: 5px; align-items: center; }
+.analysis .acts select, .analysis .acts input:not([type]) { max-width: 220px; padding: 4px 6px; font-size: 14px; }
+.analysis .opts.mini { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
+.analysis .obs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 14px 0; }
+.analysis .obs h4 { margin: 0 0 6px; font: 500 12px/1.4 var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+.analysis .chk { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; color: var(--ink); }
+.abtn { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tscroll { overflow-x: auto; max-width: 100%; } .tscroll .usage th, .tscroll .usage td { white-space: nowrap; }

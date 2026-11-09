@@ -31,7 +31,8 @@ export default async function WardrobePage({ searchParams }: { searchParams: Pro
       {summary && (
         <div className="stats">
           <div><b>{summary.active}</b><span>Prendas</span></div>
-          <div><b>{summary.incomplete + summary.drafts}</b><span>Por revisar</span></div>
+          <div><b>{summary.review}</b><span>Por revisar</span></div>
+          <div><b>{summary.analyzed}</b><span>Analizadas con IA</span></div>
           <div><b>{summary.favorites}</b><span>Favoritas</span></div>
           <div><b>{summary.archived}</b><span>Archivadas</span></div>
         </div>
@@ -67,8 +68,8 @@ export default async function WardrobePage({ searchParams }: { searchParams: Pro
               <div className="wbody">
                 <Link href={`/armario/${g.id}`}><b>{garmentTitle(g)}</b></Link>
                 <span className="m small">{garmentSubtitle(g)}</span>
-                <span className={`state ${g.wardrobe_status === 'draft' || !g.complete ? 'warn' : 'm'}`}>
-                  {g.wardrobe_status === 'draft' ? 'Borrador' : g.wardrobe_status === 'archived' ? 'Archivada' : !g.complete ? 'Ficha incompleta' : 'Compatibilidad pendiente'}
+                <span className={`state ${g.pending_review || g.wardrobe_status === 'draft' || !g.complete ? 'warn' : 'm'}`}>
+                  {g.pending_review ? 'Propuesta de la IA por revisar' : g.wardrobe_status === 'draft' ? 'Borrador' : g.wardrobe_status === 'archived' ? 'Archivada' : !g.complete ? 'Ficha incompleta' : 'Compatibilidad pendiente'}
                 </span>
               </div>
               <form action={toggleFavoriteAction} className="fav">

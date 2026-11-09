@@ -16,11 +16,11 @@ const L = (xs: string[]) => xs.map((x) => ({ id: x, label: x }))
  * Campos de la ficha de una prenda, guiados por la taxonomia: al cambiar el tipo de prenda
  * aparecen su corte y sus caracteristicas tecnicas.
  */
-export function GarmentFields({ initial = {}, styles }: { initial?: G; styles: { id: string; name: string }[] }) {
-  const [category, setCategory] = useState<string>(initial.category ?? 'top')
+export function GarmentFields({ initial = {}, styles, allowEmptyCategory }: { initial?: G; styles: { id: string; name: string }[]; allowEmptyCategory?: boolean }) {
+  const [category, setCategory] = useState<string>(initial.category ?? (allowEmptyCategory ? '' : 'top'))
   const [sub, setSub] = useState<string>(initial.subcategory ?? '')
-  const group = GROUPS.find((g) => g.id === category)!
-  const family = familyOf(sub || null, category)
+  const group = GROUPS.find((g) => g.id === category)
+  const family = familyOf(sub || null, category || undefined)
   const attrs = ATTRIBUTES[family]
   const cuts = CUTS[family]
   const a: Record<string, string> = initial.attributes ?? {}
@@ -33,13 +33,14 @@ export function GarmentFields({ initial = {}, styles }: { initial?: G; styles: {
           <label>Nombre (opcional)<input name="name" defaultValue={initial.name ?? ''} placeholder="Pantalón gris de lana" /></label>
           <label>Categoría
             <select name="category" value={category} onChange={(e) => { setCategory(e.target.value); setSub('') }}>
+              {allowEmptyCategory && <option value="">Sin indicar · que la proponga la IA</option>}
               <optgroup label="Principales">{GROUPS.filter((g) => g.primary).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</optgroup>
               <optgroup label="Más categorías">{GROUPS.filter((g) => !g.primary).map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}</optgroup>
             </select></label>
           <label>Tipo de prenda
             <select name="subcategory" value={sub} onChange={(e) => setSub(e.target.value)}>
               <option value="">Sin indicar</option>
-              {group.subs.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              {(group?.subs ?? []).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
             </select></label>
           <label>Color principal
             <select name="primary_color" defaultValue={initial.primary_color ?? ''}>
