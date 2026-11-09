@@ -24,6 +24,43 @@ http.createServer((req, res) => {
       res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }))
       return
     }
+    const reply = (obj) => res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', usage: { prompt_tokens: 700, completion_tokens: 150, total_tokens: 850 }, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: JSON.stringify(obj) } }] }))
+    const utext = typeof user?.content === 'string' ? user.content : ''
+    if (sys.includes('interprete de peticiones')) {
+      // Interprete: deduce lo evidente, mete un valor invalido y un id inventado (la app debe descartarlos)
+      const q = (utext.match(/PETICION DEL USUARIO: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()
+      const inv = (name) => utext.split('\n').find((l) => /^[0-9a-f-]{36}: /.test(l) && l.toLowerCase().includes(name))?.slice(0, 36)
+      return reply({
+        occasion: q.includes('cena') ? 'cena_amigos' : q.includes('reunión') || q.includes('reunion') ? 'reunion_trabajo' : null,
+        dress_code: q.includes('elegante') ? 'smart_casual' : null, time_of_day: q.includes('cena') || q.includes('noche') ? 'evening' : null, environment: 'indoor',
+        weather: q.includes('frío') || q.includes('frio') ? 'cold' : null, formality: null, comfort_priority: null, preferred_style: 'gotico',
+        restrictions: q.includes('americana') ? ['no_jacket'] : [], exclude_categories: [],
+        required_garment_ids: q.includes('pantalón gris') ? [inv('pantalón gris')].filter(Boolean) : [], exclude_garment_ids: ['00000000-0000-4000-8000-999999999999'],
+        number_of_outfits: null, assumptions: ['Restaurante bastante elegante → smart casual', 'Hará frío: conviene abrigo'],
+      })
+    }
+    if (sys.includes('Eres Personal Stylist') && !sys.includes('AHORA ESTAS EN CONVERSACION')) {
+      // Seleccion: cita una candidata inexistente (C9) y elige en orden distinto al del motor
+      const n = Number(utext.match(/TAREA: elige (\d+)/)?.[1] ?? 3)
+      const keys = [...utext.matchAll(/^(C\d+) \[/gm)].map((m) => m[1])
+      const order = ['C9', ...keys.slice(1), keys[0]].slice(0, n + 1)
+      const names = ['Elegancia relajada', 'Minimalismo cálido', 'Noche sin corbata', 'Casual con carácter', 'Fondo de armario']
+      return reply({ intro: 'He elegido estas opciones pensando en una cena cuidada sin llegar al traje.', proposals: order.map((c, i) => ({ candidate: c, name: names[i] ?? `Propuesta ${i + 1}`, why: `Funciona porque equilibra estructura y comodidad (${c}).`, when: 'Cenas de otoño en interior.', limitations: 'No hay prueba de ajuste de todas las prendas.' })) })
+    }
+    if (sys.includes('AHORA ESTAS EN CONVERSACION')) {
+      const m = (utext.match(/MENSAJE DEL USUARIO: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()
+      const target = Number(m.match(/p(\d)/)?.[1] ?? (m.includes('segund') ? 2 : m.includes('primer') ? 1 : 2))
+      const avail = utext.split('\n').filter((l) => /^[0-9a-f-]{36}: /.test(l))
+      const line = (t) => avail.find((l) => l.includes(t))?.slice(0, 36)
+      const prop = utext.split('\n').find((l) => l.startsWith(`P${target} `)) ?? ''
+      const curShoe = prop.match(/footwear=[^(]*\(([0-9a-f-]{36})\)/)?.[1]
+      if (m.includes('cowboy')) return reply({ reply: 'Te pongo unas botas camperas.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: '00000000-0000-4000-8000-123456789abc' }], new_context: null })
+      if (m.includes('zapatillas')) return reply({ reply: 'También funciona con las zapatillas blancas, aunque cambia el carácter del look: más relajado.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: line('Zapatillas') }], new_context: null })
+      if (m.includes('zapatos')) { const alt = avail.filter((l) => l.includes('footwear') && !l.includes('Zapatillas') && !l.startsWith(curShoe ?? '-'))[0]?.slice(0, 36); return reply({ reply: 'Mantendría el pantalón y la parte superior y cambiaría los zapatos: algo menos informal y con más coherencia cromática.', action: 'modify', target, changes: [{ role: 'footwear', garment_id: alt }], new_context: null }) }
+      if (m.includes('guarda')) return reply({ reply: 'Perfecto, la guardo.', action: 'save', target, changes: [], new_context: null })
+      if (m.includes('lluvia')) return reply({ reply: 'Con lluvia lo replanteo con abrigo.', action: 'regenerate', target: null, changes: [], new_context: { weather: 'rain' } })
+      return reply({ reply: 'La segunda es la más versátil: los neutros te dejan repetir prendas en otros conjuntos.', action: 'answer', target: 2, changes: [], new_context: null })
+    }
     if (sys.includes('Fit Assessor') && Array.isArray(user?.content)) {
       // Ajuste: la primera dimension bien, el largo del pantalon mejorable y arreglable, una no observable y una clave inventada.
       const keys = [...user.content[0].text.matchAll(/^- (\w+): /gm)].map((m) => m[1])

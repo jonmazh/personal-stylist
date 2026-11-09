@@ -5,6 +5,7 @@ import { getUser } from '@/lib/supabase/server'
 import { WardrobeError } from '@/lib/wardrobe/service'
 import { createOutfit, deleteOutfit, setOutfitStatus, updateOutfit } from '@/lib/outfits/service'
 import { dismissProposal, runGeneration, saveProposal } from '@/lib/outfits/generate-service'
+import { sendMessage, startSession } from '@/lib/outfits/stylist/service'
 
 async function me() {
   const u = await getUser()
@@ -74,10 +75,30 @@ export async function proposalAction(formData: FormData) {
   const rid = String(formData.get('result_id')), gid = String(formData.get('generation_id'))
   if (formData.get('action') === 'dismiss') {
     try { await dismissProposal(supabase, rid) } catch (e) { redirect(`/outfits/generar?g=${gid}&error=${encodeURIComponent(msg(e))}`) }
-    done(); redirect(`/outfits/generar?g=${gid}&dismissed=1#r-${rid}`)
+    done(); redirect(formData.get('back') ? `${formData.get('back')}?dismissed=1#r-${rid}` : `/outfits/generar?g=${gid}&dismissed=1#r-${rid}`)
   }
   let oid = ''
   try { oid = (await saveProposal(supabase, id, rid, one(formData, 'name'))).id } catch (e) { redirect(`/outfits/generar?g=${gid}&error=${encodeURIComponent(msg(e))}`) }
   done()
   redirect(`/outfits/${oid}?saved=1`)
+}
+
+// ── Estilista con IA (3C) ──
+export async function startStylistAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const overrides: Record<string, unknown> = {}
+  for (const k of ['occasion', 'dress_code', 'time_of_day', 'weather']) { const v = one(formData, k); if (v) overrides[k] = v }
+  const n = Number(formData.get('number_of_outfits')); if (n) overrides.number_of_outfits = n
+  let sid = ''
+  try { sid = await startSession(supabase, id, String(formData.get('message') ?? ''), overrides as never) } catch (e) { redirect(`/outfits?error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/outfits/estilista/${sid}`)
+}
+
+export async function stylistMessageAction(formData: FormData) {
+  const { supabase, id } = await me()
+  const sid = String(formData.get('session_id'))
+  try { await sendMessage(supabase, id, sid, String(formData.get('message') ?? '')) } catch (e) { redirect(`/outfits/estilista/${sid}?error=${encodeURIComponent(msg(e))}`) }
+  done()
+  redirect(`/outfits/estilista/${sid}?m=${Date.now()}#fin`)
 }
