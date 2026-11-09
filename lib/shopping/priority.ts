@@ -68,6 +68,20 @@ export interface Assessment {
 export interface NeedInput { title: string; type: NeedType; spec: NeedSpecT; price_min?: number | null; price_max?: number | null; replaces_garment_id?: string | null; target_date?: string | null }
 export interface PriorityEnv { garments: G[]; evals: Map<string, Evaluation>; bundle: Bundle; use?: Use | null; signals?: Signals; weights?: Record<string, number> | null; now?: Date }
 
+export const COMBINABLE = ['top', 'bottom', 'footwear', 'outerwear', 'tailoring']
+/**
+ * Conjuntos válidos (≥ 60/100) que el Outfit Engine (3B) forma con una prenda virtual y tus prendas, simulando su temporada
+ * (un abrigo de invierno se combina como en invierno). La prenda virtual nunca entra en el armario.
+ */
+export function simulateOutfits(v: G, active: G[], env: Pick<PriorityEnv, 'bundle' | 'evals' | 'signals' | 'now'>, seasons: string[] = []) {
+  const req = GenerateRequest.parse({ required_garment_ids: [v.id] })
+  const now = env.now ?? new Date()
+  const season = seasons.includes('invierno') ? 'invierno' : seasons[0] ?? resolveContext(req, now).season
+  const ctx = learnedContext({ ...resolveContext(req, now), season, forbiddenRoles: [], noLayers: false, needsCoat: false }, env.signals ?? emptySignals())
+  const se = scoreEnv(ctx, env.bundle, env.evals, undefined, env.signals ?? emptySignals())
+  return buildCandidates([...active.filter((g) => g.id !== v.id), v], ctx, se).candidates.filter((c) => c.scored.total >= 60)
+}
+
 /** Evalua la prioridad de una necesidad con tu armario real y tu perfil. */
 export function assessNeed(n: NeedInput, env: PriorityEnv): Assessment {
   const now = env.now ?? new Date()
@@ -126,14 +140,8 @@ export function assessNeed(n: NeedInput, env: PriorityEnv): Assessment {
   // 3. Potencial de nuevos outfits (Outfit Engine de la fase 3)
   const outfits: PCrit = crit('outfits', weights)
   let newOutfits = 0
-  if (['top', 'bottom', 'footwear', 'outerwear', 'tailoring'].includes(n.spec.category)) {
-    const req = GenerateRequest.parse({ required_garment_ids: [VIRTUAL_ID] })
-    // Se simula en la temporada de la prenda buscada (un abrigo de invierno se combina como en invierno)
-    const season = n.spec.seasons.includes('invierno') ? 'invierno' : n.spec.seasons[0] ?? resolveContext(req, now).season
-    const ctx = learnedContext({ ...resolveContext(req, now), season, forbiddenRoles: [], noLayers: false, needsCoat: false }, env.signals ?? emptySignals())
-    const se = scoreEnv(ctx, b, env.evals, undefined, env.signals ?? emptySignals())
-    const r = buildCandidates([...active, v], ctx, se)
-    newOutfits = r.candidates.filter((c) => c.scored.total >= 60).length
+  if (COMBINABLE.includes(n.spec.category)) {
+    newOutfits = simulateOutfits(v, active, env, n.spec.seasons).length
     outfits.reasons.push(newOutfits ? `El motor de conjuntos encuentra ${newOutfits} ${newOutfits === 1 ? 'combinación' : 'combinaciones'} válida${newOutfits === 1 ? '' : 's'} (≥ 60/100) con tus prendas actuales.` : 'El motor no encuentra combinaciones válidas con tus prendas actuales: faltaría algo más para sacarle partido.')
   } else outfits.reasons.push('Complemento o prenda auxiliar: no cambia las combinaciones básicas.')
   outfits.value = clamp01(newOutfits / 12)

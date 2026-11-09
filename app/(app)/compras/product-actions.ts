@@ -7,6 +7,7 @@ import {
   addProductImage, addRetailer, createManualProduct, createSource, deleteProduct, deleteRetailer, deleteSource, importFromUrl,
   saveSearchResult, searchProducts, syncSource, updateProduct, verifyProduct,
 } from '@/lib/shopping/catalog-service'
+import { analyzeProduct, evaluateProduct, setGarmentMeasurements, setSizeChart } from '@/lib/shopping/evaluator-service'
 
 /** Acciones de Product Discovery (fase 4B). */
 async function me() { const u = await getUser(); if (!u) redirect('/login'); return u }
@@ -115,4 +116,33 @@ export async function deleteSourceAction(f: FormData) {
   const { supabase } = await me()
   try { await deleteSource(supabase, String(f.get('id'))) } catch (e) { err('/compras/fuentes', e) }
   done(); go('/compras/fuentes', 'removed=1')
+}
+
+// ── Fase 4C: análisis, evaluación, tallas ──
+export async function analyzeProductAction(f: FormData) {
+  const { supabase, id } = await me()
+  const pid = String(f.get('id'))
+  try { await analyzeProduct(supabase, id, pid, { force: f.get('force') === '1' }) } catch (e) { err(`/compras/productos/${pid}`, e) }
+  done(); go(`/compras/productos/${pid}`, 'analyzed=1#analisis')
+}
+export async function evaluateProductAction(f: FormData) {
+  const { supabase, id } = await me()
+  const pid = String(f.get('id'))
+  try { await evaluateProduct(supabase, id, pid, { reference_id: s(f, 'reference_id') }) } catch (e) { err(`/compras/productos/${pid}`, e) }
+  done(); go(`/compras/productos/${pid}`, 'evaluated=1#evaluacion')
+}
+export async function referenceMeasuresAction(f: FormData) {
+  const { supabase, id } = await me()
+  const pid = String(f.get('id')), gid = String(f.get('garment_id'))
+  const m = Object.fromEntries([...f.entries()].filter(([k, v]) => k.startsWith('m_') && String(v).trim()).map(([k, v]) => [k.slice(2), Number(String(v).replace(',', '.'))]))
+  try { await setGarmentMeasurements(supabase, id, gid, { measurements: m }); await evaluateProduct(supabase, id, pid, { reference_id: gid }) } catch (e) { err(`/compras/productos/${pid}`, e) }
+  done(); go(`/compras/productos/${pid}`, 'evaluated=1#talla')
+}
+export async function sizeChartAction(f: FormData) {
+  const { supabase, id } = await me()
+  const pid = String(f.get('id'))
+  const rows = [0, 1, 2, 3, 4, 5].map((i) => ({ size: s(f, `size_${i}`), measurements: Object.fromEntries([...f.entries()].filter(([k, v]) => k.startsWith(`r${i}_`) && String(v).trim()).map(([k, v]) => [k.slice(`r${i}_`.length), Number(String(v).replace(',', '.'))])) }))
+    .filter((r) => r.size && Object.keys(r.measurements).length)
+  try { await setSizeChart(supabase, id, pid, rows); await evaluateProduct(supabase, id, pid, { reference_id: s(f, 'reference_id') }) } catch (e) { err(`/compras/productos/${pid}`, e) }
+  done(); go(`/compras/productos/${pid}`, 'evaluated=1#talla')
 }

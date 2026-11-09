@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getUser } from '@/lib/supabase/server'
 import { listProducts } from '@/lib/shopping/catalog-service'
 import { AVAILABILITY, PRODUCT_STATUSES, SOURCE_KINDS, label } from '@/lib/shopping/catalog/taxonomy'
+import { VERDICTS } from '@/lib/shopping/evaluate'
 
 type Row = Record<string, any>
 
@@ -10,6 +11,9 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams
   const user = (await getUser())!
   const products = await listProducts(user.supabase, { need_id: sp.need, status: sp.status })
+  const { data: evs } = products.length ? await user.supabase.from('purchase_evaluations').select('product_id, score, verdict, created_at').in('product_id', products.map((p) => p.id)).order('created_at', { ascending: false }) : { data: [] as Row[] }
+  const evOf = new Map<string, Row>(); for (const e of evs ?? []) if (!evOf.has(e.product_id)) evOf.set(e.product_id, e)
+  products.sort((a, z) => Number(evOf.get(z.id)?.score ?? -1) - Number(evOf.get(a.id)?.score ?? -1))
   const groups = new Map<string, { title: string; items: Row[] }>()
   for (const p of products) { const k = p.shopping_needs?.id ?? '-'; if (!groups.has(k)) groups.set(k, { title: p.shopping_needs?.title ?? 'Sin necesidad asociada', items: [] }); groups.get(k)!.items.push(p) }
   return (
@@ -23,16 +27,23 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         {([['saved', 'Guardados'], ['discarded', 'Descartados'], ['all', 'Todos']] as const).map(([st, t]) => <Link key={st} className="chip" href={`/compras/productos?status=${st}`} aria-current={sp.status === st ? 'page' : undefined}>{t}</Link>)}
       </p>
       {!products.length && <p className="m">Aún no hay productos. <Link href="/compras/buscar">Busca</Link> para una necesidad o <Link href="/compras/importar">importa uno</Link> que hayas visto.</p>}
+      {products.length > 1 && <p className="m small">Marca 2 a 4 productos y pulsa «Comparar».</p>}
+      <form action="/compras/comparar" method="get">
+      {products.length > 1 && <div className="btns"><button className="btn small primary">Comparar seleccionados</button></div>}
       {[...groups.values()].map((g) => (
         <section key={g.title} className="osec"><h2>{g.title} <span className="m small">· {g.items.length}</span></h2>
           <div className="combos">{g.items.map((p) => (
-            <Link key={p.id} href={`/compras/productos/${p.id}`} className="need">
+            <div key={p.id} className="need"><label className="chk small"><input type="checkbox" name="ids" value={p.id} /> Comparar</label>
+            <Link href={`/compras/productos/${p.id}`} style={{ color: 'inherit', textDecoration: 'none', display: 'block' }}>
+              {evOf.get(p.id) && <span className="score" title="Puntuación de compra">{evOf.get(p.id)!.score}</span>}
               <span className="st">{p.retailers?.name ?? p.brand ?? 'Tienda'} · {label(SOURCE_KINDS, p.source_kind)} · {label(PRODUCT_STATUSES, p.status)}</span>
               <h3>{p.product_name}</h3>
               <p className="small">{p.current_price != null ? `${Number(p.current_price).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : 'Precio sin comprobar'} · {label(AVAILABILITY, p.availability_status)}{p.confirmed_composition ? ` · ${p.confirmed_composition}` : ' · composición desconocida'}</p>
               <p className={`small ${p.stale ? 'lvl-high' : 'm'}`}>{p.last_verified_at ? `Comprobado el ${new Date(p.last_verified_at).toLocaleDateString('es-ES')}` : 'Sin verificar'}{p.stale ? ' · verifica antes de decidir' : ''}</p>
-            </Link>))}</div>
+              {evOf.get(p.id) && <p className="small"><b>{VERDICTS.find((v) => v.id === evOf.get(p.id)!.verdict)?.label}</b></p>}
+            </Link></div>))}</div>
         </section>))}
+      </form>
     </main>
   )
 }

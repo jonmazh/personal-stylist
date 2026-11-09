@@ -443,3 +443,9 @@ p.state { white-space: normal; }
 .hit .st { font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--acc); }
 .shots { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; } .shots img { width: 110px; height: 140px; object-fit: cover; border: 1px solid var(--line); }
 .srcs { display: grid; gap: 4px; margin: 10px 0; font-size: 13px; }
+
+/* ── Purchase Evaluator (fase 4C) ── */
+.verdict.v-buy { border-left-color: var(--olive); } .verdict.v-consider { border-left-color: var(--camel); } .verdict.v-wait { border-left-color: var(--mut); } .verdict.v-skip { border-left-color: #8a2b20; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; } .cmp th, .cmp td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; } .cmp th { color: var(--mut); font-weight: 500; }
+.cmpwrap { overflow-x: auto; max-width: 100%; }
+.sizegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; } .sizegrid input { width: 100%; }

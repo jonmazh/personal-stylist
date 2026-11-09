@@ -8,7 +8,11 @@ import { GARMENT_COLORS, GROUPS, SUBS, subOf } from '@/lib/wardrobe/taxonomy'
 import { Src } from '@/components/shopping/provenance'
 import { ScreenshotUpload } from '@/components/shopping/screenshot-upload'
 import { PendingButton } from '@/components/outfits/pending-button'
-import { deleteProductAction, productEditAction, productStatusAction, verifyAction } from '../../product-actions'
+import { analyzeProductAction, deleteProductAction, evaluateProductAction, productEditAction, productStatusAction, referenceMeasuresAction, sizeChartAction, verifyAction } from '../../product-actions'
+import { latestAnalysis, latestEvaluation, referenceGarments } from '@/lib/shopping/evaluator-service'
+import { measureSet } from '@/lib/shopping/sizing'
+import { EvaluationView } from '@/components/shopping/evaluation'
+import { garmentTitle } from '@/lib/wardrobe/display'
 
 type Row = Record<string, any>
 const eur = (x: unknown) => (x == null ? null : `${Number(x).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`)
@@ -18,7 +22,12 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const user = (await getUser())!
   const p = await getProduct(user.supabase, id).catch(() => null)
   if (!p) notFound()
-  const needs = await listNeeds(user.supabase, { status: 'all' }).catch(() => [])
+  const [needs, analysis, evaluation, refs] = await Promise.all([listNeeds(user.supabase, { status: 'all' }).catch(() => []), latestAnalysis(user.supabase, id).catch(() => null), latestEvaluation(user.supabase, id).catch(() => null), referenceGarments(user.supabase, p).catch(() => [])])
+  const mset = measureSet(p.subcategory, p.category)
+  const { data: sameFamily } = mset ? await user.supabase.from('garments').select('id, name, brand, category, subcategory, primary_color').eq('wardrobe_status', 'active') : { data: [] as Row[] }
+  const candidatesRef = (sameFamily ?? []).filter((g: Row) => measureSet(g.subcategory, g.category) === mset)
+  const size = (evaluation?.size ?? null) as Row
+  const na = analysis?.normalized as Row | undefined
   const fs = p.field_sources as Record<string, { source: string; at?: string }>
   const storeImgs = (p.images as Row[]).filter((i) => i.origin === 'store'), mine = (p.images as Row[]).filter((i) => i.origin === 'user')
   const manualOnly = p.retailers?.url_policy === 'manual_only'
@@ -57,6 +66,56 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
         {p.variants.length > 0 && (<><h3>Tallas</h3><p className="small">{(p.variants as Row[]).map((v) => `${v.size ?? '—'}${v.color ? ` (${v.color})` : ''}: ${label(AVAILABILITY, v.availability).toLowerCase()}`).join(' · ')}</p><p className="m small">Comprobadas el {new Date(p.variants[0].checked_at).toLocaleDateString('es-ES')}.</p></>)}
         {storeImgs.length > 0 && <p className="small">Imágenes de la tienda: {storeImgs.map((i: Row, k: number) => <a key={k} href={i.url} target="_blank" rel="noopener noreferrer nofollow">{`imagen ${k + 1}`} </a>)} <span className="m">(solo enlazadas: no se copian)</span></p>}
       </section>
+
+      <section className="osec" id="analisis"><h2>Análisis del producto</h2>
+        {sp.analyzed && <p className="note" role="status">Análisis hecho. Los datos que aporta quedan marcados como «Foto» o «IA» y no sustituyen a los de la tienda ni a los tuyos.</p>}
+        <p className="m small">La IA lee la descripción de la tienda y tus capturas{p.source_kind === 'feed' ? ' y las imágenes del feed autorizado' : ''} para identificar corte, silueta, tejido aparente, formalidad, temporada y estilo. No rellena composición, tallas ni precio.</p>
+        {na ? (<>
+          <p className="small">{na.style_tags?.length ? `Estilo: ${na.style_tags.map((t: Row) => t.name).join(', ')}. ` : ''}{na.model_photos ? 'Hay fotos con modelo: su ajuste no es el tuyo.' : ''}</p>
+          <div className="combos">
+            <div className="need"><span className="st">Calidad documentada</span><ul className="small">{na.quality.documented.length ? na.quality.documented.map((q: string) => <li key={q}>{q}</li>) : <li>Nada documentado por la tienda.</li>}</ul></div>
+            <div className="need"><span className="st">Calidad aparente (fotos)</span><ul className="small">{na.quality.apparent.length ? na.quality.apparent.map((q: string) => <li key={q}>{q}</li>) : <li>Sin fotos analizadas.</li>}</ul></div>
+            <div className="need"><span className="st">Desconocido</span><ul className="small">{na.quality.unknown.map((q: string) => <li key={q}>{q}</li>)}</ul></div>
+          </div>
+          {na.observations?.length > 0 && <p className="small">Observaciones: {na.observations.join(' · ')}</p>}
+          {na.discarded?.length > 0 && <p className="m small">Descartado por no ajustarse a la taxonomía o no estar documentado: {na.discarded.join(' · ')}</p>}
+          <p className="m small">{analysis!.model_id} · {analysis!.prompt_version} · {new Date(analysis!.created_at).toLocaleString('es-ES')} · {(analysis!.images_used as Row[]).length} imagen(es)</p>
+        </>) : <p className="m">Aún sin analizar.</p>}
+        <form action={analyzeProductAction} className="btns"><input type="hidden" name="id" value={p.id} />{na && <input type="hidden" name="force" value="1" />}<PendingButton className="btn small" label={na ? 'Volver a analizar' : 'Analizar con IA'} pending="Analizando el producto…" /></form>
+      </section>
+
+      <section className="osec" id="evaluacion"><h2>¿Merece la pena?</h2>
+        {sp.evaluated && <p className="note" role="status">Evaluación actualizada.</p>}
+        {evaluation ? <EvaluationView e={evaluation} /> : <p className="m">Evalúo este producto con tu perfil, tu armario, tus necesidades y lo que ya tienes. {!na ? 'Conviene analizarlo antes.' : ''}</p>}
+        <form action={evaluateProductAction} className="btns"><input type="hidden" name="id" value={p.id} />{size?.reference && <input type="hidden" name="reference_id" value={size.reference.id} />}<PendingButton className="btn small primary" label={evaluation ? 'Volver a evaluar' : 'Evaluar la compra'} pending="Evaluando con tu armario…" /></form>
+      </section>
+
+      {mset && (<section className="osec" id="talla"><h2>Talla</h2>
+        {size?.size ? <p className="verdict"><b>Talla {size.size}</b> · confianza {size.confidence}{size.available === false ? ' · agotada' : ''}{size.reference ? ` · comparada con «${size.reference.title}»` : ''}</p> : size ? <p className="m">{size.notes?.[0]}</p> : null}
+        {size?.notes?.length > 0 && size.size && <ul className="small">{(size.notes as string[]).map((n) => <li key={n}>{n}</li>)}</ul>}
+        {size?.table?.length > 0 && <div className="cmpwrap"><table className="cmp"><thead><tr><th>Talla</th>{mset.map((m) => <th key={m.key}>{m.label}</th>)}</tr></thead><tbody>
+          {size.reference && <tr><td>Tu referencia</td>{mset.map((m) => <td key={m.key}>{(refs.find((r) => r.id === size.reference.id)?.measurements as Row)?.[m.key] ?? '—'}</td>)}</tr>}
+          {(size.table as Row[]).map((t) => <tr key={t.size}><td>{t.size}{t.size === size.size ? ' ★' : ''}</td>{mset.map((m) => { const d = (t.diffs as Row[]).find((x) => x.key === m.key); return <td key={m.key}>{d ? `${d.cand} (${d.diff > 0 ? '+' : ''}${d.diff})` : '—'}</td> })}</tr>)}
+        </tbody></table></div>}
+        <details className="howto"><summary>Medidas de una prenda tuya que te queda bien</summary>
+          <form action={referenceMeasuresAction}>
+            <input type="hidden" name="id" value={p.id} />
+            <label>Prenda<select name="garment_id" required defaultValue={refs[0]?.id ?? ''}><option value="" disabled>Elige</option>{candidatesRef.map((g: Row) => <option key={g.id} value={g.id}>{garmentTitle(g)}</option>)}</select></label>
+            <p className="m small">Mídela en plano, igual que la guía de la tienda, en cm.</p>
+            <div className="sizegrid">{mset.map((m) => <label key={m.key}>{m.label}<input name={`m_${m.key}`} inputMode="decimal" defaultValue={(refs[0]?.measurements as Row)?.[m.key] ?? ''} /></label>)}</div>
+            <div className="btns"><button className="btn small">Guardar medidas y comparar</button></div>
+          </form>
+        </details>
+        <details className="howto"><summary>Guía de medidas de la tienda</summary>
+          <form action={sizeChartAction}>
+            <input type="hidden" name="id" value={p.id} />{size?.reference && <input type="hidden" name="reference_id" value={size.reference.id} />}
+            <p className="m small">Cópiala de la web de la tienda (en cm). Queda marcada como introducida por ti.</p>
+            {[0, 1, 2, 3, 4, 5].map((i) => { const v = (p.variants as Row[])[i]; return (
+              <div key={i} className="sizegrid"><label>Talla<input name={`size_${i}`} maxLength={30} defaultValue={v?.size ?? ''} /></label>{mset.map((m) => <label key={m.key}>{m.label}<input name={`r${i}_${m.key}`} inputMode="decimal" defaultValue={v?.measurements?.[m.key] ?? ''} /></label>)}</div>) })}
+            <div className="btns"><button className="btn small">Guardar guía y comparar</button></div>
+          </form>
+        </details>
+      </section>)}
 
       <section className="osec"><h2>Verificar precio y tallas</h2>
         {!manualOnly && p.source_kind !== 'manual' && (p.product_url || p.source_kind === 'feed') && <form action={verifyAction}><input type="hidden" name="id" value={p.id} /><PendingButton className="btn small" label="Volver a comprobar en la fuente" pending="Comprobando…" /></form>}
