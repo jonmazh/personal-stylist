@@ -38,7 +38,7 @@ const log = (...a) => console.log('✔', ...a)
   log('armario de 13 prendas (una marcada para donar) y temperatura cálida')
 
   // ── Generar desde la interfaz ──
-  await go('/outfits'); await p.click('text=Generar propuestas'); await p.waitForURL(/generar/)
+  await go('/outfits'); await p.click('text=Con filtros detallados'); await p.waitForURL(/generar/)
   await p.selectOption('select[name=occasion]', 'cena_amigos'); await p.selectOption('select[name=dress_code]', 'smart_casual'); await p.selectOption('select[name=time_of_day]', 'evening')
   await p.click('summary:has-text("Más condiciones")'); await p.selectOption('select[name=number_of_outfits]', '4')
   await p.click('main button:has-text("Generar propuestas")'); await p.waitForURL(/generar\?g=/); await p.waitForLoadState('networkidle')
