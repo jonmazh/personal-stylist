@@ -17,7 +17,7 @@
 | 2A · Base del armario | Tablas, Storage, alta con varias fotos (cámara o galería), edición, archivo, búsqueda, filtros, orden, historial | Hecha |
 | 2B · Garment AI | Análisis de visión, prompt especializado, esquema con confianza por campo, revisión y confirmación (`garment_analyses`), control de costes | Hecha |
 | 2C · Evaluación personal | Compatibilidad con tu perfil, valor estratégico, Fit Assessment (IA con fotos puestas o autoevaluación), decisiones | Hecha |
-| 2D · Auditoría | Duplicados, huecos, informes | Pendiente |
+| 2D · Auditoría | Clasificación por estado, duplicados, huecos por categoría, ocasión y temporada, necesidades prioritarias, informes versionados con recomendaciones que apruebas o rechazas | Hecha |
 
 ## Taxonomía
 
@@ -231,7 +231,24 @@ REGLAS:
 6. Lenguaje profesional, concreto y respetuoso, en espanol. Devuelve UNICAMENTE el JSON.
 ```
 
-## Datos (migraciones `0007_wardrobe_base.sql`, `0008_garment_ai.sql` y `0009_garment_evaluation.sql`)
+## Auditoría del armario (2D)
+
+Del artículo al conjunto (`lib/wardrobe/audit.ts`), bajo demanda y con al menos 5 prendas activas. Reglas deterministas sobre el inventario real, el perfil y las evaluaciones de 2C, sin coste de IA. **Ninguna auditoría elimina, archiva ni decide nada**: cada hallazgo trae su porqué y los datos usados, y tú lo apruebas o lo rechazas. Aprobar una recomendación que propone una decisión la registra como tuya (motivo «Auditoría vN»); aprobar una necesidad la añade a tus necesidades (base de las compras de la fase 4). Cada hallazgo tiene una clave estable: en la siguiente auditoría se recuerda lo que aprobaste o rechazaste y no vuelve a aparecer como nuevo.
+
+| Sección | Qué detecta |
+|---|---|
+| Clasificación por estado | Prendas por decisión (conservar, modificar, revisar, sustituir, donar/vender, sin decidir) y archivadas; compatibilidad media y prendas con prueba de ajuste |
+| Duplicados potenciales | Similitud 0–100 con categoría (obligatoria), tipo, color, corte, material, formalidad, función (ocasiones) y combinaciones; grupo a partir de 70. Explica en qué coinciden y en qué se diferencian, y recomienda conservar la de **más utilidad real** (compatibilidad, ajuste, combinaciones, favorita, conservación), solo si la diferencia es clara; si no, decides tú |
+| Arreglos | Prendas marcadas para modificar o con una dimensión de ajuste arreglable |
+| Sustituir o donar | Decididas o propuestas por la evaluación personal |
+| Diagnóstico por categoría | Parte superior, inferior, calzado y prendas exteriores: bien cubierta, necesita revisión, falta variedad o sin prendas (sin contar las marcadas para sustituir o donar) |
+| Ocasiones | Para cada actividad con al menos un 10 % de tu semana: ¿tienes parte superior, inferior y calzado para ella (con la formalidad de tu trabajo)? |
+| Necesidades prioritarias | Hasta 6, concretas: tipo + color de tu paleta que aún no tienes + tu corte preferido u ocasión (p. ej. «Calzado versátil para smart casual»), ordenadas por el peso de la ocasión en tu semana; temporadas según tu clima |
+| Conservación | Prendas desgastadas o dañadas |
+| Por revisar | Borradores, fichas incompletas, propuestas de la IA sin revisar, prendas marcadas para revisar o sin datos para valorarlas |
+| Temporadas y organización | Prendas por temporada, sin temporada y por ubicación. La frecuencia de uso queda pendiente: saldrá del registro de outfits y del diario de uso, no de las fotos |
+
+## Datos (migraciones `0007_wardrobe_base.sql` a `0010_wardrobe_audit.sql`)
 
 | Tabla | Responsabilidad | Subfase |
 |---|---|---|
@@ -241,7 +258,8 @@ REGLAS:
 | `garment_analyses` | Resultados de IA versionados (modelo, versión de prompt y de esquema, estado) | 2B |
 | `garment_fit_reviews` | Evaluaciones de ajuste: propuesta de la IA (con modelo, versión de prompt, fotos y consumo) o autoevaluación; dimensiones con puntuación, nota y si es arreglable; provisional; estado propuesta → vigente → anterior | 2C |
 | `garment_decisions` | Decisiones del usuario con la propuesta del sistema y la instantánea de puntuaciones de ese momento; la vigente se copia en `garments.decision` | 2C |
-| `wardrobe_audits`, `wardrobe_audit_findings` | Auditorías y hallazgos | 2D |
+| `wardrobe_audits` | Informes versionados: estados, cobertura por categoría y ocasión, temporadas, organización y comparación con la versión anterior | 2D |
+| `wardrobe_audit_findings` | Hallazgos con clave estable, porqué, datos usados, prendas, recomendación y estado (propuesto, aprobado, rechazado; heredado de una auditoría anterior) | 2D |
 
 Los atributos técnicos viven en `garments.attributes` (jsonb validado contra la taxonomía) en lugar de una tabla `garment_attributes`: cada prenda solo tiene los de su familia y su origen queda en `field_sources`.
 
@@ -262,4 +280,27 @@ Los atributos técnicos viven en `garments.attributes` (jsonb validado contra la
 | `POST /api/wardrobe/items/:id/fit-review` | `{mode: "ai"}` pide la propuesta de la IA; `{dimensions: [{key, score 1-10\|null, note, fixable}], proposal_id?, notes?}` registra o confirma la evaluación |
 | `POST /api/wardrobe/items/:id/decision` | `{decision: keep\|modify\|review\|replace\|donate_sell, reason?, alteration?}` (nunca archiva ni borra) |
 
-Las rutas de auditoría llegan en 2D. La interfaz usa el mismo servicio (`lib/wardrobe/service.ts`) mediante acciones del servidor.
+| `GET /api/wardrobe/audit[?version=N]` | Última auditoría (o una versión) con sus hallazgos |
+| `POST /api/wardrobe/audit` | Generar una auditoría nueva (bajo demanda, por reglas, sin coste de IA) |
+| `POST /api/wardrobe/audit/findings/:id` | `{action: accept\|reject}`: aprobar una decisión propuesta la registra como tuya |
+
+## Criterios de aceptación de la fase 2
+
+| Criterio | Cómo se cumple |
+|---|---|
+| Puedo añadir una prenda manualmente | Añadir prenda → ficha guiada por la taxonomía (2A) |
+| Puedo fotografiar una prenda desde el móvil | Cámara (`capture`) o galería; reducción y miniatura en el navegador (2A) |
+| Puedo asociar varias fotografías a un mismo artículo | Varias vistas con su función (frontal, posterior, detalle, etiqueta, puesta) (2A) |
+| Las imágenes están protegidas y almacenadas correctamente | Buckets privados por usuario, URLs firmadas, sin metadatos; hash para duplicados (2A) |
+| La IA reconoce la categoría y los atributos básicos | Garment Analyst con confianza por campo y revisión (2B) |
+| La IA distingue entre material aparente y composición confirmada | Composición solo con foto de etiqueta leída; material aparente siempre como estimación (2B) |
+| Puedo editar y validar todos los campos de una ficha | Características y revisión de la propuesta; origen de cada dato en `field_sources` (2A, 2B) |
+| Cada análisis queda registrado y versionado | `garment_analyses` y `garment_fit_reviews` con modelo, prompt, esquema y consumo (2B, 2C) |
+| Puedo buscar, ordenar y filtrar mi armario | Búsqueda, categoría, estado, decisión, favoritas; orden por fecha, nombre, precio o compatibilidad (2A, 2C) |
+| Puedo consultar la compatibilidad de mis prendas con mi perfil | Pestaña Compatibilidad y tarjetas del panel (2C) |
+| Puedo registrar cómo me queda una prenda mediante Fit Assessment | IA con fotos puestas o autoevaluación (2C) |
+| Puedo clasificar prendas para conservar, modificar o sustituir | Decisión con propuesta justificada (2C) y desde la auditoría (2D) |
+| Puedo generar una primera auditoría del armario | Auditoría del armario, versionada (2D) |
+| Puedo detectar prendas potencialmente duplicadas y huecos | Similitud con siete factores y huecos por categoría, ocasión y temporada (2D) |
+
+La interfaz usa los mismos servicios que la API. La interfaz usa el mismo servicio (`lib/wardrobe/service.ts`) mediante acciones del servidor.

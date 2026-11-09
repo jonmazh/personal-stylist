@@ -42,7 +42,7 @@ export default async function WardrobePage({ searchParams }: { searchParams: Pro
           <div><b>{summary.archived}</b><span>Archivadas</span></div>
         </div>
       )}
-      <div className="btns"><Link className="btn primary" href="/armario/nueva">Añadir prenda</Link></div>
+      <div className="btns"><Link className="btn primary" href="/armario/nueva">Añadir prenda</Link><Link className="btn" href="/armario/auditoria">Auditoría del armario</Link></div>
 
       <nav className="chips catnav" aria-label="Categorías">
         <Link href={href({ category: undefined })} className="chip" aria-current={!sp.category ? 'page' : undefined}>Todo</Link>
