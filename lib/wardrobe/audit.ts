@@ -174,7 +174,7 @@ export function occasionCoverage(gs: G[], b: Bundle) {
   })
 }
 
-function seasonCoverage(gs: G[], b: Bundle) {
+export function seasonCoverage(gs: G[], b: Bundle) {
   const climate = b.life?.climate as string | undefined
   const usable = gs.filter((g) => !OUT.has(g.decision))
   const has = (cats: string[], seasons: string[]) => usable.some((g) => cats.includes(g.category) && (g.seasons ?? []).some((s: string) => seasons.includes(s)))

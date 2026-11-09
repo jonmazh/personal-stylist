@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const LINKS = [['/profile', 'Expediente'], ['/blueprint', 'Diagnóstico'], ['/armario', 'Armario'], ['/outfits', 'Outfits'], ['/stylist', 'Estilista']] as const
+const LINKS = [['/profile', 'Expediente'], ['/blueprint', 'Diagnóstico'], ['/armario', 'Armario'], ['/outfits', 'Outfits'], ['/compras', 'Compras'], ['/stylist', 'Estilista']] as const
 
 export function Nav() {
   const path = usePathname()
