@@ -161,3 +161,17 @@ test('migración 0017: CHECK alineados, tiendas sembradas igual que el código, 
   assert.match(sql, /create policy "read retailers"[^;]*user_id is null or user_id = \(select auth\.uid\(\)\)/)
   assert.match(sql, /'shopping-private', 'shopping-private', false/)
 })
+
+test('caché de búsquedas: cambia si se configura el buscador, se sincroniza un feed o cambian las tiendas', async () => {
+  const { searchCacheKey, sourcesSignature } = await import('@/lib/shopping/catalog-service')
+  const q = queryFromText('pantalón gris')
+  const shops = [{ id: 'r1', domains: ['cos.com'] }]
+  const none = searchCacheKey(q, sourcesSignature({ provider: null, key: null, market: 'ES' }, [], shops))
+  const brave = searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [], shops))
+  assert.notEqual(none, brave, 'configurar el buscador invalida la búsqueda guardada sin buscador')
+  assert.equal(brave, searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'otra', market: 'ES' }, [], shops)), 'la clave no forma parte de la caché')
+  const feed1 = searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [{ id: 'f', last_sync_at: '2026-11-01' }], shops))
+  assert.notEqual(brave, feed1)
+  assert.notEqual(feed1, searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [{ id: 'f', last_sync_at: '2026-11-09' }], shops)), 'sincronizar el feed invalida')
+  assert.notEqual(brave, searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [], [...shops, { id: 'r2', domains: ['x.com'] }])), 'añadir una tienda invalida')
+})

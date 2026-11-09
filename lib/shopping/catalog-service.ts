@@ -104,6 +104,14 @@ async function buildSources(sb: Sb, retailers: RetailerRef[]): Promise<ProductSo
 }
 const slim = (h: SearchHit) => ({ ...h, raw_attributes: {}, description: h.description?.slice(0, 600) ?? null, retailer: h.retailer ? { id: h.retailer.id, slug: h.retailer.slug, name: h.retailer.name, url_policy: h.retailer.url_policy, domains: h.retailer.domains } : null })
 
+/**
+ * La caché depende de la búsqueda Y de las fuentes disponibles: si configuras el buscador, añades o sincronizas un feed
+ * o cambias las tiendas, la misma búsqueda se repite en lugar de devolver un resultado antiguo.
+ */
+export const sourcesSignature = (cfg: { provider: string | null; key: string | null; market: string }, feeds: { id: string; last_sync_at?: string | null }[], retailers: { id: string; domains: readonly string[] }[]) =>
+  JSON.stringify({ search: cfg.provider && cfg.key ? `${cfg.provider}:${cfg.market}` : null, feeds: feeds.map((f) => `${f.id}@${f.last_sync_at ?? ''}`).sort(), shops: retailers.map((r) => `${r.id}:${r.domains.join(',')}`).sort() })
+export const searchCacheKey = (q: ProductSearchQuery, signature: string) => createHash('sha256').update(JSON.stringify(q) + '|' + signature).digest('hex').slice(0, 32)
+
 /** Busca en las fuentes autorizadas para una necesidad o un texto. Reutiliza la misma búsqueda de las últimas 24 h (caché). */
 export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: string | null; text?: string | null; force?: boolean }) {
   const prefs = await prefsOf(sb)
@@ -116,13 +124,14 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
     const t = (raw.text ?? '').trim(); if (t.length < 3) throw new WardrobeError('Describe qué buscas (al menos 3 letras) o elige una necesidad.')
     q = queryFromText(t, prefs)
   }
-  const cache_key = createHash('sha256').update(JSON.stringify(q)).digest('hex').slice(0, 32)
+  const retailers = await listRetailers(sb)
+  const { data: feeds } = await sb.from('product_sources').select('id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
+  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers))
   if (!raw.force) {
     const since = new Date(Date.now() - CACHE_HOURS * 3600e3).toISOString()
     const { data: hit } = await sb.from('shopping_searches').select('*').eq('cache_key', cache_key).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (hit) return { id: hit.id as string, query: q, results: hit.results as Row[], sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
   }
-  const retailers = await listRetailers(sb)
   const { results, statuses } = await searchAll(q, await buildSources(sb, retailers))
   const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query: q, query_text: q.text, cache_key, sources: statuses, results: results.map(slim), result_count: results.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
