@@ -20,7 +20,7 @@ export async function updateSession(request: NextRequest) {
   // getClaims refresca el token si hace falta y lo verifica.
   const { data } = await supabase.auth.getClaims()
   const path = request.nextUrl.pathname
-  const open = path.startsWith('/login') || path.startsWith('/auth')
+  const open = path.startsWith('/login') || path.startsWith('/auth') || path === '/.well-known/ucp'   // perfil UCP público (sin sesión ni redirecciones)
   if (!data?.claims && !open) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

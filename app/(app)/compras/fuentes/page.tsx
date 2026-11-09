@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getUser } from '@/lib/supabase/server'
 import { listRetailers, listSources, searchConfigured } from '@/lib/shopping/catalog-service'
 import { URL_POLICIES, label } from '@/lib/shopping/catalog/taxonomy'
+import { ucpConfig } from '@/lib/shopping/catalog/ucp'
 import { addRetailerAction, createSourceAction, deleteRetailerAction, deleteSourceAction, syncSourceAction } from '../product-actions'
 
 type Row = Record<string, any>
@@ -55,6 +56,7 @@ export default async function SourcesPage({ searchParams }: { searchParams: Prom
             <h3 style={{ margin: '4px 0' }}>{r.name}</h3>
             <p className="m small">{r.domains.join(', ')}</p>
             {r.policy_note && <p className="small">{r.policy_note}</p>}
+            {r.connector === 'ucp' && <p className={ucpConfig().profileUrl ? 'small' : 'note warn small'}>{ucpConfig().profileUrl ? 'Conector UCP activo: se consulta en cada búsqueda.' : 'Conector UCP inactivo: falta SHOPPING_UCP_PROFILE_URL (URL pública del perfil UCP de la app, /.well-known/ucp).'}</p>}
             {r.user_id && <form action={deleteRetailerAction}><input type="hidden" name="id" value={r.id} /><button className="btn small">Quitar</button></form>}
           </div>))}</div>
         <details className="howto"><summary>Añadir una tienda</summary>

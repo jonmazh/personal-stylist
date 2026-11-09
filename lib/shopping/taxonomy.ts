@@ -38,6 +38,7 @@ export const BUDGET_PERIODS = [
  * «manual_only» = sus condiciones prohíben la extracción automatizada: solo se guarda el enlace y los datos que aportes.
  */
 const INDITEX = 'Las condiciones de Inditex prohíben la extracción automatizada sin autorización escrita: solo enlace y datos que aportes.'
+const UCP_NOTE = 'Catálogo oficial por UCP/MCP (search_catalog, get_product, lookup_catalog): solo consulta, bajo demanda, sin carrito ni compra. Imágenes solo enlazadas.'
 const UNREVIEWED = 'Condiciones sin revisar: solo metadatos públicos de una página, a petición tuya y si robots.txt lo permite.'
 export const RETAILERS = [
   { id: 'zara', name: 'Zara', group: 'Inditex', domains: ['zara.com'], url_policy: 'manual_only', note: INDITEX },
@@ -50,6 +51,7 @@ export const RETAILERS = [
   { id: 'uniqlo', name: 'Uniqlo', group: 'Complementarias', domains: ['uniqlo.com'], url_policy: 'metadata', note: UNREVIEWED },
   { id: 'mango-man', name: 'Mango Man', group: 'Complementarias', domains: ['mango.com'], url_policy: 'metadata', note: UNREVIEWED },
   { id: 'selected-homme', name: 'Selected Homme', group: 'Complementarias', domains: ['selected.com'], url_policy: 'metadata', note: UNREVIEWED },
+  { id: 'grimey', name: 'Grimey', group: 'Conectadas por UCP', domains: ['grimey.com'], url_policy: 'metadata', note: UCP_NOTE, connector: 'ucp' },
 ] as const
 export const label = (xs: readonly { id: string; label?: string; name?: string }[], id?: string | null) => { const x = xs.find((y) => y.id === id); return x?.label ?? x?.name ?? id ?? '—' }
 

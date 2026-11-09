@@ -38,6 +38,8 @@ export async function checkUrl(raw: string): Promise<URL> {
   const host = u.hostname.replace(/^\[|\]$/g, '')
   if (/^(localhost|.*\.local|.*\.internal|.*\.localhost)$/i.test(host) || (isIP(host) && isPrivateIp(host))) throw new FetchBlocked('No se puede acceder a direcciones internas.', 'private')
   if (u.port && !['80', '443'].includes(u.port)) throw new FetchBlocked('Solo se admiten los puertos web habituales.', 'invalid')
+  // Con un proxy de salida (SHOPPING_FETCH_VIA_PROXY=1) el nombre lo resuelve el proxy: aquí solo se bloquean nombres internos e IP literales
+  if (!isIP(host) && process.env.SHOPPING_FETCH_VIA_PROXY === '1') return u
   const addrs = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => { throw new FetchBlocked('No se encuentra ese dominio.', 'invalid') })
   if (!addrs.length || addrs.some((a) => isPrivateIp(a.address))) throw new FetchBlocked('No se puede acceder a direcciones internas.', 'private')
   return u

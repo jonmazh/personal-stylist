@@ -8,6 +8,7 @@ import { canonicalUrl, normalizeProduct, retailerForUrl, type NormalizedProduct 
 import { FetchBlocked, safeFetch } from './catalog/net'
 import { parseFeed } from './catalog/feed'
 import { queryFromNeed, queryFromText, type ProductSearchQuery } from './catalog/query'
+import { ucpConfig, ucpSource, UcpError, type UcpRetailer } from './catalog/ucp'
 import { feedSource, manualProduct, searchAll, searchProviderConfig, searchProviderSource, urlImportSource, type ProductSource, type RetailerRef, type SearchHit } from './catalog/sources'
 
 /** Product Discovery (fase 4B): tiendas, fuentes autorizadas, búsqueda, importación y catálogo de candidatos. */
@@ -16,9 +17,10 @@ const ids = <T extends { id: string }>(xs: readonly T[]) => xs.map((x) => x.id) 
 const dbErr = (m: string) => new WardrobeError(/schema cache|does not exist/i.test(m) ? 'Ejecuta la migración 0017 en Supabase.' : m, 500)
 const zmsg = (e: z.ZodError) => e.issues.map((i) => `${i.path.join('.') || 'dato'}: ${i.message}`).join('; ')
 const CACHE_HOURS = 24
+export const UCP_CACHE_MINUTES = 15
 
 // ── Tiendas ──
-export async function listRetailers(sb: Sb): Promise<(RetailerRef & { user_id: string | null; group_name: string | null; market: string })[]> {
+export async function listRetailers(sb: Sb): Promise<(RetailerRef & { user_id: string | null; group_name: string | null; market: string; connector?: string | null })[]> {
   const { data, error } = await sb.from('retailers').select('*').order('user_id', { nullsFirst: true }).order('name')
   if (error) { if (/schema cache|does not exist/i.test(error.message)) return []; throw dbErr(error.message) }
   return (data ?? []) as never
@@ -99,10 +101,21 @@ async function buildSources(sb: Sb, retailers: RetailerRef[]): Promise<ProductSo
     const { data: items } = await sb.from('product_feed_items').select('product').eq('source_id', f.id).limit(FETCH_LIMITS.feedMaxItems)
     out.push(feedSource(f, (items ?? []).map((i) => i.product as NormalizedProduct), retailers, retailers.find((r) => r.id === f.retailer_id) ?? null))
   }
-  out.push(searchProviderSource(searchProviderConfig(), retailers))
+  // Tiendas con conector UCP (p. ej. Grimey): catálogo oficial, consultado bajo demanda
+  for (const r of retailers as UcpRetailer[]) if (r.connector === 'ucp') out.push(ucpSource(r))
+  // El buscador genérico no repite las tiendas que ya se consultan por su catálogo oficial
+  out.push(searchProviderSource(searchProviderConfig(), (retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp')))
   return out
 }
-const slim = (h: SearchHit) => ({ ...h, raw_attributes: {}, description: h.description?.slice(0, 600) ?? null, retailer: h.retailer ? { id: h.retailer.id, slug: h.retailer.slug, name: h.retailer.name, url_policy: h.retailer.url_policy, domains: h.retailer.domains } : null })
+const slim = (h: SearchHit) => ({ ...h, raw_attributes: h.source_kind === 'api' ? h.raw_attributes : {}, description: h.description?.slice(0, 600) ?? null, retailer: h.retailer ? { id: h.retailer.id, slug: h.retailer.slug, name: h.retailer.name, url_policy: h.retailer.url_policy, domains: h.retailer.domains } : null })
+
+/**
+ * La caché depende de la búsqueda Y de las fuentes disponibles: si configuras el buscador, añades o sincronizas un feed
+ * o cambias las tiendas, la misma búsqueda se repite en lugar de devolver un resultado antiguo.
+ */
+export const sourcesSignature = (cfg: { provider: string | null; key: string | null; market: string }, feeds: { id: string; last_sync_at?: string | null }[], retailers: { id: string; domains: readonly string[] }[]) =>
+  JSON.stringify({ search: cfg.provider && cfg.key ? `${cfg.provider}:${cfg.market}` : null, feeds: feeds.map((f) => `${f.id}@${f.last_sync_at ?? ''}`).sort(), shops: retailers.map((r) => `${r.id}:${r.domains.join(',')}`).sort() })
+export const searchCacheKey = (q: ProductSearchQuery, signature: string) => createHash('sha256').update(JSON.stringify(q) + '|' + signature).digest('hex').slice(0, 32)
 
 /** Busca en las fuentes autorizadas para una necesidad o un texto. Reutiliza la misma búsqueda de las últimas 24 h (caché). */
 export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: string | null; text?: string | null; force?: boolean }) {
@@ -116,13 +129,16 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
     const t = (raw.text ?? '').trim(); if (t.length < 3) throw new WardrobeError('Describe qué buscas (al menos 3 letras) o elige una necesidad.')
     q = queryFromText(t, prefs)
   }
-  const cache_key = createHash('sha256').update(JSON.stringify(q)).digest('hex').slice(0, 32)
+  const retailers = await listRetailers(sb)
+  const { data: feeds } = await sb.from('product_sources').select('id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
+  const ucp = (retailers as UcpRetailer[]).some((r) => r.connector === 'ucp' && !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
+  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : ''))
   if (!raw.force) {
-    const since = new Date(Date.now() - CACHE_HOURS * 3600e3).toISOString()
+    // UCP: las respuestas de catálogo no deben reutilizarse entre sesiones sin revalidar → caché de 15 minutos
+    const since = new Date(Date.now() - (ucp ? UCP_CACHE_MINUTES * 60e3 : CACHE_HOURS * 3600e3)).toISOString()
     const { data: hit } = await sb.from('shopping_searches').select('*').eq('cache_key', cache_key).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (hit) return { id: hit.id as string, query: q, results: hit.results as Row[], sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
   }
-  const retailers = await listRetailers(sb)
   const { results, statuses } = await searchAll(q, await buildSources(sb, retailers))
   const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query: q, query_text: q.text, cache_key, sources: statuses, results: results.map(slim), result_count: results.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
@@ -145,6 +161,7 @@ async function upsertProduct(sb: Sb, uid: string, p: NormalizedProduct, extra: {
   const existing = p.canonical_url ? (await sb.from('external_products').select('*').eq('canonical_url', p.canonical_url).maybeSingle()).data : null
   const row: Row = { source_kind: p.source_kind, last_verified_at: p.source_kind === 'search' ? null : now, verify_note: extra.verify_note ?? null }
   for (const k of COLS) row[k] = (p as never as Row)[k]
+  if (p.raw_attributes && Object.keys(p.raw_attributes).length) row.raw_attributes = p.raw_attributes
   if (extra.retailer_id !== undefined) row.retailer_id = extra.retailer_id
   if (extra.source_id) row.source_id = extra.source_id
   let id: string
@@ -153,6 +170,7 @@ async function upsertProduct(sb: Sb, uid: string, p: NormalizedProduct, extra: {
     for (const k of mine) delete row[k]
     if (mine.has('primary_color')) delete row.colors
     row.field_sources = { ...p.field_sources, ...Object.fromEntries([...mine].map((k) => [k, existing.field_sources[k]])) }
+    if (row.raw_attributes) row.raw_attributes = { ...(existing.raw_attributes ?? {}), ...row.raw_attributes }
     if (extra.need_id && !existing.need_id) row.need_id = extra.need_id
     if (existing.images?.some((i: Row) => i.origin === 'user')) row.images = [...existing.images.filter((i: Row) => i.origin === 'user'), ...(row.images ?? p.images)]
     const { error } = await sb.from('external_products').update(row).eq('id', existing.id)
@@ -190,7 +208,8 @@ export async function importFromUrl(sb: Sb, uid: string, raw: { url?: string; ne
   const url = String(raw.url ?? '').trim()
   if (!/^https?:\/\//i.test(url)) throw new WardrobeError('Pega la dirección completa del producto (https://…).')
   const retailers = await listRetailers(sb)
-  const r = await urlImportSource(retailers).getProduct!(url)
+  const ucpShop = (retailers as UcpRetailer[]).find((x) => x.connector === 'ucp' && retailerForUrl(url, [x]))
+  const r = ucpShop ? await ucpSource(ucpShop).getProduct!(url) : await urlImportSource(retailers).getProduct!(url)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_import', model: 'reglas', meta: { ok: r.ok, reason: r.ok ? r.how : r.reason, retailer: r.retailer?.slug ?? null } })
   if (!r.ok) return { ok: false as const, reason: r.reason, message: r.message, url, retailer: r.retailer ? { id: r.retailer.id, name: r.retailer.name } : null }
   const saved = await upsertProduct(sb, uid, r.product, { need_id: raw.need_id ?? null, retailer_id: r.retailer?.id ?? null, verify_note: r.note })
@@ -303,6 +322,21 @@ export async function verifyProduct(sb: Sb, uid: string, id: string, manual?: { 
     const { data: src } = await sb.from('product_sources').select('last_sync_at').eq('id', p.source_id).single()
     await upsertProduct(sb, uid, it, { verify_note: `Según el feed sincronizado el ${new Date(src?.last_sync_at ?? now).toLocaleDateString('es-ES')}.` })
     return { ok: true, how: 'feed', changed: true, note: 'Actualizado desde el feed.' }
+  }
+  const shop = p.source_kind === 'api' && p.retailer_id ? ((await listRetailers(sb)) as UcpRetailer[]).find((x) => x.id === p.retailer_id && x.connector === 'ucp') : null
+  if (shop && p.external_product_id) {
+    try {
+      const fresh = await ucpSource(shop).getById(p.external_product_id)
+      const old = (p.variants as Row[]).filter((v) => v.availability !== 'unknown').length
+      if (fresh.variants.every((v) => v.availability === 'unknown') && old) fresh.variants = []   // el detalle no trae tallas: se conservan las comprobadas
+      await upsertProduct(sb, uid, fresh, { verify_note: `Comprobado en el catálogo oficial de ${shop.name} (UCP) el ${new Date().toLocaleString('es-ES')}.` })
+      return { ok: true, how: 'ucp', changed: true, note: `Precio y disponibilidad comprobados en ${shop.name}.` }
+    } catch (e) {
+      if (e instanceof UcpError && e.code === 'not_found') { await sb.from('external_products').update({ availability_status: 'out_of_stock', verify_note: 'Ya no está en el catálogo de la tienda.', last_verified_at: now }).eq('id', id); await recordPrice(sb, uid, id, p.current_price, p.currency, 'out_of_stock', 'api'); return { ok: true, how: 'ucp', changed: true, note: 'Ya no está en el catálogo de la tienda.' } }
+      const m = e instanceof UcpError ? e.message : 'No se pudo consultar la tienda.'
+      await sb.from('external_products').update({ verify_note: m }).eq('id', id)
+      return { ok: false, how: 'manual', changed: false, note: `${m} Indica tú el precio y la disponibilidad que ves en la tienda.` }
+    }
   }
   if (p.product_url) {
     const r = await importFromUrl(sb, uid, { url: p.product_url })
