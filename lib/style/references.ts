@@ -51,7 +51,7 @@ export const GARMENT_HEX: Record<string, string> = {
   Rojo: '#B0282E', Rosa: '#D9A3AE', Lila: '#B39DC4', Mostaza: '#C99A2E',
   Crudo: '#EDE5D3', Denim: '#2F4868', 'Denim claro': '#7F9BBF', Caqui: '#A89A6E', Antracita: '#3A3B3D', 'Gris claro': '#C9C8C3',
 }
-const PALETTE_OF: Record<string, string> = { Crudo: 'Beige', Denim: 'Azul marino', 'Denim claro': 'Azul claro', Caqui: 'Beige', Antracita: 'Gris', 'Gris claro': 'Gris' }
+export const PALETTE_OF: Record<string, string> = { Crudo: 'Beige', Denim: 'Azul marino', 'Denim claro': 'Azul claro', Caqui: 'Beige', Antracita: 'Gris', 'Gris claro': 'Gris' }
 const ACCENTS = new Set(['Rojo', 'Burdeos', 'Mostaza', 'Rosa', 'Lila', 'Verde bosque'])
 const EARTH = new Set(['Beige', 'Camel', 'Marrón', 'Oliva', 'Crudo', 'Caqui', 'Blanco'])
 

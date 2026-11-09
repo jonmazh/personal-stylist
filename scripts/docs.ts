@@ -17,6 +17,8 @@ import { PHOTO_ANALYSIS, STYLIST_PERSONA, TEMPERATURE_ANALYSIS } from '@/lib/ai/
 import { SERIOUS_ISSUES } from '@/lib/color/temperature'
 import { ATTRIBUTES, COMPOSITION_SOURCES, CONDITIONS, CUTS, GARMENT_COLORS, GROUPS, IMAGE_ROLES, PATTERNS, STATUSES, SUBS } from '@/lib/wardrobe/taxonomy'
 import type { Bundle } from '@/lib/profile/data'
+import { DECISIONS, MIN_WARDROBE, WEIGHTS } from '@/lib/wardrobe/compatibility'
+import { FIT_ASSESSOR, FIT_DIMENSIONS, FIT_PROMPT_VERSION, MAX_WORN } from '@/lib/wardrobe/fit'
 import { ANALYSIS_ROLES, GARMENT_ANALYST, MAX_IMAGES, PROMPT_VERSION, SCHEMA_VERSION } from '@/lib/wardrobe/analysis'
 
 const KIND: Record<Question['kind'], string> = {
@@ -305,6 +307,48 @@ export function styleDnaDoc() {
   return out.join('\n')
 }
 
+function evaluationSection() {
+  const famName: Record<string, string> = { bottom: 'Pantalones', jacket: 'Chaquetas, abrigos y sastrería', shirt: 'Camisas', top: 'Camisetas, polos y punto', footwear: 'Calzado', accessory: 'Complementos', basic: 'Básicos' }
+  return [
+    'Tres valoraciones **separadas** (0–10). Una prenda puede encajar contigo y combinar mal con tu armario. **Lo que no se puede calcular aparece como «Pendiente», nunca como cero.** Compatibilidad y valor estratégico se calculan con reglas (`lib/wardrobe/compatibility.ts`) cada vez que se consultan: si cambias tu perfil o tu armario, cambian. No se guardan como verdad; solo se guarda una instantánea junto a cada decisión.',
+    '',
+    '### 1. Compatibilidad personal',
+    '',
+    '| Criterio | Peso | Datos del perfil que usa |', '|---|---|---|',
+    `| Compatibilidad con tu estilo | ${WEIGHTS.style} % | Identidad estética (influencias y pesos, declarada o propuesta), rasgos que te gustan o rechazas, estilos que has descartado; la prenda se traduce a rasgos del catálogo (tipo, corte, silueta, estampado) y a los estilos que le hayas puesto |`,
+    `| Compatibilidad cromática | ${WEIGHTS.color} % | Temperatura cromática (validada > declarada > estimada por IA > pistas), colores que te gustan y que evitas; cerca de la cara pesa más |`,
+    `| Adecuación del corte a tus preferencias y proporciones | ${WEIGHTS.cut} % | Corte preferido por tipo de prenda, ajuste general preferido, «algo que nunca te pondrías» y proporciones de tus medidas (orientaciones, no prohibiciones) |`,
+    `| Encaje con tus necesidades | ${WEIGHTS.needs} % | Reparto de tu semana frente a las ocasiones de la prenda (o las deducidas de su formalidad, marcadas como tales), formalidad del trabajo, clima y restricciones prácticas |`,
+    `| Calidad de la información disponible | ${WEIGHTS.info} % | Datos clave confirmados (los propuestos por la IA y no aceptados no cuentan), fotos y composición confirmada |`,
+    '',
+    'Cada criterio muestra su porqué, los datos usados, lo que falta y la confianza (los datos de la IA sin confirmar cuentan como hipótesis). Si falta más de la mitad del peso personal, la compatibilidad queda **pendiente**; si falta algo, es **provisional** e indica el porcentaje calculado. **Nunca incluye el ajuste real.**',
+    '',
+    '### 2. Ajuste real (Fit Assessment)',
+    '',
+    `Solo con fotos tuyas llevándola puesta (función «Llevándola puesta», hasta ${MAX_WORN}) o con tu autoevaluación. La IA (prompt \`${FIT_PROMPT_VERSION}\`) **propone**; la propuesta no cuenta hasta que la confirmas o corriges. Lo que no se ve queda «no observable» y la evaluación, **provisional**. Se tiene en cuenta la clase de prenda: corte diseñado, silueta amplia, estructura (una americana desestructurada no se evalúa como una formal), hombro caído, pinzas. Las dimensiones que solo puedes juzgar tú (talla del calzado, comodidad) nunca las puntúa la IA; hombros y talla nunca son «arreglables». La nota es la media de las dimensiones observadas de la última evaluación confirmada.`,
+    '',
+    '| Prenda | Dimensiones |', '|---|---|',
+    ...Object.entries(FIT_DIMENSIONS).map(([f, ds]) => `| ${famName[f]} | ${ds.map((x) => x.label + (x.ai ? '' : ' (solo tú)')).join(' · ')} |`),
+    '',
+    '### 3. Valor estratégico (preliminar)',
+    '',
+    `Se calcula con al menos ${MIN_WARDROBE} prendas activas: con cuántas combina (grupos complementarios, formalidad a ±1, colores que no chocan según tu paleta) 35 %, ocasiones que cubre 20 %, temporadas 15 %, si duplica otra prenda (mismo tipo, color y corte) 15 % y si cubre una actividad importante de tu semana que ninguna otra prenda de su grupo cubre 15 %. Se recalculará con la auditoría (2D) y el registro de uso.`,
+    '',
+    '### Decisión',
+    '',
+    '| Decisión | Significado |', '|---|---|',
+    ...DECISIONS.map((x) => `| ${x.label} (\`${x.id}\`) | ${x.help} |`),
+    '',
+    'El sistema **propone** (con su porqué) y tú **decides**: arreglo posible en el ajuste → modificar; sin datos → revisar; ajuste < 5 → sustituir; compatibilidad < 5 y poco valor → sustituir o donar/vender; buena compatibilidad sin prueba de ajuste → revisar; buena compatibilidad y buen ajuste → conservar. Ninguna decisión archiva ni elimina la prenda. Cada decisión guarda la propuesta, si la seguiste y las puntuaciones del momento; el historial de la ficha registra pruebas de ajuste y decisiones.',
+    '',
+    '**Veredicto del estilista**: un resumen en lenguaje natural, generado por reglas a partir de las tres valoraciones (sin coste de IA). El chat recibe la compatibilidad y la decisión de cada prenda.',
+    '',
+    '### Prompt del Fit Assessor',
+    '',
+    '```text', FIT_ASSESSOR, '```',
+  ]
+}
+
 function garmentAiSection() {
   return [
     `Prompt \`${PROMPT_VERSION}\`, esquema \`${SCHEMA_VERSION}\` (\`lib/wardrobe/analysis.ts\`). Se envían hasta ${MAX_IMAGES} fotos por orden de función: ${ANALYSIS_ROLES.map((r) => IMAGE_ROLES.find((x) => x.id === r)?.label).join(', ')}. Las fotos «llevándola puesta» no se usan para identificar la prenda: son para el Fit Assessment (2C).`,
@@ -351,7 +395,7 @@ export function wardrobeDoc() {
     '| Subfase | Contenido | Estado |', '|---|---|---|',
     '| 2A · Base del armario | Tablas, Storage, alta con varias fotos (cámara o galería), edición, archivo, búsqueda, filtros, orden, historial | Hecha |',
     '| 2B · Garment AI | Análisis de visión, prompt especializado, esquema con confianza por campo, revisión y confirmación (`garment_analyses`), control de costes | Hecha |',
-    '| 2C · Evaluación personal | Compatibilidad con el Blueprint, Fit Assessment, decisiones | Pendiente |',
+    '| 2C · Evaluación personal | Compatibilidad con tu perfil, valor estratégico, Fit Assessment (IA con fotos puestas o autoevaluación), decisiones | Hecha |',
     '| 2D · Auditoría | Duplicados, huecos, informes | Pendiente |',
     '',
     '## Taxonomía',
@@ -392,14 +436,19 @@ export function wardrobeDoc() {
     '',
     ...garmentAiSection(),
     '',
-    '## Datos (migraciones `0007_wardrobe_base.sql` y `0008_garment_ai.sql`)',
+    '## Evaluación personal (2C)',
+    '',
+    ...evaluationSection(),
+    '',
+    '## Datos (migraciones `0007_wardrobe_base.sql`, `0008_garment_ai.sql` y `0009_garment_evaluation.sql`)',
     '',
     '| Tabla | Responsabilidad | Subfase |', '|---|---|---|',
     '| `garments` | Registro principal (evoluciona la tabla mínima de la fase 1: CHECK, índices por usuario/categoría/estado, `updated_at` con disparador, `field_sources`) | 2A |',
     '| `garment_images` | Fotos, función, dimensiones y hash | 2A |',
     '| `garment_events` | Incorporaciones, cambios campo a campo, estados, fotos | 2A |',
     '| `garment_analyses` | Resultados de IA versionados (modelo, versión de prompt y de esquema, estado) | 2B |',
-    '| `garment_fit_reviews`, `garment_decisions` | Ajuste real y decisiones (conservar, modificar, revisar, sustituir, donar/vender) | 2C |',
+    '| `garment_fit_reviews` | Evaluaciones de ajuste: propuesta de la IA (con modelo, versión de prompt, fotos y consumo) o autoevaluación; dimensiones con puntuación, nota y si es arreglable; provisional; estado propuesta → vigente → anterior | 2C |',
+    '| `garment_decisions` | Decisiones del usuario con la propuesta del sistema y la instantánea de puntuaciones de ese momento; la vigente se copia en `garments.decision` | 2C |',
     '| `wardrobe_audits`, `wardrobe_audit_findings` | Auditorías y hallazgos | 2D |',
     '',
     'Los atributos técnicos viven en `garments.attributes` (jsonb validado contra la taxonomía) en lugar de una tabla `garment_attributes`: cada prenda solo tiene los de su familia y su origen queda en `field_sources`.',
@@ -416,7 +465,11 @@ export function wardrobeDoc() {
     '| `POST /api/wardrobe/items/:id/analyze[?force=1]` | Propuesta de la IA (no toca la ficha). Sin `force` reutiliza el análisis de las mismas fotos |',
     '| `POST /api/wardrobe/items/:id/confirm` | `{analysis_id, decisions: {campo: {action: accept\\|correct\\|reject, value?}}, activate?}`: escribe solo lo aceptado o corregido |',
     '',
-    'Las rutas de Fit Assessment y auditoría llegan en 2C–2D. La interfaz usa el mismo servicio (`lib/wardrobe/service.ts`) mediante acciones del servidor.',
+    '| `GET /api/wardrobe/items/:id/evaluation` | Compatibilidad, ajuste real y valor estratégico con sus criterios, propuesta de decisión, veredicto e historiales |',
+    '| `POST /api/wardrobe/items/:id/fit-review` | `{mode: "ai"}` pide la propuesta de la IA; `{dimensions: [{key, score 1-10\\|null, note, fixable}], proposal_id?, notes?}` registra o confirma la evaluación |',
+    '| `POST /api/wardrobe/items/:id/decision` | `{decision: keep\\|modify\\|review\\|replace\\|donate_sell, reason?, alteration?}` (nunca archiva ni borra) |',
+    '',
+    'Las rutas de auditoría llegan en 2D. La interfaz usa el mismo servicio (`lib/wardrobe/service.ts`) mediante acciones del servidor.',
     '',
   ]
   return out.join('\n')

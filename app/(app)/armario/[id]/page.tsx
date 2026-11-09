@@ -9,6 +9,10 @@ import { GarmentFields } from '@/components/wardrobe/garment-fields'
 import { AddPhotos } from '@/components/wardrobe/add-photos'
 import { AnalysisReview } from '@/components/wardrobe/analysis-review'
 import { latestAnalysis } from '@/lib/wardrobe/ai-service'
+import { decisionsOf, evaluationFor } from '@/lib/wardrobe/eval-service'
+import { decisionLabel } from '@/lib/wardrobe/compatibility'
+import { EvaluationView } from '@/components/wardrobe/evaluation-view'
+import { FitView } from '@/components/wardrobe/fit-view'
 import { deleteGarmentAction, removeImageAction, setImageRoleAction, setStatusAction, toggleFavoriteAction, updateGarmentAction } from '../actions'
 
 const TABS = [['resumen', 'Resumen'], ['analisis', 'Análisis IA'], ['caracteristicas', 'Características'], ['compatibilidad', 'Compatibilidad'], ['ajuste', 'Fit Assessment'], ['combinaciones', 'Combinaciones'], ['historial', 'Historial']] as const
@@ -19,7 +23,7 @@ const FIELD: Record<string, string> = {
   condition: 'Conservación', location: 'Ubicación', purchase_price: 'Precio', purchase_date: 'Fecha de compra', store: 'Tienda', estimated_uses: 'Usos estimados', notes: 'Notas',
   wardrobe_status: 'Estado', is_favorite: 'Favorita',
 }
-const EVENT: Record<string, string> = { analyzed: 'Analizada con IA', analysis_reviewed: 'Propuesta de la IA revisada', created: 'Incorporada', updated: 'Ficha editada', status: 'Cambio de estado', favorite: 'Favorita', image_added: 'Foto añadida', image_removed: 'Foto quitada', archived: 'Archivada', restored: 'Recuperada del archivo' }
+const EVENT: Record<string, string> = { fit_reviewed: 'Prueba de ajuste', decided: 'Decisión', analyzed: 'Analizada con IA', analysis_reviewed: 'Propuesta de la IA revisada', created: 'Incorporada', updated: 'Ficha editada', status: 'Cambio de estado', favorite: 'Favorita', image_added: 'Foto añadida', image_removed: 'Foto quitada', archived: 'Archivada', restored: 'Recuperada del archivo' }
 const label = (xs: { id: string; label: string }[], id?: string | null) => xs.find((x) => x.id === id)?.label ?? id
 const fmt = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 const show = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : Array.isArray(v) ? v.join(', ') || '—' : typeof v === 'object' ? Object.entries(v as object).map(([k, x]) => `${k}: ${x}`).join('; ') || '—' : String(v))
@@ -34,6 +38,8 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
   const family = familyOf(g.subcategory, g.category)
   const attrs = ATTRIBUTES[family].filter((d) => g.attributes?.[d.key])
   const analyses = tab === 'analisis' || tab === 'resumen' ? await latestAnalysis(user.supabase, id).catch(() => []) : []
+  const ev = tab === 'compatibilidad' || tab === 'ajuste' ? await evaluationFor(user.supabase, user.id, g, g.images.length) : null
+  const decisions = tab === 'compatibilidad' ? await decisionsOf(user.supabase, id) : []
   const SRC: Record<string, string> = { usuario: 'tú', ia: 'IA, aceptado por ti', etiqueta: 'etiqueta', ficha: 'ficha comercial' }
 
   return (
@@ -41,7 +47,7 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
       <p className="eyebrow">{groupOf(g.category)?.label ?? 'Sin categoría'}{g.subcategory ? ` · ${subOf(g.subcategory)?.label}` : ''}</p>
       <h1 className="display">{garmentTitle(g)}</h1>
       <p className={`state ${g.wardrobe_status === 'active' && g.complete ? 'ok' : 'warn'}`}>
-        {label(STATUSES, g.wardrobe_status)}{g.wardrobe_status !== 'archived' && !g.complete ? ` · falta: ${g.missing.join(', ').toLowerCase()}` : ''}{g.is_favorite ? ' · ★ favorita' : ''}
+        {label(STATUSES, g.wardrobe_status)}{g.wardrobe_status !== 'archived' && !g.complete ? ` · falta: ${g.missing.join(', ').toLowerCase()}` : ''}{g.is_favorite ? ' · ★ favorita' : ''}{g.decision ? ` · decisión: ${decisionLabel(g.decision).toLowerCase()}` : ''}
       </p>
       {sp.nuevo && <p className="note" role="status">Prenda creada{g.wardrobe_status === 'draft' ? ' como borrador' : ' en tu armario'}. {tab === 'analisis' ? 'Revisa lo que propone la IA.' : 'Revisa la ficha cuando quieras.'}</p>}
       {tab !== 'analisis' && analyses[0]?.status === 'proposed' && <p className="note" role="status">Hay una propuesta de la IA sin revisar. <Link href={`/armario/${id}?tab=analisis`}>Revisarla</Link></p>}
@@ -121,14 +127,8 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
         </form>
       )}
 
-      {tab === 'compatibilidad' && (
-        <div className="pending"><p className="state warn">Pendiente · fase 2C</p>
-          <p>Aquí verás la compatibilidad personal de la prenda con tu Style Blueprint: estilo, armonía cromática con tu temperatura validada, corte frente a tus preferencias y proporciones, y utilidad en tus actividades. Una puntuación que no pueda calcularse aparecerá como «pendiente», nunca como cero.</p></div>
-      )}
-      {tab === 'ajuste' && (
-        <div className="pending"><p className="state warn">Pendiente · fase 2C</p>
-          <p>El ajuste real solo se valora con fotos tuyas llevándola. Ya puedes subirlas con la función «Llevándola puesta» ({g.images.filter((i) => i.role === 'worn').length} por ahora): las usaremos en el Fit Assessment.</p></div>
-      )}
+      {tab === 'compatibilidad' && ev && <EvaluationView g={g} ev={ev} decisions={decisions} flags={sp} />}
+      {tab === 'ajuste' && ev && <FitView g={g} fit={ev.fit} reviews={ev.reviews} confirmed={ev.confirmed} proposed={ev.proposed} flags={sp} />}
       {tab === 'combinaciones' && (
         <div className="pending"><p className="state warn">Pendiente</p><p>Las combinaciones con el resto del armario llegarán con el motor de estilismo (Outfit Studio).</p></div>
       )}
@@ -137,6 +137,8 @@ export default async function GarmentPage({ params, searchParams }: { params: Pr
           {g.events.map((e) => (
             <li key={e.id}><b>{EVENT[e.kind] ?? e.kind}</b> <span className="m small">· {fmt(e.created_at)} · {e.source === 'usuario' ? 'por ti' : e.source === 'ia' ? 'por la IA' : e.source}</span>
               {e.kind === 'updated' && e.changes && <ul className="m small">{Object.entries(e.changes as Record<string, [unknown, unknown]>).map(([k, [a, b]]) => <li key={k}>{FIELD[k] ?? k}: {show(a)} → {show(b)}</li>)}</ul>}
+              {e.kind === 'fit_reviewed' && e.changes && <span className="m small"> · {(e.changes as Record<string, unknown>).status === 'proposed' ? 'propuesta de la IA' : `confirmada${(e.changes as Record<string, unknown>).overall != null ? ` (${String((e.changes as Record<string, unknown>).overall).replace('.', ',')})` : ''}`}</span>}
+              {e.kind === 'decided' && e.changes && <span className="m small"> · {decisionLabel(((e.changes as Record<string, unknown>).decision as string[])?.[1])}</span>}
               {e.kind === 'analyzed' && e.changes && <span className="m small"> · {String((e.changes as Record<string, unknown>).fields ?? 0)} datos propuestos</span>}
               {e.kind === 'analysis_reviewed' && e.changes && <span className="m small"> · {String((e.changes as Record<string, unknown>).accepted ?? 0)} aceptados, {String((e.changes as Record<string, unknown>).corrected ?? 0)} corregidos, {String((e.changes as Record<string, unknown>).rejected ?? 0)} descartados</span>}
               {e.kind !== 'updated' && e.changes && (e.changes as Record<string, unknown>).role ? <span className="m small"> · {label(IMAGE_ROLES, String((e.changes as Record<string, unknown>).role))}</span> : null}

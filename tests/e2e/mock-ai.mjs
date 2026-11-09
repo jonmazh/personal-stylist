@@ -2,6 +2,7 @@
 // - Chat: responde un texto fijo.
 // - Temperatura cromatica: foto con aviso de oscura → no apta; si no, «neutra con tendencia calida», confianza alta.
 // - Analisis de referencias: etiqueta cada imagen como Workwear contemporáneo (incluye un color y un elemento fuera del vocabulario para probar el filtro).
+// - Fit Assessor: ajuste bueno salvo el largo del pantalon (arreglable) y una dimension no observable.
 // - Garment Analyst: propone un pantalon gris (con valores invalidos para probar la normalizacion).
 // - Analisis de fotos (peticion con imagenes): marca "lateral" como no utilizable y devuelve una observacion por foto.
 import http from 'node:http'; import fs from 'node:fs'
@@ -21,6 +22,17 @@ http.createServer((req, res) => {
         ? { image_quality: { suitable: false, issues: ['Iluminación insuficiente: la piel apenas se distingue'] }, temperature: 'calida', secondary_tendency: null, confidence: 'alta', observations: [], explanation: 'La foto está demasiado oscura.', limitations: ['Con poca luz el color de la piel no es fiable'] }
         : { image_quality: { suitable: true, issues: [] }, temperature: 'neutra', secondary_tendency: 'calida', confidence: 'alta', observations: ['Matices ligeramente dorados en mejillas y frente'], explanation: 'Se aprecian matices ligeramente dorados, aunque sin una predominancia cálida marcada.', limitations: ['La luz y el procesado del móvil influyen en el color aparente'] })
       res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }))
+      return
+    }
+    if (sys.includes('Fit Assessor') && Array.isArray(user?.content)) {
+      // Ajuste: la primera dimension bien, el largo del pantalon mejorable y arreglable, una no observable y una clave inventada.
+      const keys = [...user.content[0].text.matchAll(/^- (\w+): /gm)].map((m) => m[1])
+      content = JSON.stringify({
+        photo_quality: { suitable: true, issues: [] },
+        dimensions: [...keys.map((k, i) => ({ key: k, score: k === 'trouser_length' ? 5 : k === 'stacking' ? null : 8 + (i % 2), observation: k === 'trouser_length' ? 'El bajo acumula tela sobre el zapato' : k === 'stacking' ? 'El zapato no se ve en la foto' : 'Correcto', fixable: k === 'trouser_length', confidence: k === 'stacking' ? 0.2 : 0.8 })), { key: 'shoulders', score: 3, observation: 'x', fixable: true, confidence: 0.9 }],
+        limitations: ['Los pliegues pueden deberse a la postura'], summary: 'Buen ajuste general; el largo es mejorable.',
+      })
+      res.end(JSON.stringify({ id: 'x', object: 'chat.completion', created: 0, model: 'mock', usage: { prompt_tokens: 900, completion_tokens: 200, total_tokens: 1100 }, choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }] }))
       return
     }
     if (sys.includes('Garment Analyst') && Array.isArray(user?.content)) {

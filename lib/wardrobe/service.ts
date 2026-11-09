@@ -37,7 +37,7 @@ async function logEvent(sb: Sb, uid: string, garmentId: string, kind: string, ch
 }
 
 // ── Lectura ──
-export interface ListQuery { q?: string; category?: string; status?: 'active' | 'draft' | 'archived' | 'all'; favorite?: boolean; sort?: 'recent' | 'updated' | 'name' | 'category' | 'price' }
+export interface ListQuery { q?: string; category?: string; decision?: string; status?: 'active' | 'draft' | 'archived' | 'all'; favorite?: boolean; sort?: 'recent' | 'updated' | 'name' | 'category' | 'price' | 'compat' }
 
 export async function listGarments(sb: Sb, query: ListQuery = {}) {
   let req = sb.from('garments').select('*, garment_images(id, role, thumb_path, storage_path, position)')
@@ -45,8 +45,10 @@ export async function listGarments(sb: Sb, query: ListQuery = {}) {
   if (status !== 'all') req = req.eq('wardrobe_status', status)
   if (query.category && GROUPS.some((g) => g.id === query.category)) req = req.eq('category', query.category)
   if (query.favorite) req = req.eq('is_favorite', true)
+  if (query.decision === 'none') req = req.is('decision', null)
+  else if (query.decision && ['keep', 'modify', 'review', 'replace', 'donate_sell'].includes(query.decision)) req = req.eq('decision', query.decision)
   const order = { recent: ['created_at', false], updated: ['updated_at', false], name: ['name', true], category: ['category', true], price: ['purchase_price', false] } as const
-  const [col, asc] = order[query.sort ?? 'recent'] ?? order.recent
+  const [col, asc] = order[query.sort as keyof typeof order] ?? order.recent
   req = req.order(col, { ascending: asc, nullsFirst: false }).order('created_at', { ascending: false })
   const { data, error } = await req
   if (error) throw dbError(error.message)

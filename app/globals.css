@@ -241,7 +241,7 @@ p.state { white-space: normal; }
 @media (max-width: 520px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 .catnav { margin: 22px 0 8px; }
 .catnav .chip[aria-current=page] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.filters { display: grid; grid-template-columns: 2fr 1fr 1fr auto auto auto; gap: 8px 16px; align-items: end; margin: 8px 0 18px; }
+.filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto auto auto; gap: 8px 16px; align-items: end; margin: 8px 0 18px; }
 .filters select, .gfields select, .staged select, .wimgs select { width: 100%; padding: 10px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 15px var(--sans); }
 .filters label.inline { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; margin-bottom: 12px; }
 @media (max-width: 760px) { .filters { grid-template-columns: 1fr 1fr; } .filters label:first-of-type { grid-column: 1 / 3; } }
@@ -286,3 +286,33 @@ p.state { white-space: normal; }
 .analysis .chk { display: flex; gap: 8px; align-items: center; margin: 14px 0 4px; color: var(--ink); }
 .abtn { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .tscroll { overflow-x: auto; max-width: 100%; } .tscroll .usage th, .tscroll .usage td { white-space: nowrap; }
+/* Evaluacion personal (2C) */
+.scards { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 10px 0 8px; }
+.scards.one { grid-template-columns: 1fr; max-width: 260px; }
+.scard { padding: 14px 10px 12px 0; display: grid; gap: 2px; }
+.scard .st { font: 500 11px/1.4 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--mut); }
+.scard b { font: 400 clamp(32px, 7vw, 46px)/1 var(--serif); }
+.scard.pend b { font-size: clamp(22px, 5vw, 28px); color: var(--mut); }
+@media (max-width: 520px) { .scards { grid-template-columns: 1fr 1fr; } .scards .scard:last-child { grid-column: 1 / 3; } }
+.verdict { background: var(--paper); border: 1px solid var(--line); padding: 14px 16px; margin: 16px 0; }
+.verdict h3 { margin-top: 0; }
+.crit { display: grid; gap: 10px; margin: 10px 0 18px; }
+.crit .cr { border-top: 1px solid var(--line); padding-top: 8px; }
+.crit .crh { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.crit .crh b { font: 400 22px/1 var(--serif); white-space: nowrap; }
+.crit .cr.pend .crh b { font: 500 12px/1.4 var(--sans); color: var(--mut); text-transform: uppercase; letter-spacing: .1em; }
+.crit ul { margin: 6px 0; padding-left: 18px; font-size: 14px; }
+.bar { display: block; height: 3px; background: var(--line); margin: 6px 0; } .bar > i { display: block; height: 100%; background: var(--olive); }
+.decide { margin: 18px 0 26px; }
+.decide .dhelp { list-style: none; padding: 0; margin: 6px 0 10px; }
+.decide input:not([type]) { width: 100%; }
+.dchip { display: inline-block; font: 500 10px/1.6 var(--sans); letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--line); padding: 0 6px; margin-top: 4px; width: fit-content; }
+.dchip.d-keep { border-color: var(--ok); color: var(--ok); } .dchip.d-modify, .dchip.d-review { border-color: var(--warn); color: var(--warn); } .dchip.d-replace, .dchip.d-donate_sell { border-color: var(--acc); color: var(--acc); }
+.fdims { display: grid; gap: 10px; margin: 12px 0; }
+.fdims .fd { border: 1px solid var(--line); padding: 10px 12px; margin: 0; min-width: 0; }
+.fdims .fd legend { font: 500 11px/1.4 var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--mut); padding: 0 4px; }
+.fdims .fdr { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 6px 0; }
+.fdims select { padding: 6px 2px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); font: 15px var(--sans); }
+.fdims input:not([type]) { width: 100%; }
+.fdims .chk, .fitform .chk { display: inline-flex; gap: 6px; align-items: center; }
+.wgrid > * { min-width: 0; } .wcard .state { white-space: normal; line-height: 1.5; }

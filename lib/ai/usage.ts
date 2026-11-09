@@ -3,7 +3,7 @@ import { providerId, PROVIDER_LABEL } from './client'
 
 const LABEL: Record<string, string> = {
   chat: 'Chat del estilista', photo_analysis: 'Análisis de fotos corporales', temperature_analysis: 'Temperatura cromática',
-  reference_analysis: 'Referencias de estilo', garment_analysis: 'Análisis de prendas',
+  reference_analysis: 'Referencias de estilo', garment_analysis: 'Análisis de prendas', fit_assessment: 'Fit Assessment (ajuste)',
 }
 
 /**

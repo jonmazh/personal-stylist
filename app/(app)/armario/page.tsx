@@ -4,22 +4,27 @@ import { GROUPS } from '@/lib/wardrobe/taxonomy'
 import { listGarments, wardrobeSummary, WardrobeError, type ListQuery } from '@/lib/wardrobe/service'
 import { garmentSubtitle, garmentTitle } from '@/lib/wardrobe/display'
 import { toggleFavoriteAction } from './actions'
+import { evaluationsForList } from '@/lib/wardrobe/eval-service'
+import { DECISIONS, decisionLabel } from '@/lib/wardrobe/compatibility'
+import { fmtScore } from '@/components/wardrobe/score'
 
-const SORTS = [['recent', 'Más recientes'], ['updated', 'Última modificación'], ['name', 'Nombre'], ['category', 'Categoría'], ['price', 'Precio']] as const
+const SORTS = [['recent', 'Más recientes'], ['updated', 'Última modificación'], ['name', 'Nombre'], ['category', 'Categoría'], ['price', 'Precio'], ['compat', 'Compatibilidad']] as const
 const STATUS_TABS = [['active', 'En el armario'], ['draft', 'Borradores'], ['archived', 'Archivadas'], ['all', 'Todas']] as const
 
 export default async function WardrobePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams
   const user = (await getUser())!
-  const query: ListQuery = { q: sp.q, category: sp.category, status: (sp.status as ListQuery['status']) ?? 'active', favorite: sp.favorite === '1', sort: (sp.sort as ListQuery['sort']) ?? 'recent' }
+  const query: ListQuery = { q: sp.q, category: sp.category, status: (sp.status as ListQuery['status']) ?? 'active', favorite: sp.favorite === '1', decision: sp.decision, sort: (sp.sort as ListQuery['sort']) ?? 'recent' }
   let items: Awaited<ReturnType<typeof listGarments>> = [], summary: Awaited<ReturnType<typeof wardrobeSummary>> | null = null, error = ''
   try { [items, summary] = await Promise.all([listGarments(user.supabase, query), wardrobeSummary(user.supabase)]) }
   catch (e) { error = e instanceof WardrobeError ? e.message : 'No se pudo cargar el armario' }
+  const evals = items.length ? await evaluationsForList(user.supabase, user.id, items).catch(() => new Map()) : new Map()
+  if (query.sort === 'compat') items = [...items].sort((a, z) => (evals.get(z.id)?.compat.score ?? -1) - (evals.get(a.id)?.compat.score ?? -1))
   const href = (patch: Record<string, string | undefined>) => {
-    const p = new URLSearchParams(Object.entries({ q: sp.q, category: sp.category, status: sp.status, favorite: sp.favorite, sort: sp.sort, ...patch }).filter(([, v]) => v) as [string, string][])
+    const p = new URLSearchParams(Object.entries({ q: sp.q, category: sp.category, status: sp.status, favorite: sp.favorite, decision: sp.decision, sort: sp.sort, ...patch }).filter(([, v]) => v) as [string, string][])
     return `/armario${p.size ? `?${p}` : ''}`
   }
-  const filtered = !!(sp.q || sp.category || sp.favorite)
+  const filtered = !!(sp.q || sp.category || sp.favorite || sp.decision)
 
   return (
     <main className="wide">
@@ -50,10 +55,11 @@ export default async function WardrobePage({ searchParams }: { searchParams: Pro
         {sp.category && <input type="hidden" name="category" value={sp.category} />}
         <label>Buscar<input name="q" defaultValue={sp.q ?? ''} placeholder="Marca, color, material, notas…" /></label>
         <label>Estado<select name="status" defaultValue={query.status}>{STATUS_TABS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+        <label>Decisión<select name="decision" defaultValue={sp.decision ?? ''}><option value="">Todas</option>{DECISIONS.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}<option value="none">Sin decidir</option></select></label>
         <label>Ordenar<select name="sort" defaultValue={query.sort}>{SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <label className="inline"><input type="checkbox" name="favorite" value="1" defaultChecked={query.favorite} /> Solo favoritas</label>
         <button className="btn">Aplicar</button>
-        {filtered && <Link className="btn quiet" href={href({ q: undefined, category: undefined, favorite: undefined })}>Quitar filtros</Link>}
+        {filtered && <Link className="btn quiet" href={href({ q: undefined, category: undefined, favorite: undefined, decision: undefined })}>Quitar filtros</Link>}
       </form>
 
       {items.length === 0 ? (
@@ -69,8 +75,10 @@ export default async function WardrobePage({ searchParams }: { searchParams: Pro
                 <Link href={`/armario/${g.id}`}><b>{garmentTitle(g)}</b></Link>
                 <span className="m small">{garmentSubtitle(g)}</span>
                 <span className={`state ${g.pending_review || g.wardrobe_status === 'draft' || !g.complete ? 'warn' : 'm'}`}>
-                  {g.pending_review ? 'Propuesta de la IA por revisar' : g.wardrobe_status === 'draft' ? 'Borrador' : g.wardrobe_status === 'archived' ? 'Archivada' : !g.complete ? 'Ficha incompleta' : 'Compatibilidad pendiente'}
+                  {g.pending_review ? 'Propuesta de la IA por revisar' : g.wardrobe_status === 'draft' ? 'Borrador' : g.wardrobe_status === 'archived' ? 'Archivada' : !g.complete ? 'Ficha incompleta'
+                    : (() => { const e = evals.get(g.id); const c = fmtScore(e?.compat.score); const f = fmtScore(e?.fit.score); return [c ? `Compatibilidad: ${c}` : 'Compatibilidad pendiente', f ? `Ajuste: ${f}` : 'Ajuste pendiente'].join(' · ') })()}
                 </span>
+                {g.decision && <span className={`dchip d-${g.decision}`}>{decisionLabel(g.decision)}</span>}
               </div>
               <form action={toggleFavoriteAction} className="fav">
                 <input type="hidden" name="id" value={g.id} /><input type="hidden" name="value" value={g.is_favorite ? '0' : '1'} /><input type="hidden" name="back" value={href({})} />
