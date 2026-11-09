@@ -23,7 +23,7 @@ export default async function OutfitPage({ params, searchParams }: { params: Pro
     <main className="wide">
       <p className="eyebrow"><Link href="/outfits">Outfit Studio</Link>{o.occasion ? ` · ${occasionLabel(o.occasion)}` : ''}</p>
       <h1 className="display">{o.name}</h1>
-      <p className={`state ${o.status === 'saved' ? 'ok' : 'warn'}`}>{o.status === 'draft' ? 'Borrador' : o.status === 'archived' ? 'Archivado' : 'Guardado'}{o.is_favorite ? ' · ★ favorito' : ''} · creado a mano</p>
+      <p className={`state ${o.status === 'saved' ? 'ok' : 'warn'}`}>{o.status === 'draft' ? 'Borrador' : o.status === 'archived' ? 'Archivado' : 'Guardado'}{o.is_favorite ? ' · ★ favorito' : ''} · {o.source === 'generator' ? 'propuesto por el motor' : 'creado a mano'}{o.compatibility_score != null ? ` · compatibilidad ${Math.round(Number(o.compatibility_score))}/100 (confianza ${o.confidence_level})` : ''}</p>
       {sp.saved && <p className="note" role="status">Conjunto guardado.</p>}
       {sp.status && <p className="note" role="status">{sp.status === 'archived' ? 'Archivado: no aparece entre tus conjuntos activos. Puedes recuperarlo cuando quieras.' : 'Estado actualizado.'}</p>}
       {sp.warn && <p className="note warn" role="status">{sp.warn}</p>}

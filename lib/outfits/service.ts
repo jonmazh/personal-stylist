@@ -125,12 +125,13 @@ const metaRow = (m: z.infer<typeof OutfitMeta>) => {
   return r
 }
 
-export async function createOutfit(sb: Sb, uid: string, rawMeta: unknown, rawItems: unknown) {
+export interface CreateOpts { source?: 'manual' | 'generator' | 'stylist' | 'evaluation'; score?: number | null; confidence?: string | null; resultId?: string | null }
+export async function createOutfit(sb: Sb, uid: string, rawMeta: unknown, rawItems: unknown, opts: CreateOpts = {}) {
   const m = OutfitMeta.safeParse(rawMeta); if (!m.success) throw new WardrobeError(zmsg(m.error))
   const it = ItemsInput.safeParse(rawItems ?? []); if (!it.success) throw new WardrobeError('Prendas no válidas')
   const items = it.data.map((i) => ({ ...i, role: i.role || '' }))
   const { garments, warnings } = await validateItems(sb, items)
-  const { data: o, error } = await sb.from('outfits').insert({ ...metaRow(m.data), user_id: uid, status: m.data.status ?? 'draft', source: 'manual' }).select('id').single()
+  const { data: o, error } = await sb.from('outfits').insert({ ...metaRow(m.data), user_id: uid, status: m.data.status ?? 'draft', source: opts.source ?? 'manual', ...(opts.score != null ? { compatibility_score: opts.score, confidence_level: opts.confidence ?? null, generation_result_id: opts.resultId ?? null } : {}) }).select('id').single()
   if (error) throw dbErr(error.message)
   if (items.length) {
     const { error: ie } = await sb.from('outfit_items').insert(items.map((x, i) => ({ user_id: uid, outfit_id: o.id, garment_id: x.garment_id, item_role: x.role, position: i, attribute_snapshot: snapshotOf(garments.get(x.garment_id!)!, garments.get(x.garment_id!)!.title) })))

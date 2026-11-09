@@ -25,12 +25,12 @@ export default async function OutfitsPage({ searchParams }: { searchParams: Prom
     <main className="wide">
       <p className="eyebrow">Outfit Studio</p>
       <h1 className="display">Tus conjuntos</h1>
-      <p className="m">Conjuntos construidos con prendas reales de tu armario. De momento los creas tú; pronto el estilista te propondrá combinaciones para cada ocasión.</p>
+      <p className="m">Conjuntos construidos con prendas reales de tu armario. Créalos tú o pide propuestas para una ocasión: el motor combina solo tu ropa real y explica cada puntuación.</p>
       {sp.deleted && <p className="note" role="status">Conjunto eliminado. Las prendas siguen en tu armario.</p>}
       {error && <p className="note warn" role="alert">{error}</p>}
-      <div className="btns"><Link className="btn primary" href="/outfits/nuevo">Crear conjunto</Link><Link className="btn quiet" href="/stylist">Hablar con mi estilista</Link></div>
+      <div className="btns"><Link className="btn primary" href="/outfits/generar">Generar propuestas</Link><Link className="btn" href="/outfits/nuevo">Crear conjunto</Link><Link className="btn quiet" href="/stylist">Hablar con mi estilista</Link></div>
       <div className="ozones">
-        <div><span className="st">Generar propuestas</span><span className="m small">Pendiente · fase 3B–3C</span></div>
+        <div><span className="st">Pedírselo al estilista en tus palabras</span><span className="m small">Pendiente · fase 3C</span></div>
         <div><span className="st">Fórmulas de estilo</span><span className="m small">Pendiente · fase 3D</span></div>
       </div>
 
@@ -55,6 +55,7 @@ export default async function OutfitsPage({ searchParams }: { searchParams: Prom
             <div className="wbody">
               <Link href={`/outfits/${o.id}`}><b>{o.name}</b></Link>
               <span className="m small">{[o.occasion ? occasionLabel(o.occasion) : null, o.formality_level ? `formalidad ${o.formality_level}/5` : null, `${o.items.length} prenda${o.items.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</span>
+              {o.compatibility_score != null && <span className="m small">Compatibilidad {Math.round(Number(o.compatibility_score))}/100 · confianza {o.confidence_level}</span>}
               <span className={`state ${o.status === 'saved' && !o.problems.length ? 'm' : 'warn'}`}>{o.status === 'draft' ? 'Borrador' : o.status === 'archived' ? 'Archivado' : 'Guardado'}{o.problems.length ? ` · ${o.problems.length} aviso${o.problems.length === 1 ? '' : 's'}` : ''}</span>
               {(o.tags ?? []).length > 0 && <span className="m small">{o.tags.map((t: string) => `#${t}`).join(' ')}</span>}
             </div>
