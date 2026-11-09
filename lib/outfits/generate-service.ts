@@ -4,18 +4,31 @@ import { evaluationsForList } from '@/lib/wardrobe/eval-service'
 import { WardrobeError, listGarments, type Sb } from '@/lib/wardrobe/service'
 import { GenerateRequest } from './engine/context'
 import { generate, type GenerationResult } from './engine/generate'
+import { detectPatterns, toSignals } from './learning'
 import { createOutfit, garmentsWithPhotos } from './service'
 import { snapshotOf } from './taxonomy'
 
 /** Outfit Engine (3B) con persistencia: se guarda la peticion, el contexto, los pesos, lo descartado y cada propuesta. */
 const dbErr = (m: string) => new WardrobeError(/schema cache|does not exist/i.test(m) ? 'Ejecuta la migración 0012 en Supabase.' : m, 500)
 
+/** Valoraciones, usos y decisiones sobre patrones (vacio si la migracion 0014 no esta aplicada). */
+export async function learningData(sb: Sb) {
+  const [f, w, d] = await Promise.all([
+    sb.from('outfit_feedback').select('*').order('created_at', { ascending: false }).limit(500),
+    sb.from('outfit_wear_events').select('*').order('worn_on', { ascending: false }).limit(500),
+    sb.from('style_learning').select('*'),
+  ])
+  return { feedback: f.data ?? [], wears: w.data ?? [], decisions: d.data ?? [] }
+}
+
 /** Prepara lo que necesita el motor: armario activo (con titulo), perfil y evaluaciones de 2C. */
 export async function prepareEngine(sb: Sb, uid: string) {
   const [rows, bundle] = await Promise.all([listGarments(sb, { status: 'active' }), loadBundle(sb, uid)])
   const garments = rows.map((g) => ({ ...g, title: garmentTitle(g) }))
-  const evals = await evaluationsForList(sb, uid, garments, bundle)
-  return { garments, bundle, evals, byId: new Map(garments.map((g) => [g.id as string, g])) }
+  const [evals, learn] = await Promise.all([evaluationsForList(sb, uid, garments, bundle), learningData(sb)])
+  const byId = new Map(garments.map((g) => [g.id as string, g]))
+  const patterns = detectPatterns(learn.feedback, learn.wears, byId, learn.decisions)
+  return { garments, bundle, evals, byId, patterns, signals: toSignals(patterns) }
 }
 export type Prepared = Awaited<ReturnType<typeof prepareEngine>>
 export type StylistMeta = { name: string; why: string; when: string; limitations: string | null; model?: string; prompt_version?: string }
@@ -45,7 +58,7 @@ export async function runGeneration(sb: Sb, uid: string, raw: unknown) {
   if (!p.success) throw new WardrobeError(`Petición no válida: ${p.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)
   const t0 = Date.now()
   const prep = await prepareEngine(sb, uid)
-  const out = generate(p.data, prep.garments, prep.evals, prep.bundle)
+  const out = generate(p.data, prep.garments, prep.evals, prep.bundle, new Date(), prep.signals)
   const gen = await persistGeneration(sb, uid, out, prep, out.proposals.map((x) => ({ p: x })), Date.now() - t0)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'outfit_generation', model: 'reglas', meta: { generation_id: gen.id, proposals: out.proposals.length, evaluated: out.stats.evaluated, ms: Date.now() - t0, cached: false } })
   return gen.id

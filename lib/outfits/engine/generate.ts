@@ -4,6 +4,7 @@ import { SEASONS } from '@/lib/wardrobe/taxonomy'
 import { checkComposition, roleLabel, rolesFor, type ItemRole } from '../taxonomy'
 import { INTENTS, resolveContext, templatesFor, type Ctx, type GenerateRequestT, type IntentId } from './context'
 import { explain, intentFit, scoreEnv, scoreOutfit, type G, type ScoreEnv, type Scored, type Slot } from './scoring'
+import { emptySignals, type Signals } from '../learning'
 
 /**
  * Outfit Engine (fase 3B): genera y valida combinaciones SIN IA.
@@ -22,7 +23,7 @@ const title = (g: G) => g.title ?? g.name ?? 'Prenda'
 
 export interface Exclusion { garment: string; reason: string }
 /** Etapa 3: solo prendas activas, no descartadas, de tu armario y compatibles con las condiciones. */
-export function eligible(garments: G[], ctx: Ctx) {
+export function eligible(garments: G[], ctx: Ctx, signals: Signals = emptySignals()) {
   const ok: G[] = [], out: Exclusion[] = []
   const r = ctx.req
   for (const g of garments) {
@@ -30,6 +31,7 @@ export function eligible(garments: G[], ctx: Ctx) {
       g.wardrobe_status !== 'active' ? 'no está en tu armario activo'
       : g.decision === 'replace' || g.decision === 'donate_sell' ? 'la has marcado para sustituir o donar'
       : r.exclude_garment_ids.includes(g.id) ? 'la has excluido'
+      : signals.exclude.has(g.id) ? 'confirmaste que no te convence'
       : g.category && r.exclude_categories.includes(g.category) ? 'su categoría está excluida'
       : r.restrictions.includes('no_suit') && ['suit', 'tuxedo'].includes(g.subcategory) ? 'sin traje'
       : r.restrictions.includes('no_formal_shoes') && FORMAL_SHOES.has(g.subcategory) ? 'sin zapatos formales'
@@ -150,11 +152,20 @@ export interface Proposal {
   alternatives: ReturnType<typeof alternatives>
 }
 
+/** Ajusta la formalidad objetivo de una ocasion segun lo aprendido (patrones consistentes o confirmados). */
+export function learnedContext(ctx: Ctx, signals: Signals): Ctx {
+  const shift = ctx.req.occasion ? signals.formalityShift.get(ctx.req.occasion) ?? 0 : 0
+  const d = shift <= -0.5 ? -1 : shift >= 0.5 ? 1 : 0
+  if (!d) return ctx
+  const lo = Math.max(1, Math.min(5, ctx.formality[0] + d)), hi = Math.max(lo, Math.min(5, ctx.formality[1] + d))
+  return { ...ctx, formality: [lo, hi], formalitySource: `${ctx.formalitySource}, ajustada por tus valoraciones (${d < 0 ? 'más informal' : 'más arreglado'})` }
+}
+
 /** Motor completo. `garments`: tu armario (con titulo); `evals`: evaluaciones de 2C. */
-export function generate(req: GenerateRequestT, garments: G[], evals: Map<string, Evaluation>, bundle: Bundle, now = new Date()) {
-  const ctx = resolveContext(req, now)
-  const env = scoreEnv(ctx, bundle, evals, req.weights)
-  const { ok: pool, excluded } = eligible(garments, ctx)
+export function generate(req: GenerateRequestT, garments: G[], evals: Map<string, Evaluation>, bundle: Bundle, now = new Date(), signals: Signals = emptySignals()) {
+  const ctx = learnedContext(resolveContext(req, now), signals)
+  const env = scoreEnv(ctx, bundle, evals, req.weights, signals)
+  const { ok: pool, excluded } = eligible(garments, ctx, signals)
   const missingRequired = req.required_garment_ids.filter((id) => !pool.some((g) => g.id === id))
   const b = missingRequired.length ? { candidates: [], evaluated: 0, rejected: 0, coatMissing: false, perRole: {}, templates: [] } : buildCandidates(pool, ctx, env)
   const chosen = selectDiverse(b.candidates.sort((a, z) => z.scored.total - a.scored.total), ctx, req.number_of_outfits)
@@ -179,8 +190,8 @@ export function generate(req: GenerateRequestT, garments: G[], evals: Map<string
   else if (!b.candidates.length && !missingRequired.length) notes.push(`No he encontrado combinaciones completas que cumplan las condiciones. Funciones disponibles: ${Object.entries(b.perRole).filter(([, v]) => v).map(([k]) => lc(roleLabel(k))).join(', ') || 'ninguna'}.`)
   else if (proposals.length < req.number_of_outfits) notes.push(`Solo he encontrado ${proposals.length} propuesta${proposals.length === 1 ? '' : 's'} distinta${proposals.length === 1 ? '' : 's'}: con tu armario actual no hay más variedad para esta ocasión.`)
   return {
-    engine: ENGINE_VERSION, request: req, ctx: { formality: ctx.formality, formalitySource: ctx.formalitySource, season: ctx.season, seasonLabel: SEASONS.find((s) => s.id === ctx.season)?.label, seasonSource: ctx.seasonSource, forbiddenRoles: ctx.forbiddenRoles, summary: ctx.summary },
-    weights: env.weights,
+    engine: ENGINE_VERSION, request: req, ctx: { formality: ctx.formality, formalitySource: ctx.formalitySource, season: ctx.season, seasonLabel: SEASONS.find((s) => s.id === ctx.season)?.label, seasonSource: ctx.seasonSource, forbiddenRoles: ctx.forbiddenRoles, summary: ctx.summary, learned: signals.notes },
+    weights: env.weights, learned: signals.notes,
     stats: { garments: garments.length, eligible: pool.length, excluded, perRole: b.perRole, templates: b.templates, evaluated: b.evaluated, rejected: b.rejected, candidates: b.candidates.length },
     proposals, notes,
   }
