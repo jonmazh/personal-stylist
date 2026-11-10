@@ -42,6 +42,25 @@ http.createServer((req, res) => {
   if (u.pathname === '/feed-psi.csv') return send(200, 'text/csv', feedPsi)
   if (u.pathname === '/admin/price') { price = u.searchParams.get('v') ?? price; return send(200, 'text/plain', price) }
   if (u.pathname === '/admin/last-query') return send(200, 'text/plain', lastQuery)
+  // Brave Search (falso) para Trend Intelligence: resultados SINTÉTICOS (no se guardan resultados reales de Brave).
+  // Incluye ruido que el filtro debe descartar: una tienda, una nota de prensa de mercado y un artículo solo de mujer.
+  if (u.pathname === '/res/v1/web/search' || u.pathname === '/res/v1/news/search') {
+    if (req.headers['x-subscription-token'] !== 'test') return send(401, 'application/json', '{"error":"bad key"}')
+    const q = (u.searchParams.get('q') ?? '').toLowerCase()
+    const d = (days) => new Date(Date.now() - days * 864e5).toISOString().slice(0, 19)
+    const R = (host, path, title, description, days, extra = []) => ({ title, url: `https://${host}/${path}`, description, page_age: d(days), meta_url: { hostname: host }, profile: { name: host }, extra_snippets: extra })
+    const all = [
+      R('menswear-weekly.example', 'aw-trousers', "The men's trouser shift: wide and relaxed", "Wide-leg and relaxed trousers with fluid drape replace slim fits in men's collections this autumn winter.", 12, ['Auralee and Lemaire show loose, wide trousers.']),
+      R('style-journal.example', 'menswear-silhouettes', "Menswear silhouettes for autumn", "For men, baggy and wide trousers with a clean top are the key proportion of the season.", 30),
+      R('gents-review.example', 'suede-season', "Men's suede jackets are back", "Suede overshirts and jackets for men add texture to neutral outfits.", 20),
+      R('elmundo-moda.example', 'tendencias-hombre', 'Tendencias de moda hombre otoño invierno', 'El marrón chocolate y el pantalón amplio dominan las propuestas para hombre.', 25),
+      R('shop.example', 'products/wide-trousers', "Men's wide trousers – buy now", 'Wide trousers for men, 49 EUR.', 3),
+      R('openpr.com', 'news/menswear-market', 'Menswear Market to Reach USD 800 Billion', 'The men\'s apparel market will grow 6 % annually.', 2),
+      R('women-style.example', 'tights', 'Novelty tights for her this winter', 'Women are wearing brown tights and suede skirts.', 5),
+    ]
+    const results = all.filter((r) => q.length > 3 && (q.includes('trend') || q.includes('tendencia') || q.includes('trouser') || q.includes('menswear') || q.includes('wide') || q.includes('suede') || q.includes('brown')))
+    return send(200, 'application/json', JSON.stringify(u.pathname.includes('/news/') ? { type: 'news', results: results.slice(0, 3) } : { type: 'search', web: { results } }))
+  }
   if (u.pathname === '/search') {
     if (req.headers['x-subscription-token'] !== 'test') return send(401, 'application/json', '{"error":"bad key"}')
     lastQuery = u.searchParams.get('q') ?? ''

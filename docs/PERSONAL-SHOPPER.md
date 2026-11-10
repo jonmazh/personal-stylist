@@ -283,6 +283,25 @@ Persistencia: `wardrobe_analyses` (migración 0021; versionado, RLS). Se reutili
 
 Pruebas: `tests/stylist-wardrobe.test.ts` y `tests/e2e/stylist-wardrobe.cjs` (10 pantalones rectos → silueta que falta; proporciones repetidas; paleta neutra; aislamiento, redundancias e infrautilizadas; límites sin identidad ni colorimetría; huella; pregunta de experimentación; caché y RLS).
 
+### 2.0C · Trend Intelligence (`lib/stylist/brave.ts`, `trends.ts`, `trend-service.ts`)
+
+Investiga **direcciones** de la moda masculina (siluetas y proporciones, color, materiales y texturas, lavados, estampados, calzado, prendas exteriores, capas, estéticas), no qué se vende más. Cuatro pasos separados:
+
+1. **Recuperación** (Brave Search: `/res/v1/web/search` y `/res/v1/news/search`): 12 consultas propias por dimensión y temporada, más 2 sobre tu identidad; en inglés y en español; último año (noticias: último mes).
+2. **Filtrado por código**: fuera tiendas, notas de prensa de mercado, contenido solo de mujer, resultados antiguos y duplicados; reparto entre consultas (máx. 40 evidencias).
+3. **Síntesis por IA** (proveedor configurado): solo sobre las evidencias, citándolas (E1, E2…); sin conocimiento propio, cifras, popularidad, crecimiento ni vigencia. No se le envían URL.
+4. **Validación por código**: citas inexistentes descartadas; marcas solo si aparecen en las fuentes citadas; frases con cifras de ventas o popularidad eliminadas; **tendencia** solo con ≥ 2 medios independientes (una sola fuente = propuesta aislada); etapa (emergente, consolidada, de temporada, saturada) y confianza calculadas por código a partir de medios y fechas; «saturada» exige dos fuentes que lo digan.
+
+**Presencia comercial** (Channel3, aparte): productos, marcas y tiendas en España para cada tendencia y para las hipótesis del armario (p. ej. «te falta un pantalón amplio»). Es un dato de mercado: estar en catálogos no es una tendencia. Tope: 6 créditos por investigación (de los ~25 de una estrategia completa).
+
+**Dos niveles**: con Brave + Channel3, evidencia editorial y presencia comercial; solo con Channel3, presencia comercial de las hipótesis del armario y nada se presenta como tendencia. La relevancia **personal** de cada señal no se decide aquí (2.0D).
+
+**Condiciones de Brave**: no se pueden almacenar ni cachear sus resultados salvo de forma transitoria (ni usarlos para entrenar modelos) sin un plan con derechos de almacenamiento. Por eso **no se guardan** URL, títulos ni fragmentos: se guardan las conclusiones validadas, nuestras consultas, recuentos y fechas; las fuentes se vuelven a consultar **en vivo** al abrir una señal («Ver fuentes»). Con un plan con derechos de almacenamiento, `BRAVE_STORAGE_RIGHTS=1` guarda sus metadatos. Usa un proveedor de IA que no entrene con tus datos. Ni siquiera las pruebas guardan resultados reales de Brave (usan datos sintéticos).
+
+**Caché**: semanal (misma temporada e identidad); «Investigar de nuevo» la renueva. Consumo registrado en `ai_runs` (consultas de Brave y coste estimado, créditos de Channel3, uso de IA). Configuración: `BRAVE_SEARCH_API_KEY` (o la clave del buscador de productos si es Brave), `BRAVE_COUNTRY`, `BRAVE_SEARCH_LANG`, `BRAVE_STORAGE_RIGHTS`. Migración `0022_trend_intelligence.sql` (`trend_researches`, `trend_signals`, RLS).
+
+Pruebas: `tests/trends.test.ts`, `tests/e2e/stylist-trends.cjs` (Brave de prueba con resultados sintéticos e IA simulada con trampas) y `tests/e2e/trends-live.cjs` (`TRENDS_LIVE=1`, Brave y Channel3 reales).
+
 ## Channel3 (catálogo multimarca)
 
 Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus datos; **no decide qué te favorece** (lo decide el motor 4C) y su relevancia no se usa como puntuación. Conector: `lib/shopping/catalog/channel3.ts` (cumple `ProductSource`). Documentación oficial: https://channel3.ai/docs; esquemas comprobados con el SDK oficial `@channel3/sdk` 4.9.0 (no se usa como dependencia: el conector llama a la API directamente y valida cada respuesta con Zod).
