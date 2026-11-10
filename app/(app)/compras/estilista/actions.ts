@@ -39,3 +39,21 @@ export async function searchOpportunityAction(form: FormData) {
   catch (e) { redirect(`/compras/estilista?error=${encodeURIComponent((e as Error).message)}#oportunidades`) }
   redirect(`/compras/buscar?s=${id}`)
 }
+
+/** Valoración de un producto, una oportunidad o una tendencia (los campos «ctx_*» describen a qué se refiere). */
+export async function feedbackAction(form: FormData) {
+  const user = await getUser(); if (!user) redirect('/login')
+  const { addFeedback } = await import('@/lib/stylist/service')
+  const context = Object.fromEntries([...form.entries()].filter(([k, v]) => k.startsWith('ctx_') && String(v)).map(([k, v]) => [k.slice(4), String(v)]))
+  try { await addFeedback(user.supabase, user.id, { target_kind: String(form.get('target_kind')), target_ref: String(form.get('target_ref')), reason: String(form.get('reason')), context }) }
+  catch (e) { redirect(`/compras/estilista?error=${encodeURIComponent((e as Error).message)}`) }
+  revalidatePath('/compras/estilista')
+  redirect(`/compras/estilista?fb=${Date.now()}${form.get('back') ? `#${form.get('back')}` : ''}`)
+}
+export async function undoFeedbackAction(form: FormData) {
+  const user = await getUser(); if (!user) redirect('/login')
+  const { deleteFeedback } = await import('@/lib/stylist/service')
+  await deleteFeedback(user.supabase, String(form.get('id')))
+  revalidatePath('/compras/estilista')
+  redirect(`/compras/estilista?fb=${Date.now()}#aprendido`)
+}

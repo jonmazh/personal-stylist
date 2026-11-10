@@ -1,10 +1,14 @@
 import Link from 'next/link'
 import { getUser } from '@/lib/supabase/server'
-import { styleStrategy } from '@/lib/stylist/service'
+import { curatedSelections, styleStrategy } from '@/lib/stylist/service'
+import { curate } from '@/lib/stylist/evaluation'
+import { learn, reasonLabel } from '@/lib/stylist/feedback'
+import { CuratedCard } from '@/components/stylist/curated-card'
+import { FeedbackForm } from '@/components/stylist/feedback-form'
 import { MODES } from '@/lib/stylist/strategy'
 import { FINDING_LABEL, type StrategicFinding } from '@/lib/stylist/wardrobe'
 import { PendingButton } from '@/components/outfits/pending-button'
-import { opportunityStatusAction, searchOpportunityAction, refreshAnalysisAction, refreshStrategyAction, researchTrendsAction } from './actions'
+import { opportunityStatusAction, searchOpportunityAction, refreshAnalysisAction, refreshStrategyAction, researchTrendsAction, undoFeedbackAction } from './actions'
 import { latestTrends } from '@/lib/stylist/trend-service'
 import { DIMENSIONS, KINDS, STAGES } from '@/lib/stylist/trends'
 
@@ -20,6 +24,7 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
   const res = st?.wardrobe
   const a = res?.analysis
   const trends = st?.trends ?? await latestTrends(user.supabase).catch(() => null)
+  const sels = st ? await curatedSelections(user.supabase, user.id, (st.opportunities as Record<string, any>[]).filter((o) => o.purchase).map((o) => o.id)).catch(() => ({})) : {}
   const improve = (a?.findings ?? []).filter((f) => f.kind !== 'strength')
   const strengths = (a?.findings ?? []).filter((f) => f.kind === 'strength')
   return (
@@ -29,7 +34,15 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
       <p className="m">Antes de proponerte nada, estudio tu armario como un conjunto, tu identidad y lo que está pasando en la moda masculina. Después decido qué merece la pena incorporar —y si no hace falta comprar nada, te lo digo— y solo entonces buscaré productos.</p>
       {sp.strategy && <p className="note" role="status">Estrategia recalculada.</p>}
       {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
-      {st && <StrategyView st={st} />}
+      {st && <StrategyView st={st} sels={sels} />}
+      <section className="osec" id="tendencias">
+        <h2>Investigación de tendencias</h2>
+        <p className="m small">Investigo direcciones de la moda masculina (siluetas, proporciones, color, materiales, lavados, calzado, prendas exteriores, capas, estéticas) en fuentes editoriales. La IA solo resume lo que dicen esas fuentes y el sistema valida cada conclusión: una sola fuente es una propuesta, no una tendencia, y estar en catálogos tampoco lo es. Si te encajan o no lo decidiré después, al cruzarlas con tu perfil.</p>
+        {sp.trends && <p className="note" role="status">Investigación actualizada.</p>}
+        {!trends && <p className="verdict">Aún no he investigado las tendencias de esta semana.</p>}
+        {trends && <TrendsView t={trends} />}
+        <form action={researchTrendsAction} className="btns"><PendingButton className="btn small" label={trends ? 'Investigar de nuevo' : 'Investigar tendencias'} pending="Investigando fuentes editoriales…" /></form>
+      </section>
       {sp.updated && <p className="note" role="status">Diagnóstico recalculado.</p>}
       {err && <p className="note warn" role="alert">{err}</p>}
       {a && (<>
@@ -58,17 +71,6 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
         </section>
         {a.limitations.length > 0 && <section className="osec"><h2>Límites de este diagnóstico</h2><ul className="small">{a.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul></section>}
         <form action={refreshAnalysisAction} className="btns"><PendingButton className="btn small" label="Recalcular el diagnóstico" pending="Analizando tu armario…" /></form>
-      </>)}
-      <section className="osec" id="tendencias">
-        <h2>Tendencias de moda masculina</h2>
-        <p className="m small">Investigo direcciones de la moda masculina (siluetas, proporciones, color, materiales, lavados, calzado, prendas exteriores, capas, estéticas) en fuentes editoriales. La IA solo resume lo que dicen esas fuentes y el sistema valida cada conclusión: una sola fuente es una propuesta, no una tendencia, y estar en catálogos tampoco lo es. Si te encajan o no lo decidiré después, al cruzarlas con tu perfil.</p>
-        {sp.trends && <p className="note" role="status">Investigación actualizada.</p>}
-        {!trends && <p className="verdict">Aún no he investigado las tendencias de esta semana.</p>}
-        {trends && <TrendsView t={trends} />}
-        <form action={researchTrendsAction} className="btns"><PendingButton className="btn small" label={trends ? 'Investigar de nuevo' : 'Investigar tendencias'} pending="Investigando fuentes editoriales…" /></form>
-      </section>
-      {a && (<>
-        <p className="m small">Próximamente: una selección de productos reales para cada oportunidad, comprobando tu talla y su disponibilidad.</p>
       </>)}
     </main>
   )
@@ -112,9 +114,13 @@ function TrendsView({ t }: { t: { research: Record<string, any>; signals: Record
 }
 
 const STATUS: Record<string, string> = { me_interesa: 'Te interesa', descartada: 'Descartada' }
-function StrategyView({ st }: { st: Awaited<ReturnType<typeof styleStrategy>> }) {
-  const s = st.strategy, ops = st.opportunities as Record<string, any>[]
-  const card = (o: Record<string, any>) => (
+type R = Record<string, any>
+function StrategyView({ st, sels }: { st: Awaited<ReturnType<typeof styleStrategy>>; sels: Record<string, R> }) {
+  const s = st.strategy, ops = st.opportunities as R[]
+  const fb = st.feedback as R[]
+  const learned = learn(fb as never)
+  const fbOf = (kind: string, ref: string) => fb.find((f) => f.target_kind === kind && f.target_ref === ref)?.reason ?? null
+  const card = (o: R) => (
     <div className={`hit ${o.status === 'descartada' ? 'v-skip' : ''}`} key={o.id}>
       <span className="st">{MODES.find((m) => m.id === o.mode)?.label} · prioridad {o.priority} · confianza {o.confidence}{STATUS[o.status] ? ` · ${STATUS[o.status]}` : ''}</span>
       <h3>{o.title}</h3>
@@ -127,11 +133,17 @@ function StrategyView({ st }: { st: Awaited<ReturnType<typeof styleStrategy>> })
       {o.drawbacks?.length > 0 && <p className="m small">Inconvenientes: {o.drawbacks.join(' · ')}</p>}
       {o.purchase && o.target && <p className="m small">Buscaría: {o.target.label}{o.target.colors_ok?.length ? ` (${o.target.colors_ok.map((c: string) => c.toLowerCase()).join(' o ')})` : ''}</p>}
       <div className="btns">
-        {o.purchase && o.target && o.status !== 'descartada' && <form action={searchOpportunityAction}><input type="hidden" name="id" value={o.id} /><PendingButton className="btn small primary" label="Buscar productos" pending="Investigando tiendas…" /></form>}
+        {o.purchase && o.target && o.status !== 'descartada' && <form action={searchOpportunityAction}><input type="hidden" name="id" value={o.id} /><PendingButton className="btn small primary" label={sels[o.id] ? 'Buscar de nuevo' : 'Buscar productos'} pending="Investigando tiendas…" /></form>}
         {(['me_interesa', 'descartada'] as const).map((x) => <form key={x} action={opportunityStatusAction}><input type="hidden" name="id" value={o.id} /><input type="hidden" name="status" value={o.status === x ? 'propuesta' : x} /><button className="btn small">{o.status === x ? 'Deshacer' : x === 'me_interesa' ? 'Me interesa' : 'No es para mí'}</button></form>)}
       </div>
+      <FeedbackForm kind="oportunidad" target={o.key} current={fbOf('oportunidad', o.key)} back="oportunidades" context={{ name: o.title, element: o.target?.element, mode: o.mode }} />
     </div>)
   const buys = ops.filter((o) => o.purchase), free = ops.filter((o) => !o.purchase)
+  // B · Tendencias para ti: cuáles uso y en qué oportunidad, y cuáles descarto y por qué
+  const signals = ((st.trends?.signals ?? []) as R[]).filter((x) => x.kind === 'tendencia_editorial')
+  const usedIn = (sig: R) => ops.find((o) => o.market?.signal_id === sig.id || (o.sources ?? []).includes(`tendencia:${sig.id}`))
+  const whyNot = (sig: R) => (s.rejected as R[]).find((r) => r.key === `trend:${sig.key}`)?.reason
+  const searched = buys.filter((o) => sels[o.id])
   return (<>
     <section className="osec" id="direccion">
       <h2>Dirección de estilo</h2>
@@ -139,13 +151,46 @@ function StrategyView({ st }: { st: Awaited<ReturnType<typeof styleStrategy>> })
       {s.no_purchase_needed && <p className="verdict"><b>No necesitas comprar nada ahora.</b> Tu armario ya resuelve lo que buscas; abajo tienes cómo sacarle más partido.</p>}
       <p className="m small">{st.trends ? `Con las tendencias investigadas el ${new Date(st.trends.research.created_at).toLocaleDateString('es-ES')}` : 'Sin investigación de tendencias todavía: la estrategia se basa en tu armario y tu perfil'} · {st.cached ? 'estrategia reutilizada (nada ha cambiado)' : 'estrategia nueva'}</p>
     </section>
+    <section className="osec" id="tendencias-para-ti">
+      <h2>Tendencias para ti</h2>
+      {!st.trends && <p className="m">Aún no he investigado el mercado: <a href="#tendencias">investiga las tendencias</a> para cruzarlas con tu perfil.</p>}
+      {st.trends && !signals.length && <p className="m">La investigación no encontró tendencias con evidencia editorial suficiente.</p>}
+      <div className="combos">{signals.map((sig) => { const o = usedIn(sig), no = whyNot(sig); return (
+        <div className={`hit ${no ? 'v-skip' : ''}`} key={sig.id}>
+          <span className="st">{DIMENSIONS.find((d) => d.id === sig.dimension)?.label} · {STAGES.find((x) => x.id === sig.stage)?.label} · {sig.source_count} medios</span>
+          <h3>{sig.name}</h3>
+          <p className="small">{no ? <><b>No para ti:</b> {no}</> : o ? <><b>Encaja contigo:</b> la desarrollo en «{o.title}».</> : <>No la convierto en una propuesta para ti: no aporta algo concreto a tu armario ahora.</>}</p>
+          <p className="m small">{sig.description}</p>
+          <div className="btns"><a className="btn small" href={`/compras/estilista/tendencias/${sig.id}`}>Ver fuentes</a></div>
+          <FeedbackForm kind="tendencia" target={sig.key} current={fbOf('tendencia', sig.key)} back="tendencias-para-ti" context={{ name: sig.name }} />
+        </div>) })}</div>
+    </section>
     <section className="osec" id="oportunidades">
       <h2>Oportunidades para elevar tu estilo</h2>
       {!buys.length && <p className="m">No encuentro incorporaciones que merezcan la pena con tus datos actuales.</p>}
       {MODES.map((m) => { const xs = buys.filter((o) => o.mode === m.id); return xs.length ? <div key={m.id}><h3>{m.label}</h3><p className="m small">{m.help}</p><div className="combos">{xs.map(card)}</div></div> : null })}
       {free.length > 0 && <><h3>Sin comprar nada</h3><div className="combos">{free.map(card)}</div></>}
-      {(s.rejected as Record<string, any>[]).length > 0 && <details className="howto"><summary>Ideas descartadas ({(s.rejected as Record<string, any>[]).length})</summary><ul className="small">{(s.rejected as Record<string, any>[]).map((r) => <li key={r.key}><b>{r.title}:</b> {r.reason}</li>)}</ul></details>}
       <form action={refreshStrategyAction} className="btns"><PendingButton className="btn small" label="Recalcular la estrategia" pending="Pensando tu estrategia…" /></form>
+    </section>
+    <section className="osec" id="seleccion">
+      <h2>Selección del estilista</h2>
+      {!searched.length && <p className="m">Pulsa «Buscar productos» en una oportunidad: investigo las tiendas, compruebo tu talla y su disponibilidad y elijo lo que de verdad mejora tu estilo.</p>}
+      {searched.map((o) => { const r = sels[o.id]; const res = r.results as R[]; const c = curate(res, learned.hidden_products); return (
+        <div key={o.id} className="opsel">
+          <h3>Para «{o.title}»</h3>
+          <p className="m small">{r.query?.coverage ? `Investigados ${r.query.coverage.candidates} productos de ${r.query.coverage.brands} marcas en ${r.query.coverage.retailers} tiendas` : ''} · <a href={`/compras/buscar?s=${r.id}`}>ver toda la búsqueda</a></p>
+          {!c.selection.length && <p className="verdict">Ninguno está a la altura: no encuentro un producto disponible en tu talla que materialice esta oportunidad con suficiente valor.</p>}
+          <div className="combos">{c.selection.map((i) => <CuratedCard key={i} h={res[i]} index={i} searchId={r.id} opportunity={o} current={fbOf('producto', res[i].canonical_url)} />)}</div>
+          {c.alternatives.length > 0 && <><h4>Alternativas de otras marcas y precios</h4><div className="combos">{c.alternatives.slice(0, 4).map((i) => <CuratedCard key={i} h={res[i]} index={i} searchId={r.id} opportunity={o} current={fbOf('producto', res[i].canonical_url)} compact />)}</div></>}
+        </div>) })}
+    </section>
+    <section className="osec" id="aprendido">
+      <h2>Ideas descartadas y lo que he aprendido de ti</h2>
+      {(s.rejected as R[]).length > 0 && <details className="howto"><summary>Ideas descartadas ({(s.rejected as R[]).length})</summary><ul className="small">{(s.rejected as R[]).map((r) => <li key={r.key}><b>{r.title}:</b> {r.reason}</li>)}</ul></details>}
+      {learned.applied.length > 0 && <><h3>Aprendido de tus valoraciones</h3><ul className="small">{learned.applied.map((x, i) => <li key={i}>{x.detail} ({x.count} valoraciones). No cambia tu Style Blueprint; se deshace borrando las valoraciones.</li>)}</ul></>}
+      {learned.pending.length > 0 && <p className="m small">Pendiente de confirmar (necesito al menos 2 valoraciones coherentes): {learned.pending.map((x) => `${x.detail.toLowerCase()} (${x.count})`).join(' · ')}.</p>}
+      {fb.length > 0 && <details className="howto"><summary>Tus valoraciones ({fb.length})</summary><ul className="small">{fb.slice(0, 40).map((f) => <li key={f.id}>{f.context?.name ?? f.target_ref} · {f.target_kind}: {reasonLabel(f.reason).toLowerCase()} <form action={undoFeedbackAction} style={{ display: 'inline' }}><input type="hidden" name="id" value={f.id} /><button className="btn small">Deshacer</button></form></li>)}</ul></details>}
+      {!fb.length && <p className="m small">Valora oportunidades, tendencias y productos: aprendo de forma gradual y explicable, distinguiendo si lo que no te convence es el producto, la tendencia, la estética o el corte.</p>}
     </section>
   </>)
 }

@@ -108,11 +108,13 @@ export function rankStrategic<T extends Row>(hits: T[]): T[] {
     || (z.strategic?.value ?? -1) - (a.strategic?.value ?? -1) || (z.evaluation?.score ?? -1) - (a.evaluation?.score ?? -1))
 }
 /** Selección del estilista: hasta 3 elegibles con buena decisión, de marcas distintas; el resto, alternativas por precio. */
-export function curate<T extends Row>(hits: T[]): { selection: number[]; alternatives: number[] } {
-  const ok = hits.map((h, i) => ({ h, i })).filter(({ h }) => ['eleccion', 'buena_opcion'].includes(h.strategic?.decision))
+export function curate<T extends Row>(hits: T[], hidden: string[] = []): { selection: number[]; alternatives: number[] } {
+  // Los productos que has valorado en contra (no me gusta, no es mi estilo, ya tengo algo parecido…) no vuelven a proponerse
+  const visible = (h: Row) => !hidden.includes(h.canonical_url)
+  const ok = hits.map((h, i) => ({ h, i })).filter(({ h }) => visible(h) && ['eleccion', 'buena_opcion'].includes(h.strategic?.decision))
   const brands = new Set<string>(); const selection: number[] = []
   for (const { h, i } of ok) { const b = String(h.brand ?? h.raw_attributes?.domain ?? '').toLowerCase(); if (selection.length < 3 && !brands.has(b)) { brands.add(b); selection.push(i) } }
-  const alternatives = hits.map((h, i) => ({ h, i })).filter(({ h, i }) => !selection.includes(i) && ['eleccion', 'buena_opcion', 'con_reservas'].includes(h.strategic?.decision)).map(({ i }) => i)
+  const alternatives = hits.map((h, i) => ({ h, i })).filter(({ h, i }) => visible(h) && !selection.includes(i) && ['eleccion', 'buena_opcion', 'con_reservas'].includes(h.strategic?.decision)).map(({ i }) => i)
   return { selection, alternatives }
 }
 export const median = (xs: number[]) => { const s = xs.filter((x) => Number.isFinite(x)).sort((a, z) => a - z); return s.length ? s[Math.floor(s.length / 2)] : null }

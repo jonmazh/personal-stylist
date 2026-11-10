@@ -8,6 +8,7 @@ import { analyzeColor } from '@/lib/shopping/intelligence/color'
 import { detectColors } from '@/lib/shopping/catalog/normalize'
 import type { StrategicFinding, WardrobeAnalysis, Experimentation } from './wardrobe'
 import { generalColors } from './discovery'
+import { emptyLearned, type Learned } from './feedback'
 
 /**
  * Personal Shopper 2.0 · 2.0D — Style Strategy Engine.
@@ -86,13 +87,16 @@ export function trendTraits(text: string): { elements: string[]; materials: stri
   return { elements: [...els], materials: [...mats], colors: detectColors(text) }
 }
 
-export interface StrategyInput { analysis: WardrobeAnalysis; signals: G[]; bundle: Bundle; garments: G[]; evals: Map<string, Evaluation>; now?: Date }
+export interface StrategyInput { analysis: WardrobeAnalysis; signals: G[]; bundle: Bundle; garments: G[]; evals: Map<string, Evaluation>; now?: Date; learned?: Learned }
 export function buildStrategy(input: StrategyInput) {
   const { analysis: a, bundle: b } = input
   const sp = styleProfileOf(b)
   const ctx = buildShopperContext({ bundle: b, garments: input.garments, evals: input.evals })
   const exp: Experimentation = a.experimentation ?? 'Abierto'
-  const rejected = new Set(sp.elements.rejected.map((e) => e.element)), liked = new Set(sp.elements.liked.map((e) => e.element))
+  // Aprendido de tus valoraciones (aparte del Style Blueprint, que no se toca): rasgos que no son tuyos o que te gustan
+  const learned = input.learned ?? emptyLearned()
+  const rejected = new Set([...sp.elements.rejected.map((e) => e.element), ...learned.soft_rejected]), liked = new Set([...sp.elements.liked.map((e) => e.element), ...learned.liked.filter((e) => !learned.soft_rejected.includes(e))])
+  const learnedReject = new Set(learned.soft_rejected)
   const identity = sp.identity.influences
   const principal = identity.find((i) => i.role === 'principal') ?? identity[0]
   const idEls = (filter: (i: typeof identity[number]) => boolean) => new Set<string>(identity.filter(filter).flatMap((i) => (styleById(i.style)?.elements ?? []) as string[]))
@@ -125,11 +129,13 @@ export function buildStrategy(input: StrategyInput) {
     return { score: Math.max(0, Math.min(100, s)), why }
   }
   const expBonus: Record<Experimentation, Record<Mode, number>> = { Conservador: { evolution: 15, expansion: 0, exploration: -20 }, Abierto: { evolution: 5, expansion: 10, exploration: -5 }, Explorador: { evolution: 0, expansion: 10, exploration: 15 } }
+  // Si has dicho varias veces que algo te parece demasiado arriesgado, la exploración baja (sin desaparecer)
+  const riskAdj: Record<Mode, number> = learned.risk_averse ? { evolution: 5, expansion: -5, exploration: -15 } : { evolution: 0, expansion: 0, exploration: 0 }
   const confOf = (...cs: (string | null | undefined)[]): Conf => cs.includes('baja') ? 'baja' : cs.includes('media') ? 'media' : 'alta'
   const signals = input.signals.filter((s) => s.stage !== 'saturada')
   const traitsOf = new Map(input.signals.map((s) => [s.id ?? s.key, trendTraits(`${s.name}. ${s.description}`)]))
   const marketFor = (pred: (t: ReturnType<typeof trendTraits>) => boolean) => {
-    const s = signals.filter((x) => pred(traitsOf.get(x.id ?? x.key)!)).sort((x, z) => (x.kind === 'tendencia_editorial' ? 0 : 1) - (z.kind === 'tendencia_editorial' ? 0 : 1) || ({ alta: 0, media: 1, baja: 2 } as Record<string, number>)[x.confidence] - ({ alta: 0, media: 1, baja: 2 } as Record<string, number>)[z.confidence])[0]
+    const s = signals.filter((x) => !learned.trends_rejected.includes(x.key) && pred(traitsOf.get(x.id ?? x.key)!)).sort((x, z) => (x.kind === 'tendencia_editorial' ? 0 : 1) - (z.kind === 'tendencia_editorial' ? 0 : 1) || ({ alta: 0, media: 1, baja: 2 } as Record<string, number>)[x.confidence] - ({ alta: 0, media: 1, baja: 2 } as Record<string, number>)[z.confidence])[0]
     return s ? { signal_id: s.id ?? null, name: s.name, kind: s.kind, confidence: s.confidence, stage: s.stage, presence: s.presence ?? null } : null
   }
   const relevance = (m: Opportunity['market']) => (!m ? null : m.kind === 'tendencia_editorial' ? ({ alta: 85, media: 70, baja: 55 } as Record<string, number>)[m.confidence] : 35)
@@ -139,11 +145,15 @@ export function buildStrategy(input: StrategyInput) {
     const mode = o.mode ?? modeFor(o.target?.element ?? null)
     const suit = o.suit ?? suitability(o.target?.element ?? null, o.target?.color ?? null)
     const fr = relevance(o.market)
-    const priority = Math.round(Math.max(0, Math.min(100, o.impact * 0.45 + suit.score * 0.35 + (fr ?? 40) * 0.2 + expBonus[exp][mode] - (o.purchase ? 0 : 15))))
+    const later = learned.opps_later.includes(o.key), have = learned.opps_have.includes(o.key)
+    const purchase = o.purchase && !have
+    const priority = Math.round(Math.max(0, Math.min(100, o.impact * 0.45 + suit.score * 0.35 + (fr ?? 40) * 0.2 + expBonus[exp][mode] + riskAdj[mode] - (purchase ? 0 : 15) - (later ? 10 : 0))))
+    const notes = [...(later ? ['Te interesa, pero no ahora: la dejo con menos prioridad.'] : []), ...(have ? ['Dices que ya tienes algo parecido: no propongo comprar.'] : []),
+      ...(o.target?.element && learned.cut_avoid[o.target.element]?.length ? [`Aprendido de tus valoraciones: evita el corte ${learned.cut_avoid[o.target.element].join(', ').toLowerCase()}.`] : [])]
     const prev = ops.get(o.key)
     if (prev) { prev.sources.push(...o.sources); prev.wardrobe_evidence.facts.push(...o.wardrobe_evidence.facts); prev.benefits = [...new Set([...prev.benefits, ...o.benefits])]; if (!prev.market && o.market) prev.market = o.market; return }
     const { impact: _i, suit: _s, ...rest } = o
-    ops.set(o.key, { ...rest, mode, profile_relation: [...new Set([...o.profile_relation, ...suit.why])], scores: { fashion_relevance: fr, personal_suitability: suit.score, stylistic_impact: o.impact }, priority })
+    ops.set(o.key, { ...rest, purchase, mode, profile_relation: [...new Set([...o.profile_relation, ...suit.why, ...notes])], scores: { fashion_relevance: fr, personal_suitability: suit.score, stylistic_impact: o.impact }, priority })
   }
   const fid = (f: StrategicFinding) => ({ garment_ids: f.evidence.garment_ids, facts: [f.diagnosis, ...f.evidence.facts] })
   // Orden de razonamiento: primero lo estructural (silueta, proporción), después identidad, color, textura y el resto
@@ -156,6 +166,7 @@ export function buildStrategy(input: StrategyInput) {
       const [, kind, cut] = f.key.split(':')
       const el = kind === 'leg' ? CUT_EL[cut] : TOP_EL[cut]
       if (!el) continue
+      if (learnedReject.has(el)) { rejectedIdeas.push({ key: `armario:${f.key}`, title: f.title, reason: `Tu armario lo pediría, pero has dicho varias veces que ${elementLabel(el).toLowerCase()} no representa tu estilo.`, source: 'armario' }); used.add(el); continue }
       const tgt = ELEMENT_TARGET[el]
       const market = marketFor((t) => t.elements.includes(el))
       used.add(el)
@@ -232,11 +243,12 @@ export function buildStrategy(input: StrategyInput) {
   for (const s of input.signals) {
     const t = traitsOf.get(s.id ?? s.key)!
     const title = `Tendencia «${s.name}»`
+    if (learned.trends_rejected.includes(s.key)) { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: 'La descartaste tú (no es tu estilo o te parece demasiado arriesgada).', source: 'tendencia' }); continue }
     if (s.stage === 'saturada') { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: 'Las fuentes la describen como saturada o en declive.', source: 'tendencia' }); continue }
     if (s.kind !== 'tendencia_editorial') { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: 'Solo la respalda una fuente: es una propuesta aislada, no una tendencia.', source: 'tendencia' }); continue }
     const els = t.elements.filter((e) => ELEMENT_TARGET[e])
     if (!els.length && !t.colors.length && !t.materials.length) { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: 'No se traduce en una incorporación concreta para tu armario.', source: 'tendencia' }); continue }
-    if (els.some((e) => rejected.has(e))) { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: `Incluye algo que rechazas (${els.filter((e) => rejected.has(e)).map((e) => elementLabel(e).toLowerCase()).join(', ')}).`, source: 'tendencia' }); continue }
+    if (els.some((e) => rejected.has(e))) { const bad = els.filter((e) => rejected.has(e)); rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: bad.some((e) => learnedReject.has(e)) ? `Has dicho varias veces que ${bad.map((e) => elementLabel(e).toLowerCase()).join(', ')} no representa tu estilo.` : `Incluye algo que rechazas (${bad.map((e) => elementLabel(e).toLowerCase()).join(', ')}).`, source: 'tendencia' }); continue }
     const badBody = els.find((e) => bodyOk(e) === false)
     if (badBody) { rejectedIdeas.push({ key: `trend:${s.key}`, title, reason: `${elementLabel(badBody)} no es de los cortes que favorecen tu silueta (${shape}).`, source: 'tendencia' }); continue }
     const color = t.colors[0] ?? null
@@ -269,7 +281,7 @@ export function buildStrategy(input: StrategyInput) {
     list.some((o) => !o.purchase) ? 'Antes de comprar, aprovecha mejor lo que ya tienes.' : null,
     `Grado de experimentación ${exp.toLowerCase()}${a.experimentation ? '' : ' (supuesto)'}.`,
   ].filter(Boolean).join(' ')
-  return { version: STRATEGY_VERSION, direction, experimentation: exp, no_purchase_needed: noPurchase, opportunities: list, rejected: rejectedIdeas, market_level: input.signals.length ? 'con señales de mercado' : 'sin señales de mercado' }
+  return { version: STRATEGY_VERSION, direction, experimentation: exp, no_purchase_needed: noPurchase, opportunities: list, rejected: rejectedIdeas, learned: { applied: learned.applied, pending: learned.pending }, market_level: input.signals.length ? 'con señales de mercado' : 'sin señales de mercado' }
 }
 export type Strategy = ReturnType<typeof buildStrategy>
-export const strategyFingerprint = (wardrobeFp: string, researchId: string | null, b: Bundle) => createHash('sha256').update(JSON.stringify({ v: STRATEGY_VERSION, wardrobeFp, researchId, style: b.style ?? null, goals: b.goals ?? null, color: b.color ?? null })).digest('hex').slice(0, 24)
+export const strategyFingerprint = (wardrobeFp: string, researchId: string | null, b: Bundle, learnedHash = '') => createHash('sha256').update(JSON.stringify({ v: STRATEGY_VERSION, wardrobeFp, researchId, style: b.style ?? null, goals: b.goals ?? null, color: b.color ?? null, learnedHash })).digest('hex').slice(0, 24)

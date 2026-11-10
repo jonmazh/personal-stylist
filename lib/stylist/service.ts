@@ -1,6 +1,8 @@
 import { WardrobeError, type Sb } from '@/lib/wardrobe/service'
 import { prepareEngine } from '@/lib/outfits/generate-service'
 import { buildStrategy, strategyFingerprint, STRATEGY_VERSION } from './strategy'
+import { FeedbackInput, learn, type FeedbackRow } from './feedback'
+import { getSearchForDisplay } from '@/lib/shopping/catalog-service'
 import { latestTrends } from './trend-service'
 import { analyzeWardrobe, wardrobeFingerprint, WARDROBE_ANALYSIS_VERSION, type WardrobeAnalysis } from './wardrobe'
 
@@ -35,15 +37,17 @@ export async function styleStrategy(sb: Sb, uid: string, opts: { force?: boolean
   const prep = await prepareEngine(sb, uid)
   const wa = await wardrobeAnalysis(sb, uid, { prep })
   const trends = await latestTrends(sb).catch(() => null)
-  const fingerprint = strategyFingerprint(wa.fingerprint, trends?.research.id ?? null, prep.bundle)
+  const feedback = await listFeedback(sb)
+  const learned = learn(feedback as FeedbackRow[])
+  const fingerprint = strategyFingerprint(wa.fingerprint, trends?.research.id ?? null, prep.bundle, learned.hash)
   if (!opts.force) {
     const { data: last } = await sb.from('style_strategies').select('*').eq('fingerprint', fingerprint).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (last) return { strategy: last, opportunities: await opportunitiesOf(sb, last.id), wardrobe: wa, trends, cached: true }
+    if (last) return { strategy: last, opportunities: await opportunitiesOf(sb, last.id), wardrobe: wa, trends, learned, feedback, cached: true }
   }
-  const s = buildStrategy({ analysis: wa.analysis, signals: trends?.signals ?? [], bundle: prep.bundle, garments: prep.garments, evals: prep.evals })
+  const s = buildStrategy({ analysis: wa.analysis, signals: trends?.signals ?? [], bundle: prep.bundle, garments: prep.garments, evals: prep.evals, learned })
   const { data: row, error } = await sb.from('style_strategies').insert({
     user_id: uid, version: STRATEGY_VERSION, fingerprint, wardrobe_analysis_id: wa.id, trend_research_id: trends?.research.id ?? null, direction: s.direction,
-    experimentation: s.experimentation, no_purchase_needed: s.no_purchase_needed, rejected: s.rejected, meta: { market_level: s.market_level, opportunities: s.opportunities.length },
+    experimentation: s.experimentation, no_purchase_needed: s.no_purchase_needed, rejected: s.rejected, meta: { market_level: s.market_level, opportunities: s.opportunities.length, learned: s.learned },
   }).select('*').single()
   if (error) throw dbErr(error.message)
   if (s.opportunities.length) {
@@ -53,7 +57,7 @@ export async function styleStrategy(sb: Sb, uid: string, opts: { force?: boolean
     }))
     if (e2) throw dbErr(e2.message)
   }
-  return { strategy: row, opportunities: await opportunitiesOf(sb, row.id), wardrobe: wa, trends, cached: false }
+  return { strategy: row, opportunities: await opportunitiesOf(sb, row.id), wardrobe: wa, trends, learned, feedback, cached: false }
 }
 async function opportunitiesOf(sb: Sb, strategyId: string) {
   const { data } = await sb.from('style_opportunities').select('*').eq('strategy_id', strategyId).order('rank')
@@ -63,4 +67,35 @@ export async function setOpportunityStatus(sb: Sb, id: string, status: string) {
   if (!['propuesta', 'me_interesa', 'descartada'].includes(status)) throw new WardrobeError('Estado no válido')
   const { data } = await sb.from('style_opportunities').update({ status }).eq('id', id).select('id')
   if (!data?.length) throw new WardrobeError('Oportunidad no encontrada', 404)
+}
+
+// ── Valoraciones (2.0H) ──
+export async function listFeedback(sb: Sb) {
+  const { data, error } = await sb.from('style_feedback').select('*').order('created_at', { ascending: false }).limit(500)
+  if (error) { if (/schema cache|does not exist/i.test(error.message)) return []; throw dbErr(error.message) }
+  return data ?? []
+}
+export async function addFeedback(sb: Sb, uid: string, raw: unknown) {
+  const p = FeedbackInput.safeParse(raw)
+  if (!p.success) throw new WardrobeError(p.error.issues.map((i) => i.message).join('; '))
+  // Una valoración por objeto: la nueva sustituye a la anterior (cambiar de opinión no acumula señales)
+  await sb.from('style_feedback').delete().eq('target_kind', p.data.target_kind).eq('target_ref', p.data.target_ref)
+  const { data, error } = await sb.from('style_feedback').insert({ user_id: uid, ...p.data, note: p.data.note ?? null }).select('id').single()
+  if (error) throw dbErr(error.message)
+  return data.id as string
+}
+export async function deleteFeedback(sb: Sb, id: string) {
+  const { data } = await sb.from('style_feedback').delete().eq('id', id).select('id')
+  if (!data?.length) throw new WardrobeError('Valoración no encontrada', 404)
+}
+
+/** Selección de cada oportunidad: su última búsqueda, con precio, stock y tallas actualizados antes de mostrarla. */
+export async function curatedSelections(sb: Sb, uid: string, opportunityIds: string[]) {
+  if (!opportunityIds.length) return {}
+  const { data } = await sb.from('shopping_searches').select('id, opportunity_id, created_at').in('opportunity_id', opportunityIds).order('created_at', { ascending: false })
+  const latest = new Map<string, string>()
+  for (const r of data ?? []) if (!latest.has(r.opportunity_id)) latest.set(r.opportunity_id, r.id)
+  const out: Record<string, Awaited<ReturnType<typeof getSearchForDisplay>>> = {}
+  for (const [op, id] of latest) out[op] = await getSearchForDisplay(sb, uid, id)
+  return out
 }

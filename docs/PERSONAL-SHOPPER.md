@@ -266,7 +266,7 @@ Recomendados para ti (mayor compatibilidad personal), mejor aportación al armar
 
 ## Personal Shopper 2.0 · Estilista estratégico
 
-El Personal Shopper evoluciona de buscador de prendas compatibles a **estilista**: primero estudia tu armario, tu identidad y el mercado; después decide qué merece la pena incorporar y solo entonces busca productos. Fases: 2.0B diagnóstico del armario (hecho), 2.0C tendencias (Brave + Channel3), 2.0D oportunidades, 2.0E búsqueda desde oportunidades, 2.0F evaluación estratégica, 2.0G interfaz, 2.0H validación. Siempre se distingue **presencia comercial** (está en catálogos), **evidencia editorial** (fuentes con fecha) e **hipótesis estilística** (razonamiento del estilista).
+El Personal Shopper evoluciona de buscador de prendas compatibles a **estilista**: primero estudia tu armario, tu identidad y el mercado; después decide qué merece la pena incorporar y solo entonces busca productos. Fases: 2.0B diagnóstico del armario (hecho), 2.0C tendencias (Brave + Channel3), 2.0D oportunidades, 2.0E búsqueda desde oportunidades, 2.0F evaluación estratégica, 2.0G interfaz del estilista, 2.0H valoraciones, aprendizaje y validación. Siempre se distingue **presencia comercial** (está en catálogos), **evidencia editorial** (fuentes con fecha) e **hipótesis estilística** (razonamiento del estilista).
 
 ### 2.0B · Diagnóstico estratégico del armario (`lib/stylist/wardrobe.ts`)
 
@@ -339,6 +339,19 @@ En las búsquedas por oportunidad cada producto tiene dos niveles, **separados d
 - **Interfaz**: «Selección del estilista» (hasta 3, de marcas distintas, ordenada por valor estratégico), «Alternativas de otras marcas y precios» y «No los recomiendo para esta oportunidad». Cada tarjeta muestra el valor estratégico con sus componentes y, aparte, la compatibilidad personal (4C).
 
 Pruebas: `tests/strategic-evaluation.test.ts`, `tests/e2e/stylist-strategy.cjs` y `tests/e2e/opportunity-live.cjs` (Channel3 real: catálogo abierto, selección y alertas).
+
+### 2.0G · La experiencia del estilista (`/compras/estilista`)
+
+Una sola página, ordenada como trabajaría un estilista: **A · Dirección de estilo** (hacia dónde evoluciona tu imagen), **B · Tendencias para ti** (cada tendencia investigada dice si encaja contigo y en qué oportunidad la desarrollo, o por qué no es para ti), **C · Oportunidades** (agrupadas en evolución, expansión y exploración, con «Me interesa», «Descartar» y «Buscar productos»), **D · Selección del estilista** (por oportunidad, hasta 3 productos de marcas distintas con foto, tienda, tu talla disponible, valor estratégico y 4C, qué oportunidad desarrolla, por qué mejora tu estilo, con qué prendas tuyas combina, conjuntos nuevos, inconvenientes y enlace de compra; debajo, alternativas de otras marcas y precios), **E · Ideas descartadas y lo que he aprendido de ti**. La investigación de tendencias y el diagnóstico del armario quedan al final como detalle consultable.
+
+### 2.0H · Valoraciones y aprendizaje (`lib/stylist/feedback.ts`, migración `0025_style_feedback.sql`)
+
+Puedes valorar productos, oportunidades y tendencias con un motivo concreto: me gusta · no me gusta · me interesa, pero no compraría ahora · no representa mi estilo · me gusta la prenda, pero no ese corte · me gusta la tendencia, pero no ese producto · me parece demasiado arriesgado · ya tengo algo parecido (cada tipo solo ofrece los motivos que tienen sentido; la API rechaza los demás).
+
+- **Lo concreto se aplica a lo valorado, al momento**: un producto valorado en contra desaparece de la selección; una tendencia descartada deja de proponerse y de respaldar oportunidades; «no compraría ahora» baja la prioridad; «ya tengo algo parecido» convierte la oportunidad en «sin comprar».
+- **Generalizar exige al menos 2 valoraciones coherentes**: que un rasgo (p. ej. pierna amplia) no es tu estilo, que te gusta, que un corte concreto no te convence o que prefieres propuestas menos arriesgadas. Mientras tanto aparece como «pendiente de confirmar».
+- **Trazable y reversible**: cada aprendizaje indica cuántas valoraciones lo justifican; «Deshacer» borra la valoración y la estrategia se recalcula (la huella de la estrategia incluye lo aprendido). **El Style Blueprint no se modifica.**
+- Validación: `tests/stylist-acceptance.test.ts` (descubre una oportunidad no pedida y justificada; elige por valor estratégico entre alternativas reales; nunca sin talla; reglas de aprendizaje) y `tests/e2e/stylist-strategy.cjs` (interfaz completa, valoraciones, ocultación, deshacer y RLS); con productos reales, `tests/e2e/opportunity-live.cjs`.
 
 ## Channel3 (catálogo multimarca)
 
