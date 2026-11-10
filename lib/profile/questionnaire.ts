@@ -92,6 +92,9 @@ export const QUESTIONS: Question[] = [
 
   // ── a7 · Objetivos de imagen ───────────────────────────────────
   { id: 'image_words', area: 'a7', group: 'La imagen que buscas', label: 'Hasta tres palabras que quieres que piensen al verte', kind: 'multi', options: IMAGE_WORDS, max: 3, extracts: 'Objetivo visual en términos que el motor puede usar.', feeds: 'Objetivos; Identidad estética', store: { table: 'style_goals', column: 'image_words' } },
+  { id: 'experimentation', area: 'a7', group: 'La imagen que buscas', label: '¿Cuánto te apetece experimentar con tu estilo?', kind: 'single', options: ['Conservador', 'Abierto', 'Explorador'],
+    help: 'Conservador: mejorar lo que ya llevas. Abierto: probar siluetas, colores o materiales nuevos coherentes contigo. Explorador: propuestas más atrevidas. Orienta las propuestas del estilista; no prohíbe ninguna.',
+    extracts: 'Grado de experimentación aceptado.', feeds: 'Personal Shopper (prioridad de las oportunidades de estilo)', store: { table: 'style_goals', column: 'experimentation' } },
   ...GOALS.map((q, i): Question => ({
     id: `g${i}`, area: 'a7', group: 'En tus palabras', label: q, kind: 'textarea',
     extracts: 'Motivación y contexto en tus palabras.', feeds: 'Objetivos', store: { table: 'style_goals', column: 'answers', key: `g${i}` },

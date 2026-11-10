@@ -264,6 +264,25 @@ Recomendados para ti (mayor compatibilidad personal), mejor aportación al armar
 - `tests/e2e/personal-shopper.cjs` (tienda de prueba): dos perfiles con los mismos productos; el color saturado no gana y queda como no recomendado con motivo; entre dos pantalones parecidos gana el de corte adecuado aunque sea más caro; al cambiar el armario cambia la recomendación y la caché.
 - `tests/e2e/psi-live.cjs` (`PSI_LIVE=1`): dos perfiles opuestos con productos reales de Grimey y EME Studios.
 
+## Personal Shopper 2.0 · Estilista estratégico
+
+El Personal Shopper evoluciona de buscador de prendas compatibles a **estilista**: primero estudia tu armario, tu identidad y el mercado; después decide qué merece la pena incorporar y solo entonces busca productos. Fases: 2.0B diagnóstico del armario (hecho), 2.0C tendencias (Brave + Channel3), 2.0D oportunidades, 2.0E búsqueda desde oportunidades, 2.0F evaluación estratégica, 2.0G interfaz, 2.0H validación. Siempre se distingue **presencia comercial** (está en catálogos), **evidencia editorial** (fuentes con fecha) e **hipótesis estilística** (razonamiento del estilista).
+
+### 2.0B · Diagnóstico estratégico del armario (`lib/stylist/wardrobe.ts`)
+
+Lee el armario como conjunto, reutilizando Style DNA, la auditoría, el Outfit Engine y Color Intelligence (no duplica ninguno). Es determinista y cada hallazgo lleva diagnóstico, evidencias (prendas y datos), datos usados, lo que falta y confianza. Son diagnósticos e hipótesis, no compras ni tendencias.
+
+- **Estética**: tus prendas traducidas a rasgos del catálogo de estilos → qué estilos transmite tu armario frente a tu identidad (coherencia en %), rasgos de tu identidad que faltan y prendas con rasgos que rechazas.
+- **Siluetas**: distribución de cortes y siluetas. Una carencia no es una categoría ausente: con 10 pantalones casi todos rectos, si tu identidad usa el pantalón amplio y tu silueta corporal lo admite (sin rechazarlo), lo detecta como «silueta que falta».
+- **Proporciones**: el Outfit Engine forma los conjuntos válidos de tu armario; si la mayoría repite la misma relación arriba-abajo, tus conjuntos se parecen demasiado.
+- **Color**: paleta, peso de los neutros, acentos que te favorecen y encajan con tu identidad, y colores poco favorables cerca de la cara (con colorimetría).
+- **Formalidad y ocasiones** (auditoría), **texturas** (con material conocido), **redundancias** (auditoría), **potencial infrautilizado** (registro de uso + combinaciones), **prendas aisladas** (sin ningún conjunto válido) y **lo que ya funciona**.
+- **Grado de experimentación** (Objetivos de imagen: conservador, abierto, explorador; editable en tu perfil): orientará la prioridad de las oportunidades, sin prohibir ninguna.
+
+Persistencia: `wardrobe_analyses` (migración 0021; versionado, RLS). Se reutiliza mientras no cambie su huella (prendas, identidad, colorimetría, medidas, ajuste, estilo de vida, objetivos, Fit Assessments y uso). Página: **Personal Shopper → Estilista** (`/compras/estilista`); API `GET/POST /api/stylist/wardrobe`.
+
+Pruebas: `tests/stylist-wardrobe.test.ts` y `tests/e2e/stylist-wardrobe.cjs` (10 pantalones rectos → silueta que falta; proporciones repetidas; paleta neutra; aislamiento, redundancias e infrautilizadas; límites sin identidad ni colorimetría; huella; pregunta de experimentación; caché y RLS).
+
 ## Channel3 (catálogo multimarca)
 
 Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus datos; **no decide qué te favorece** (lo decide el motor 4C) y su relevancia no se usa como puntuación. Conector: `lib/shopping/catalog/channel3.ts` (cumple `ProductSource`). Documentación oficial: https://channel3.ai/docs; esquemas comprobados con el SDK oficial `@channel3/sdk` 4.9.0 (no se usa como dependencia: el conector llama a la API directamente y valida cada respuesta con Zod).
