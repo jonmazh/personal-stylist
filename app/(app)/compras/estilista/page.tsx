@@ -3,7 +3,9 @@ import { getUser } from '@/lib/supabase/server'
 import { wardrobeAnalysis } from '@/lib/stylist/service'
 import { FINDING_LABEL, type StrategicFinding } from '@/lib/stylist/wardrobe'
 import { PendingButton } from '@/components/outfits/pending-button'
-import { refreshAnalysisAction } from './actions'
+import { refreshAnalysisAction, researchTrendsAction } from './actions'
+import { latestTrends } from '@/lib/stylist/trend-service'
+import { DIMENSIONS, KINDS, STAGES } from '@/lib/stylist/trends'
 
 const SIG: Record<string, string> = { Amplia: 'holgada', Ajustada: 'ajustada', Regular: 'regular', Slim: 'slim', Recto: 'recto', Wide: 'amplio', Tapered: 'tapered' }
 const sig = (s: string) => { const [a, z] = s.split('|'); return `arriba ${SIG[a] ?? a} · pantalón ${SIG[z] ?? z}` }
@@ -15,6 +17,7 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
   let res: Awaited<ReturnType<typeof wardrobeAnalysis>> | null = null, err: string | null = null
   try { res = await wardrobeAnalysis(user.supabase, user.id) } catch (e) { err = (e as Error).message }
   const a = res?.analysis
+  const trends = await latestTrends(user.supabase).catch(() => null)
   const improve = (a?.findings ?? []).filter((f) => f.kind !== 'strength')
   const strengths = (a?.findings ?? []).filter((f) => f.kind === 'strength')
   return (
@@ -50,7 +53,17 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
         </section>
         {a.limitations.length > 0 && <section className="osec"><h2>Límites de este diagnóstico</h2><ul className="small">{a.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul></section>}
         <form action={refreshAnalysisAction} className="btns"><PendingButton className="btn small" label="Recalcular el diagnóstico" pending="Analizando tu armario…" /></form>
-        <p className="m small">Próximamente: tendencias de moda masculina con fuentes, oportunidades de estilo y una selección de productos reales para cada una.</p>
+      </>)}
+      <section className="osec" id="tendencias">
+        <h2>Tendencias de moda masculina</h2>
+        <p className="m small">Investigo direcciones de la moda masculina (siluetas, proporciones, color, materiales, lavados, calzado, prendas exteriores, capas, estéticas) en fuentes editoriales. La IA solo resume lo que dicen esas fuentes y el sistema valida cada conclusión: una sola fuente es una propuesta, no una tendencia, y estar en catálogos tampoco lo es. Si te encajan o no lo decidiré después, al cruzarlas con tu perfil.</p>
+        {sp.trends && <p className="note" role="status">Investigación actualizada.</p>}
+        {!trends && <p className="verdict">Aún no he investigado las tendencias de esta semana.</p>}
+        {trends && <TrendsView t={trends} />}
+        <form action={researchTrendsAction} className="btns"><PendingButton className="btn small" label={trends ? 'Investigar de nuevo' : 'Investigar tendencias'} pending="Investigando fuentes editoriales…" /></form>
+      </section>
+      {a && (<>
+        <p className="m small">Próximamente: oportunidades de estilo que cruzan tu armario, tu perfil y estas tendencias, y una selección de productos reales para cada una.</p>
       </>)}
     </main>
   )
@@ -67,4 +80,28 @@ function FindingCard({ f }: { f: StrategicFinding }) {
       {f.missing.length > 0 && <p className="m small">Falta: {f.missing.join(', ').toLowerCase()}</p>}
     </div>
   )
+}
+
+const MODE: Record<string, string> = { editorial_comercial: 'Evidencia editorial (Brave) y presencia comercial (Channel3)', editorial: 'Evidencia editorial (Brave)', comercial: 'Solo presencia comercial (Channel3): sin investigación editorial', sin_fuentes: 'Sin fuentes configuradas' }
+function TrendsView({ t }: { t: { research: Record<string, any>; signals: Record<string, any>[] } }) {
+  const r = t.research
+  const trends = t.signals.filter((s) => s.kind === 'tendencia_editorial'), isolated = t.signals.filter((s) => s.kind === 'propuesta_editorial')
+  const card = (s: Record<string, any>) => (
+    <div className="hit" key={s.id}>
+      <span className="st">{DIMENSIONS.find((d) => d.id === s.dimension)?.label} · {STAGES.find((x) => x.id === s.stage)?.label} · confianza {s.confidence}</span>
+      <h3>{s.name}</h3>
+      <p className="small">{s.description}</p>
+      <p className="m small">Evidencia editorial: {(s.confidence_reasons as string[]).join(' · ')}{s.validity ? ` · ${s.validity}` : ''}</p>
+      {(s.brands as string[]).length > 0 && <p className="m small">Marcas citadas por las fuentes: {(s.brands as string[]).join(', ')}</p>}
+      {s.presence && <p className="m small">Presencia comercial en España (Channel3): {s.presence.products} productos de {s.presence.brands} marcas en {s.presence.websites} tiendas. Es un dato de mercado, no prueba que sea tendencia.</p>}
+      {(s.validation as string[]).length > 0 && <p className="m small">Validación: {(s.validation as string[]).join(' ')}</p>}
+      <div className="btns"><a className="btn small" href={`/compras/estilista/tendencias/${s.id}`}>Ver fuentes</a></div>
+    </div>)
+  return (<>
+    <p className="m small">{MODE[r.mode]} · temporada {r.season} · {new Date(r.created_at).toLocaleString('es-ES')} · {r.stats?.evidence ?? 0} fuentes editoriales válidas de {r.stats?.retrieved ?? 0} resultados{r.stats?.brave?.requests ? ` · ${r.stats.brave.requests} consultas a Brave` : ''}{r.stats?.channel3?.credits ? ` · ${r.stats.channel3.credits} créditos de Channel3` : ''}</p>
+    {trends.length > 0 && <><h3>{KINDS[0].label}</h3><div className="combos">{trends.map(card)}</div></>}
+    {isolated.length > 0 && <details className="howto"><summary>{KINDS[1].label} ({isolated.length})</summary><div className="combos">{isolated.map(card)}</div></details>}
+    {(r.hypotheses as Record<string, any>[]).length > 0 && <><h3>Hipótesis de tu armario en el mercado</h3><ul className="small">{(r.hypotheses as Record<string, any>[]).map((h) => <li key={h.key}>{h.title}: {h.presence.products} productos de {h.presence.brands} marcas en España (Channel3). Hipótesis estilística con presencia comercial, no una tendencia.</li>)}</ul></>}
+    {(r.limitations as string[]).length > 0 && <ul className="m small">{(r.limitations as string[]).map((l, i) => <li key={i}>{l}</li>)}</ul>}
+  </>)
 }

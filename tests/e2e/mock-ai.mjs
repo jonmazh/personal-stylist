@@ -37,6 +37,21 @@ http.createServer((req, res) => {
       const negative = /no me gust|odio|no soporto|nunca me/.test(msg)
       return negative ? { likes: empty, dislikes: { garment_ids, elements, colors, cuts: [] } } : { likes: { garment_ids, elements, colors, cuts }, dislikes: empty }
     }
+    // Analista de tendencias (2.0C): agrupa las evidencias por palabras clave. Incluye trampas para la validación por
+    // código: una cita a una evidencia inexistente, una marca que no aparece y una cifra de ventas.
+    if (sys.includes('ANALISTA DE TENDENCIAS')) {
+      const ev = [...utext.matchAll(/\[(E\d+)\] ([^\n]*)\nTítulo: ([^\n]*)\nFragmentos: ([^\n]*)/g)].map((m) => ({ id: m[1], text: `${m[3]} ${m[4]}`.toLowerCase() }))
+      const ids = (re) => ev.filter((e) => re.test(e.text)).map((e) => e.id)
+      const signals = []
+      const wide = ids(/wide|baggy|relaxed|loose|amplio/)
+      if (wide.length) signals.push({ name: 'Pantalón amplio con caída', dimension: 'silhouette', description: 'Pantalones de pierna amplia y caída fluida, llevados con prendas superiores más limpias. Las ventas crecieron un 40 % este año.', evidence_ids: [...wide, 'E99'], brands: ['Auralee', 'Gucci'], season_mentioned: 'autumn winter', decline_evidence_ids: [], search_query_en: "men's wide leg trousers" })
+      const suede = ids(/suede|ante/)
+      if (suede.length) signals.push({ name: 'Ante en prendas exteriores', dimension: 'material', description: 'Chaquetas y sobrecamisas de ante como pieza de textura sobre bases neutras.', evidence_ids: suede, brands: [], season_mentioned: '', decline_evidence_ids: [], search_query_en: "men's suede jacket" })
+      const brown = ids(/brown|chocolate|marr/)
+      if (brown.length) signals.push({ name: 'Marrón chocolate como neutro', dimension: 'color', description: 'El marrón chocolate sustituye al negro como base de los conjuntos.', evidence_ids: brown, brands: [], season_mentioned: '', decline_evidence_ids: [], search_query_en: "menswear chocolate brown" })
+      signals.push({ name: 'Sin fuentes', dimension: 'garment', description: 'Una señal que no cita ninguna evidencia real.', evidence_ids: ['E99'], brands: [], season_mentioned: '', decline_evidence_ids: [], search_query_en: 'x' })
+      return reply({ signals })
+    }
     if (sys.includes('EXTRACTOR DE GUSTOS')) {
       const m = (utext.match(/MENSAJE: \"\"\"([\s\S]*?)\"\"\"/)?.[1] ?? '').toLowerCase()
       return reply(tasteFrom(m, utext))
