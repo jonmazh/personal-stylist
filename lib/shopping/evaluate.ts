@@ -113,7 +113,7 @@ export function evaluatePurchase(p: G, env: EvalEnv): PurchaseEvaluation {
     else if (ctx.color.confidence === 'baja') color.reasons.push('Tu colorimetría es una estimación sin validar: tómalo como orientación.')
     if (need?.spec?.colors?.length && need.spec.colors.includes(p.primary_color)) color.reasons.push(`Es el color que pediste (${lc(p.primary_color)}).`)
     else if (need?.spec?.colors?.length) color.reasons.push(`Pediste ${need.spec.colors.map(lc).join(' o ')}; este es ${lc(p.primary_color)}${ca.label === 'favorable-poco-representado' ? ', que además te favorece y te falta' : ''}.`)
-    if (p.field_sources?.primary_color && ['ai', 'derived', 'search'].includes(p.field_sources.primary_color.source)) { color.confidence = 'baja'; color.missing.push('Color confirmado por la tienda o por ti') }
+    if (p.field_sources?.primary_color && ['ai', 'derived', 'search', 'photo'].includes(p.field_sources.primary_color.source)) { color.confidence = 'baja'; color.missing.push('Color confirmado por la tienda o por ti') }
   }
   if (ctx.color.contrast) color.reasons.push(`Contraste personal ${lc(ctx.color.contrast)}${ca && ctx.color.contrast === 'Alto' && ca.personal.verdict === 'favorece' ? ': admite colores definidos' : ''}.`)
 

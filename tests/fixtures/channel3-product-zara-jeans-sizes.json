@@ -1,0 +1,236 @@
+{
+ "id": "mbFrDuf",
+ "title": "Distressed Straight Jeans",
+ "description": "Mid-blue straight-fit jeans for men, featuring a mid-rise waist and rigid cotton denim fabric. The design includes a washed effect with heavy distressed detailing and rips at the knees, five pockets, a front zip fly, and button fastening.",
+ "brands": [
+  {
+   "id": "pjbn",
+   "name": "Zara"
+  }
+ ],
+ "images": [
+  {
+   "url": "https://cdn.trychannel3.com/6c6cdad1-ffba-42cb-badc-30a974843a5c?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": true,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing white shirt and blue ripped jeans standing against a light wall."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/1064d52c-40d4-4ed7-91ac-21e2fa5c19d3?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing blue ripped jeans, belt, and white shirt, showing waist."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/2ff871b4-0cee-42ac-ac6a-a6bf64860f5f?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Back view of a man wearing blue ripped jeans and a white shirt."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/32f69df0-6c1e-409e-8621-1b21fc062e70?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Man in profile wearing white shirt and blue ripped jeans."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/43928466-7db8-42d0-a8ec-3f27680f17d8?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/43928466-7db8-42d0-a8ec-3f27680f17d8?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing blue ripped jeans and a white shirt, front view."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/1c1a3f40-97db-4900-96d3-30ad05aae33c?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/1c1a3f40-97db-4900-96d3-30ad05aae33c?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "hero",
+   "alt_text": "Front view of straight-fit blue jeans with distressing."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/4d9a86b6-0499-4cfc-bca6-f1ed88af14eb?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/4d9a86b6-0499-4cfc-bca6-f1ed88af14eb?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "flat_lay",
+   "alt_text": "Flat lay view of the back of straight-fit blue jeans."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/ffb9eaa6-9946-4156-8770-4afb5607817a?aid=01M72S8EE97DH6TKRSMYZTT4MX&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "detail",
+   "alt_text": "Close-up detail of the waistband and pocket of blue denim jeans."
+  }
+ ],
+ "category": {
+  "slug": "jeans-3",
+  "title": "Jeans",
+  "path": [
+   {
+    "slug": "apparel-accessories",
+    "title": "Apparel & Accessories"
+   },
+   {
+    "slug": "clothing",
+    "title": "Clothing"
+   },
+   {
+    "slug": "pants",
+    "title": "Pants"
+   },
+   {
+    "slug": "jeans-3",
+    "title": "Jeans"
+   }
+  ],
+  "has_children": false
+ },
+ "gender": "male",
+ "age": "adult",
+ "materials": [
+  "100% cotton"
+ ],
+ "key_features": [
+  "Straight leg from hip to ankle",
+  "Mid-rise",
+  "Rigid fabric",
+  "Five pockets",
+  "Washed effect with distressed detailing",
+  "Front zip fly and button fastening"
+ ],
+ "colors": [
+  {
+   "hex": "#969ca0",
+   "percentage": 0.2756
+  },
+  {
+   "hex": "#4c555e",
+   "percentage": 0.2539
+  },
+  {
+   "hex": "#1e262c",
+   "percentage": 0.2489
+  },
+  {
+   "hex": "#bbc1c6",
+   "percentage": 0.1154
+  },
+  {
+   "hex": "#717a83",
+   "percentage": 0.1061
+  }
+ ],
+ "offers": [
+  {
+   "url": "https://buy.trychannel3.com/mbFrDuf-Mnrl-ZbZ6hs?o=01M32TXX6RR6E5SYQJY4VA40QP&aid=01M72S8EE97DH6TKRSMYZTT4MX",
+   "domain": "zara.com",
+   "price": {
+    "price": 29.95,
+    "compare_at_price": null,
+    "currency": "EUR"
+   },
+   "availability": "InStock",
+   "condition": "new",
+   "max_commission_rate": 0.0,
+   "dimensions": null
+  }
+ ],
+ "variants": {
+  "options": [
+   {
+    "name": "Talla",
+    "values": [
+     {
+      "label": "36",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "38",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "40",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "42",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "44",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "46",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "48",
+      "exists": true,
+      "available": "OutOfStock",
+      "thumbnail_url": null,
+      "product_id": null
+     }
+    ]
+   }
+  ],
+  "selected": []
+ },
+ "structured_attributes": {
+  "distressing-level": [
+   "Heavy"
+  ],
+  "waistband-style": [
+   "Belt loops"
+  ],
+  "front-style": [
+   "Flat front"
+  ],
+  "pattern": [
+   "Solid"
+  ],
+  "waist-rise": [
+   "Mid"
+  ],
+  "fit": [
+   "Straight leg"
+  ],
+  "distressing-style": [
+   "Ripped",
+   "Knee distressed"
+  ],
+  "leg-cuff-style": [
+   "Straight hem"
+  ],
+  "fabric": [
+   "Cotton",
+   "Denim"
+  ],
+  "pants-length-type": [
+   "Long"
+  ]
+ },
+ "ratings": null
+}

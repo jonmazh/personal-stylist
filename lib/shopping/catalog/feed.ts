@@ -15,7 +15,7 @@ const KEYS: Record<keyof RawProduct | 'group' | 'size' | 'sale_price', string[]>
   availability: ['availability', 'stock_status', 'in_stock', 'disponibilidad'], brand: ['brand', 'brand_name', 'marca'],
   color: ['color', 'colour'], material: ['material', 'composition', 'composicion', 'fabric'], category_text: ['product_type', 'merchant_category', 'category_name', 'category', 'categoria', 'google_product_category'],
   external_id: ['id', 'aw_product_id', 'merchant_product_id', 'sku', 'gtin'], group: ['item_group_id', 'parent_product_id', 'group_id'], size: ['size', 'talla'],
-  variants: [], retailer_name: ['merchant_name', 'store', 'tienda'],
+  variants: [], retailer_name: ['merchant_name', 'store', 'tienda'], gender: ['gender', 'genero', 'sexo'], age: ['age_group', 'edad'],
 }
 const pick = (r: Row, k: keyof typeof KEYS) => { for (const c of KEYS[k]) { const v = r[c]; if (v != null && String(v).trim() !== '') return String(v).trim() } return null }
 
@@ -70,7 +70,7 @@ export function parseFeed(text: string, format?: string | null): RawProduct[] {
     const p: RawProduct = {
       name, description: pick(r, 'description'), url: pick(r, 'url'), images: [pick(r, 'images')].filter(Boolean) as string[], price: sale ?? pick(r, 'price'),
       currency: pick(r, 'currency'), availability: availability === '1' || availability === 'yes' ? 'in stock' : availability === '0' || availability === 'no' ? 'out of stock' : availability,
-      brand: pick(r, 'brand'), color: pick(r, 'color'), material: pick(r, 'material'), category_text: pick(r, 'category_text'), external_id: pick(r, 'external_id'), retailer_name: pick(r, 'retailer_name'),
+      brand: pick(r, 'brand'), gender: pick(r, 'gender'), age: pick(r, 'age'), color: pick(r, 'color'), material: pick(r, 'material'), category_text: pick(r, 'category_text'), external_id: pick(r, 'external_id'), retailer_name: pick(r, 'retailer_name'),
       variants: size ? [{ size, color: pick(r, 'color'), sku: pick(r, 'external_id'), availability: availability ?? null, price: sale ?? pick(r, 'price') }] : [],
     }
     const g = pick(r, 'group')

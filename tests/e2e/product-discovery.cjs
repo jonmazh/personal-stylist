@@ -27,6 +27,7 @@ const env = Object.fromEntries(fs.readFileSync('.env.local', 'utf8').split('\n')
   const pid = () => p.url().split('?')[0].split('/').pop()
   await fetch(`${STORE}/admin/price?v=89.00`)
   await signup(p, U); log('registro y login (iPhone 13)')
+  await p.goto(U + '/profile/identidad'); await p.fill('input[name=sizes]', 'pantalón 48'); await p.click('main button:has-text("Guardar")'); await p.waitForURL(/saved=1/)
 
   const need = (await A.post('/api/shopping/needs', { title: 'Pantalón de vestir gris', type: 'need', spec: { category: 'bottom', subcategory: 'trousers', colors: ['Gris'], cut: 'Recto', seasons: ['otono', 'invierno'], occasions: ['trabajo'] }, price_max: 100 })).id
 

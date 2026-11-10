@@ -10,6 +10,8 @@ export interface RawProduct {
   name?: string | null; brand?: string | null; url?: string | null; external_id?: string | null; description?: string | null
   category_text?: string | null; color?: string | null; material?: string | null; price?: unknown; currency?: string | null
   availability?: string | null; images?: string[]; variants?: RawVariant[]; retailer_name?: string | null
+  /** Género y edad declarados por la fuente (p. ej. columnas gender / age_group de un feed): datos, no deducciones */
+  gender?: string | null; age?: string | null
 }
 export interface RawVariant { size?: string | null; color?: string | null; sku?: string | null; availability?: string | null; price?: unknown }
 export interface Variant { size: string | null; color: string | null; sku: string | null; availability: Availability; price: number | null }
@@ -183,7 +185,7 @@ export function normalizeProduct(raw: RawProduct, kind: SourceKind, origin: Fiel
     currency: parseCurrency(raw.currency, typeof raw.price === 'string' ? raw.price : null) ?? 'EUR',
     availability_status: set('availability_status', mapAvailability(raw.availability)),
     images: (raw.images ?? []).filter((x) => typeof x === 'string' && /^https?:\/\//.test(x)).slice(0, 8).map((u2) => ({ url: u2, origin: 'store' as const, permission: 'link_only' as const })),
-    variants, field_sources: fs, source_kind: kind, raw_attributes: {},
+    variants, field_sources: fs, source_kind: kind, raw_attributes: { ...(raw.gender ? { gender: String(raw.gender).toLowerCase().slice(0, 20) } : {}), ...(raw.age ? { age: String(raw.age).toLowerCase().slice(0, 20) } : {}) },
   }
   const shape = detectCut(name, description, kindOf.category)
   if (shape.cut) { p.cut = shape.cut; fs.cut = { source: 'derived', at } }

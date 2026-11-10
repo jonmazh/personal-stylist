@@ -194,6 +194,8 @@ export function normalizeUcpProduct(p: J, retailer: { name: string } | null, now
     previous_price: listMax && priceMin != null && listMax > priceMin ? { amount: listMax, currency: n.currency, source: 'store' } : null,
     options: ((p.options ?? []) as J[]).map((o) => ({ name: o.name, values: ((o.values ?? []) as J[]).map((x) => ({ label: x.label, available: x.available ?? null })) })),
     collections: ((p.collections ?? []) as J[]).map((c) => c.title).filter(Boolean),
+    // Etiquetas de la tienda (p. ej. «hombre», «mujer», «FOR EVERYONE»): se usan para clasificar el género, no el nombre
+    tags: ((p.tags ?? []) as string[]).filter((t) => typeof t === 'string').slice(0, 40),
   }
   return n
 }

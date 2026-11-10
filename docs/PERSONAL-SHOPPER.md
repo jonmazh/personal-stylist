@@ -289,6 +289,22 @@ Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus
 
 **Pruebas.** `tests/channel3.test.ts` (respuestas reales guardadas en `tests/fixtures/channel3-*.json`: configuración, autenticación, 429, tiempo agotado, mercados, consultas, normalización, deduplicación y evaluación 4C con dos perfiles, cambio de corte y de armario). `tests/e2e/channel3-live.cjs` (`CHANNEL3_LIVE=1`, API real: Bershka y Pull&Bear por separado, Zara, dos perfiles, interfaz, enlace de oferta, verificación, caché con refresco y que la clave no llegue al navegador).
 
+## Tallas, moda masculina y disponibilidad por talla
+
+Condiciones **previas** al motor 4C (no son un criterio más y no cambian sus pesos 25/20/15/20/10/10 ni el WVA). Archivos: `lib/shopping/intelligence/sizes.ts`, `gender.ts` y `eligibility.ts`.
+
+**Moda masculina.** A Channel3 se le pide `gender: male` y `age: ["adult"]`, y después cada producto se valida con datos estructurados: el género y la edad de Channel3 o del feed (`gender`, `age_group`), la ruta de categoría y las etiquetas o colecciones de la tienda (UCP). Nunca el nombre comercial. Mujer o infantil → excluido. Unisex → solo apto en prendas de tallaje neutro (camisetas y polos, punto y sudaderas, calzado y complementos sin talla); en el resto, ambiguo. Sin datos → ambiguo: visible, nunca recomendado.
+
+**PersonalizedSizeResolver.** Por grupo de tallaje (camisetas, camisas, punto, pantalones, vaqueros, chaquetas, sastrería, calzado) decide tu talla principal, las alternativas (solo con datos que las respalden), las descartadas, la confianza, los datos usados, el motivo y lo que falta. Fuentes: tus tallas habituales (perfil, «camisa M, pantalón 42, calzado 43», también por marca), la talla que te funciona en prendas de tu armario, Fit Assessments confirmados (≥7 respalda; <5 descarta esa talla), prendas marcadas como referencia de medidas y, por marca, lo que ya tienes de esa marca. Las medidas corporales se registran, pero no se convierten en talla: no hay guías oficiales de las marcas (Channel3 no las publica y las de Inditex no se pueden extraer). Su huella forma parte de la caché: cambiar tallas, ajuste o un Fit Assessment repite la búsqueda.
+
+**Normalización de tallas.** Cada talla conserva la etiqueta original, su sistema (letras, numérica EU, cintura en pulgadas, calzado EU/UK/US, cuello) y la confianza de la lectura; el rango y el resto de tallas del producto distinguen 36-56 EU de 26-36 en pulgadas. **No hay conversiones entre sistemas ni se da por hecho que una M de una marca sea la M de otra**: misma marca con datos tuyos → confianza alta; otra marca, misma talla y sistema → confianza media o baja, y se indica.
+
+**Disponibilidad por talla.** Channel3 no trae el stock por talla en la búsqueda (`variants.options[].values[].available` vacío); su ficha `GET /v1/products/{id}` (gratis) sí, por talla, para el color seleccionado (`variants.selected`) y el país pedido. Antes de evaluar se pide la ficha de cada candidato. Un producto solo se recomienda si hay una variante en tu talla con `InStock`, comprobada hace menos de 60 min (UCP 60 min; feed: última sincronización, máx. 24 h) y en el mercado español. Política: talla compatible y stock confirmado → recomendable; stock desconocido, antiguo o de otro mercado → pendiente (se evalúa, nunca «compra recomendada» ni grupos principales); sin tu talla o agotado en todas tus tallas → excluido; producto que no es de hombre → excluido. Nunca se deduce stock de que aparezca, tenga precio o exista una variante.
+
+**En Channel3** se envían además tus tallas como prefiltro (`attributes.size` / `shoe-size`, valores canónicos sin sistema) **solo en tu mercado**; fuera de él un «42» no significa lo mismo y no se filtra. La validación es siempre local. No se envían medidas, fotos ni el perfil.
+
+**Pruebas.** `tests/sizes.test.ts` (normalizador, tallas por categoría, equivalencias, agotado en tu talla, talla incompatible, stock desconocido/antiguo/de otro mercado, mujer/infantil/unisex, prefiltro de Channel3, invalidación de caché, pesos y WVA intactos, Outfit Engine con IDs reales), con fichas reales de Zara España; `tests/e2e/personal-shopper.cjs` (feed con una fila por talla, producto de mujer, infantil y agotado en tu talla) y `tests/e2e/channel3-live.cjs`.
+
 ## Product Analyzer y Purchase Evaluator (4C)
 
 ### Product Analyzer (`product-analyst@1`, esquema `product-analysis@1`)
