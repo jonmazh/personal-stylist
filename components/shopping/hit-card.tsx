@@ -17,14 +17,15 @@ export function HitCard({ h, index, searchId, compact = false }: { h: Row; index
   const el = h.eligibility as Row | null
   return (
     <div className={`hit ${e ? `v-${e.verdict}` : ''}`}>
-      <span className="st">{h.retailer?.name ?? h.brand ?? 'Tienda'} · {h.source_label ?? label(SOURCE_KINDS, h.source_kind)}</span>
+      <span className="st">{h.retailer?.name ?? h.raw_attributes?.domain ?? h.brand ?? 'Tienda'} · {h.source_label ?? label(SOURCE_KINDS, h.source_kind)}</span>
       <h3>{h.product_name}</h3>
       {c3 && <span className="m small">{c3.foreign_market ? `Mercado: ${c3.market_name} · precio de otro mercado, no verificado para España` : `Mercado: ${c3.market_name}`} · {c3.refresh === 'failed' ? 'no se pudo actualizar: precio sin verificar' : c3.refresh === 'gone' ? 'ya no está en el catálogo' : `precio comprobado el ${new Date(c3.fetched_at).toLocaleString('es-ES')}`}</span>}
       <span className="small">{fmt(h.current_price, h.currency)}{h.raw_attributes?.previous_price ? ` (antes ${fmt(h.raw_attributes.previous_price.amount, h.currency)})` : ''}{h.availability_status && h.availability_status !== 'unknown' ? ` · ${label(AVAILABILITY, h.availability_status)}` : ''}{h.confirmed_composition ? ` · ${h.confirmed_composition}` : ''}</span>
       {h.opportunity_match && <p className="m small">{h.opportunity_match.fit === 'materializa' ? 'Materializa la oportunidad' : 'Encaja con la oportunidad, con datos por confirmar'}: {[...h.opportunity_match.matches, ...h.opportunity_match.unknown].join(' · ').toLowerCase()}{h.facets?.length ? ` · encontrado en: ${(h.facets as string[]).map((f: string) => f.replace(/^color:/, '').replace(/^material:/, '').replace('base', 'propuesta base').replace('sinonimo', 'variante')).join(', ').toLowerCase()}` : ''}</p>}
+      {h.strategic && <StrategicLine s={h.strategic as Row} />}
       {el && <SizeLine el={el} />}
       {e ? (<>
-        <p className="score-line"><b>{e.score}/100</b> · {v?.label} · confianza {e.confidence} ({e.confidence_score}/100) · datos {Math.round(e.completeness * 100)} %</p>
+        <p className="score-line">{h.strategic ? 'Compatibilidad personal (4C): ' : ''}<b>{e.score}/100</b> · {v?.label} · confianza {e.confidence} ({e.confidence_score}/100) · datos {Math.round(e.completeness * 100)} %</p>
         <p className="small">{e.verdict_text}</p>
         {!compact && (<>
           <div className="minibars">{(e.criteria as Row[]).map((c) => (
@@ -58,5 +59,17 @@ function SizeLine({ el }: { el: Row }) {
   return (<>
     <p className="small"><b>Talla disponible: {s.size.original}{SYS[s.size.system] ?? ''}</b> · {s.size.role === 'principal' ? 'tu talla principal' : 'talla alternativa'}{s.size.also?.length ? ` (también ${s.size.also.join(', ')})` : ''} · disponibilidad confirmada{s.checked_at ? ` el ${new Date(s.checked_at).toLocaleString('es-ES')}` : ''}{s.selected_color ? ` (color ${s.selected_color})` : ''}</p>
     <p className="m small">Ajuste: confianza {s.fit_confidence}{s.basis === 'estimada' ? ' (estimada)' : ' (respaldada por tus datos)'}{s.equivalence ? ` · ${s.equivalence.source}` : ''}. Una talla disponible no garantiza el ajuste.</p>
+  </>)
+}
+
+const DEC: Record<string, string> = { eleccion: 'Elección del estilista', buena_opcion: 'Buena opción', con_reservas: 'Con reservas', no_recomendado: 'No lo recomiendo', no_elegible: 'No disponible para ti' }
+/** Valor estratégico (2.0F), separado del 4C: decisión, componentes, alertas y nivel de precio. */
+function StrategicLine({ s }: { s: Row }) {
+  return (<>
+    <p className="score-line"><b>Valor estratégico {s.value ?? '—'}/100</b> · {DEC[s.decision]}{s.price_tier ? ` · precio ${s.price_tier}` : ''}</p>
+    <p className="small">{s.decision_text}</p>
+    {(s.flags as string[]).length > 0 && <p className="small"><b>Alertas:</b> {(s.flags as string[]).join(' · ')}</p>}
+    <div className="minibars">{(s.components as Row[]).map((c) => <span key={c.key} title={(c.reasons as string[]).join(' · ')}><i style={{ width: `${Math.round((c.value ?? 0.5) * 100)}%` }} className={c.value == null ? 'unknown' : ''} />{c.label} {c.value == null ? 'sin datos' : `${Math.round(c.value * 100)}`}</span>)}</div>
+    {(s.components as Row[]).filter((c) => c.reasons.length && c.value != null).slice(0, 2).map((c) => <p key={c.key} className="m small">{c.label}: {(c.reasons as string[]).join(' · ')}</p>)}
   </>)
 }

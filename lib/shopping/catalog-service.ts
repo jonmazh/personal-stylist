@@ -14,7 +14,8 @@ import { Channel3Error, Channel3Meter, channel3Config, channel3Label, forEvaluat
 import { buildShopperContext } from './intelligence/context'
 import { discoveryQueries } from './intelligence/discovery'
 import { rankHits } from './intelligence/rank'
-import { DISCOVERY_C3_BUDGET, diversify, facetQuery, matchOpportunity, opportunityFacets } from '@/lib/stylist/discovery'
+import { median, rankStrategic, strategicEvaluation, STRATEGIC_VERSION, type StrategicContext } from '@/lib/stylist/evaluation'
+import { DISCOVERY_C3_BUDGET, diversify, facetQuery, generalColors, matchOpportunity, opportunityFacets } from '@/lib/stylist/discovery'
 import { suggestColors } from './intelligence/color'
 import { channel3SizeFilter, resolveSizes, sizeGroupOf, type SizeContext } from './intelligence/sizes'
 import { ageOut, eligibilityOf, gateVerdict, GATE_VERSION } from './intelligence/eligibility'
@@ -105,7 +106,7 @@ export async function syncSource(sb: Sb, uid: string, id: string, uploaded?: str
 
 // ── Búsqueda ──
 async function prefsOf(sb: Sb) { const { data } = await sb.from('shopping_preferences').select('preferred_retailers, excluded_retailers').maybeSingle(); return data }
-async function buildSources(sb: Sb, retailers: RetailerRef[], meter?: Channel3Meter, sizes?: SizeContext | null, c3opts: { localOnly?: boolean; budget?: () => number } = {}): Promise<ProductSource[]> {
+async function buildSources(sb: Sb, retailers: RetailerRef[], meter?: Channel3Meter, sizes?: SizeContext | null, c3opts: { localOnly?: boolean; budget?: () => number; openCatalog?: boolean } = {}): Promise<ProductSource[]> {
   const { data: feeds } = await sb.from('product_sources').select('id, name, retailer_id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
   const out: ProductSource[] = []
   for (const f of feeds ?? []) {
@@ -221,10 +222,16 @@ async function refreshSearchRow(sb: Sb, uid: string, row: Row, ev: EvalEnv | nul
     results = (await hydrateChannel3(results, meter, old)).map((h) => { if (!h._touched) return h; const { _touched: _t, ...x } = h; return processHit(x, ev!, results.length) })
   }
   if (!meter.calls.length && before === JSON.stringify(results.map((h) => [h.eligibility?.ok, h.evaluation?.verdict]))) return row.results as Row[]
-  results = rankHits(results as never) as Row[]
+  results = row.query?.strategic_ctx ? applyStrategic(results, row.query.strategic_ctx) : rankHits(results as never) as Row[]
   await sb.from('shopping_searches').update({ results }).eq('id', row.id)
   if (meter.calls.length) await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: row.id, refreshed: true, channel3: meter.summary() } })
   return results
+}
+/** 2.0F: evaluación estratégica de cada resultado de una búsqueda por oportunidad (nivel 1 + valor) y orden por decisión. */
+function applyStrategic(results: Row[], sc: StrategicContext | null | undefined) {
+  if (!sc) return results
+  const med = median(results.filter((h) => h.eligibility?.ok && h.currency === sc.currency).map((h) => Number(h.current_price)))
+  return rankStrategic(results.map((h) => ({ ...h, strategic: strategicEvaluation(h, sc, { medianPrice: med }) })))
 }
 /** Búsqueda guardada lista para mostrar: precio, stock y tallas de Channel3 actualizados si tienen más de 30 min. */
 export async function getSearchForDisplay(sb: Sb, uid: string, id: string) {
@@ -259,8 +266,8 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
 interface RunOpts {
   q: ProductSearchQuery; need: Row | null; force?: boolean
   plan?: (ctx: ReturnType<typeof buildShopperContext>) => { queries: ProductSearchQuery[]; notes: string[] }
-  c3?: { localOnly?: boolean; budget?: () => number }; matcher?: (h: Row) => ReturnType<typeof matchOpportunity>; diversify?: boolean
-  extraQuery?: Row; cacheExtra?: string; opportunityId?: string; facetsInfo?: () => Row[]
+  c3?: { localOnly?: boolean; budget?: () => number; openCatalog?: boolean }; matcher?: (h: Row) => ReturnType<typeof matchOpportunity>; diversify?: boolean
+  extraQuery?: Row; cacheExtra?: string; opportunityId?: string; facetsInfo?: () => Row[]; strategic?: StrategicContext
 }
 async function runSearch(sb: Sb, uid: string, o: RunOpts) {
   const { q, need } = o
@@ -285,12 +292,16 @@ async function runSearch(sb: Sb, uid: string, o: RunOpts) {
   }
   // Descubrimiento (consultas en serie: respeta los límites de cada tienda)
   const meter = new Channel3Meter()
-  const sources = await buildSources(sb, retailers, meter, sizes, o.c3 ? { localOnly: o.c3.localOnly, budget: o.c3.budget ? () => o.c3!.budget!() - meter.summary().credits : undefined } : {})
-  const byKey = new Map<string, SearchHit>(); const stat = new Map<string, Row>(); const facetsOf = new Map<string, string[]>()
+  const sources = await buildSources(sb, retailers, meter, sizes, o.c3 ? { localOnly: o.c3.localOnly, openCatalog: o.c3.openCatalog, budget: o.c3.budget ? () => o.c3!.budget!() - meter.summary().credits : undefined } : {})
+  const byKey = new Map<string, SearchHit>(); const stat = new Map<string, Row>(); const facetsOf = new Map<string, string[]>(); const sameName = new Map<string, string>()
   for (const dq of plan.queries) {
     const { results, statuses } = await searchAll(dq, sources, 30)
     for (const h of results) {
       const k = h.canonical_url ?? `${h.source_label}:${h.external_product_id ?? h.product_name}`
+      // Catálogo abierto: el mismo producto de una marca publicado en varios dominios (p. ej. fr. y global.) cuenta una vez
+      const nk = o.c3?.openCatalog && h.source_label === 'Channel3' ? `${(h.brand ?? '').toLowerCase()}|${h.product_name.toLowerCase()}` : null
+      if (nk && sameName.has(nk) && sameName.get(nk) !== k) { if (dq.facet && byKey.has(sameName.get(nk)!)) facetsOf.set(sameName.get(nk)!, [...new Set([...(facetsOf.get(sameName.get(nk)!) ?? []), dq.facet])]); continue }
+      if (nk) sameName.set(nk, k)
       if (!byKey.has(k)) byKey.set(k, h)
       if (dq.facet) facetsOf.set(k, [...new Set([...(facetsOf.get(k) ?? []), dq.facet])])
     }
@@ -306,12 +317,12 @@ async function runSearch(sb: Sb, uid: string, o: RunOpts) {
   // Disponibilidad por talla: la búsqueda de Channel3 no la trae; su ficha (gratis) sí, para el mercado consultado
   const hydrated = await hydrateChannel3(candidates.map((h) => slim(h) as Row), meter, () => true)
   const evaluated = hydrated.map(({ _touched: _t, ...h }) => processHit(h, ev, candidates.length))
-  const ranked = (o.diversify ? diversify(rankHits(evaluated as never) as Row[]) : rankHits(evaluated as never)) as Row[]
+  const ranked = (o.strategic ? applyStrategic(diversify(rankHits(evaluated as never) as Row[]), o.strategic) : o.diversify ? diversify(rankHits(evaluated as never) as Row[]) : rankHits(evaluated as never)) as Row[]
   const gate = { excluded_gender: ranked.filter((h) => h.eligibility?.gender && !h.eligibility.gender.ok && h.eligibility.excluded && ['female', 'kids'].includes(h.eligibility.gender.class)).length, excluded_size: ranked.filter((h) => h.eligibility?.excluded && ['sin_talla_compatible', 'agotada_en_tu_talla'].includes(h.eligibility.size.status)).length, pending: ranked.filter((h) => h.eligibility && !h.eligibility.ok && !h.eligibility.excluded).length, available: ranked.filter((h) => h.eligibility?.ok).length }
   const groupSizes = (() => { const g = sizeGroupOf(q.subcategory, q.category); return g ? { group: g, label: sizes.groups[g].label, principal: sizes.groups[g].principal?.size.original ?? null, alternatives: sizes.groups[g].alternatives.map((a) => a.size.original), confidence: sizes.groups[g].confidence, reason: sizes.groups[g].reason, missing: sizes.groups[g].missing } : null })()
   // Recuento por fuente de productos únicos (la misma prenda puede salir en varias consultas)
   const statuses = [...stat.values()].map((st) => { const count = [...byKey.values()].filter((h) => (st.id ? h.source_id === st.id : h.source_label === st.label)).length; return { ...st, count, status: count ? 'ok' : st.status === 'ok' ? 'empty' : st.status } as Row })
-  const query = { ...q, ...(o.extraQuery ?? {}), ...(o.facetsInfo ? { facets: o.facetsInfo() } : {}), plan: plan.queries.map((x) => x.text), notes: plan.notes, ...(o.matcher ? { off_target: offTarget, coverage: { candidates: byKey.size, brands: new Set(ranked.map((h) => String(h.brand ?? '').toLowerCase()).filter(Boolean)).size, retailers: new Set(ranked.map((h) => h.retailer?.slug).filter(Boolean)).size, channel3_credits: meter.summary().credits } } : {}), gate, sizes: groupSizes, sizes_fingerprint: sizes.fingerprint, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
+  const query = { ...q, ...(o.extraQuery ?? {}), ...(o.strategic ? { strategic_ctx: o.strategic } : {}), ...(o.facetsInfo ? { facets: o.facetsInfo() } : {}), plan: plan.queries.map((x) => x.text), notes: plan.notes, ...(o.matcher ? { off_target: offTarget, coverage: { candidates: byKey.size, brands: new Set(ranked.map((h) => String(h.brand ?? '').toLowerCase()).filter(Boolean)).size, retailers: new Set(ranked.map((h) => h.retailer?.slug ?? h.raw_attributes?.domain).filter(Boolean)).size, channel3_credits: meter.summary().credits } } : {}), gate, sizes: groupSizes, sizes_fingerprint: sizes.fingerprint, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
   const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, ...(o.opportunityId ? { opportunity_id: o.opportunityId } : {}), query, query_text: q.text, cache_key, sources: statuses, results: ranked, result_count: ranked.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: ranked.length, queries: plan.queries.length, sources: statuses.map((x) => `${x.kind}:${x.status}`), eval_ms: query.eval_ms, ...(meter.calls.length ? { channel3: meter.summary() } : {}) } })
@@ -601,17 +612,27 @@ export async function searchForOpportunity(sb: Sb, uid: string, opportunityId: s
   const { data: siblings } = await sb.from('style_opportunities').select('id').eq('strategy_id', op.strategy_id)
   const { data: prev } = await sb.from('shopping_searches').select('query').in('opportunity_id', (siblings ?? []).map((x) => x.id))
   const spent = (prev ?? []).reduce((n, r) => n + (Number((r.query as Row)?.coverage?.channel3_credits) || 0), 0)
+  // Contexto estratégico: proporciones de tus conjuntos y prendas aisladas (último diagnóstico) y la oportunidad
+  const { data: wa } = await sb.from('wardrobe_analyses').select('result').order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const wr = (wa?.result ?? {}) as Row
+  const strategic: StrategicContext = {
+    opportunity: { title: op.title, target: t, scores: op.scores, market: op.detail?.market ?? null },
+    proportions: ((wr.proportions?.distribution ?? []) as Row[]).map((d) => d.signature), islands: ((wr.findings ?? []) as Row[]).filter((f) => f.kind === 'island').flatMap((f) => f.evidence?.garment_ids ?? []),
+    currency: channel3Config().currency,
+  }
   const prefs = await prefsOf(sb)
   const q: ProductSearchQuery = { text: `${t.label} hombre`, category: t.category, subcategory: t.subcategory, colors: [], cut: t.cut ?? null, materials: t.material ?? null, price_min: null, price_max: null, retailers: prefs?.preferred_retailers ?? [], excluded: prefs?.excluded_retailers ?? [], need_id: null }
   let facets: ReturnType<typeof opportunityFacets> = []
   const res = await runSearch(sb, uid, {
-    q, need: null, force: opts.force, opportunityId: op.id, diversify: true, cacheExtra: `|op:${op.id}:${op.key}`,
+    q, need: null, force: opts.force, opportunityId: op.id, diversify: true, strategic, cacheExtra: `|op:${op.id}:${op.key}|open|${STRATEGIC_VERSION}`,
     plan: (ctx) => {
-      const fav = t.category && !(t.colors_ok ?? []).length && !t.material ? suggestColors(t.category, ctx, 2) : []
-      facets = opportunityFacets(t, { favorableColors: fav })
-      return { queries: facets.map((f) => facetQuery(q, f)), notes: [`Búsqueda para la oportunidad «${op.title}»: ${facets.length} consultas complementarias.`] }
+      const wantColors = t.category && !(t.colors_ok ?? []).length && !t.material
+      const fav = wantColors && ctx.color.temp ? suggestColors(t.category, ctx, 2) : []
+      const general = wantColors && !ctx.color.temp ? generalColors(t.category, ctx.wardrobe.byCategory[t.category]?.colors ?? {}) : []
+      facets = opportunityFacets(t, { favorableColors: fav, generalColors: general })
+      return { queries: facets.map((f) => facetQuery(q, f)), notes: [`Búsqueda para la oportunidad «${op.title}»: ${facets.length} consultas complementarias.`, ...(general.length ? ['Sin colorimetría: uso colores versátiles (consejo general de estilista), no colores que te favorezcan a ti. Completa tu estudio cromático para personalizarlos.'] : [])] }
     },
-    c3: { localOnly: true, budget: () => DISCOVERY_C3_BUDGET - spent },
+    c3: { localOnly: true, openCatalog: true, budget: () => DISCOVERY_C3_BUDGET - spent },
     facetsInfo: () => facets.map((f) => ({ id: f.id, label: f.label, text: f.text })),
     matcher: (h) => matchOpportunity(h, t),
     extraQuery: { opportunity: { id: op.id, title: op.title, mode: op.mode, strategy_id: op.strategy_id }, budget: { strategy_c3: DISCOVERY_C3_BUDGET, spent_before: spent } },

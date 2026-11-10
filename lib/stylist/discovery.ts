@@ -10,7 +10,21 @@ import type { Target } from './strategy'
  */
 export const DISCOVERY_C3_BUDGET = 19
 export const MAX_FACETS = 4
-export interface Facet { id: string; label: string; text: string; c3_attributes?: Record<string, string[]>; colors?: string[] }
+export interface Facet { id: string; label: string; text: string; c3_attributes?: Record<string, string[]>; colors?: string[]; general?: boolean }
+
+/**
+ * Consejo general de estilista (sin colorimetría): colores versátiles de la moda masculina por tipo de prenda, que
+ * combinan con casi cualquier base y rara vez endurecen el rostro. NO se presentan como «te favorecen»: son una
+ * orientación hasta que completes tu estudio cromático. Se eligen los que menos tienes en esa categoría.
+ */
+export const GENERAL_COLORS: Record<string, string[]> = {
+  bottom: ['Gris', 'Beige', 'Azul marino', 'Oliva', 'Crudo', 'Marrón'], top: ['Azul marino', 'Crudo', 'Gris', 'Oliva', 'Camel', 'Burdeos'],
+  outerwear: ['Azul marino', 'Camel', 'Oliva', 'Marrón', 'Gris'], tailoring: ['Azul marino', 'Gris', 'Marrón'], footwear: ['Marrón', 'Blanco', 'Negro', 'Beige'],
+}
+export function generalColors(category: string | null, owned: Record<string, number> = {}, n = 2): string[] {
+  const list = GENERAL_COLORS[category ?? ''] ?? GENERAL_COLORS.top
+  return [...list].sort((a, z) => (owned[a] ?? 0) - (owned[z] ?? 0) || list.indexOf(a) - list.indexOf(z)).slice(0, n)
+}
 
 // Vocabulario alternativo de cada rasgo (otra forma de nombrar la misma propuesta en las tiendas)
 const SYNONYMS: Record<string, string> = {
@@ -24,7 +38,7 @@ const FIT_C3: Record<string, string[]> = { Wide: ['Wide'], Recto: ['Straight leg
 const lcf = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 const capf = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-export function opportunityFacets(t: Target, opts: { favorableColors?: string[]; max?: number } = {}): Facet[] {
+export function opportunityFacets(t: Target, opts: { favorableColors?: string[]; generalColors?: string[]; max?: number } = {}): Facet[] {
   const max = opts.max ?? MAX_FACETS
   const attrs = t.category === 'bottom' && t.cut && FIT_C3[t.cut] ? { fit: FIT_C3[t.cut] } : t.category === 'bottom' && t.silhouette === 'Amplia' ? { fit: ['Relaxed'] } : undefined
   const base = lcf(t.label)
@@ -33,6 +47,7 @@ export function opportunityFacets(t: Target, opts: { favorableColors?: string[];
   if (t.material) out.push({ id: `material:${t.material}`, label: `En ${t.material}`, text: `${base} de ${t.material} hombre` })
   const colors = [...new Set([...(t.colors_ok ?? []), ...(t.color ? [t.color] : []), ...(opts.favorableColors ?? [])])]
   for (const c of colors.slice(0, 2)) out.push({ id: `color:${c}`, label: `En ${c.toLowerCase()}`, text: `${base} ${c.toLowerCase()} hombre`, c3_attributes: attrs, colors: [c] })
+  if (!colors.length) for (const c of (opts.generalColors ?? []).slice(0, 2)) out.push({ id: `color:${c}`, label: `En ${c.toLowerCase()} (consejo general)`, text: `${base} ${c.toLowerCase()} hombre`, c3_attributes: attrs, colors: [c], general: true })
   const seen = new Set<string>()
   return out.filter((f) => !seen.has(f.text) && seen.add(f.text)).slice(0, max)
 }

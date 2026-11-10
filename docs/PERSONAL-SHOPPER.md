@@ -319,14 +319,26 @@ Persistencia: `style_strategies` y `style_opportunities` (migración 0023, RLS),
 
 Cada oportunidad con algo que comprar tiene el botón **Buscar productos**. La búsqueda parte de la oportunidad, no de una categoría:
 
-- **Facetas complementarias** (máx. 4, sin repetir consultas): la propuesta base, una variante con otro vocabulario (p. ej. «wide leg»), los colores propuestos o los que te favorecen y faltan en tu armario, y el material. El corte va como atributo estructurado de Channel3 (`fit`), no como palabra exigida.
-- **Fuentes**: Channel3, tiendas UCP, feeds y buscador, como siempre; Channel3 **solo en tu mercado** (el stock de otro mercado no se puede confirmar para ti).
+- **Facetas complementarias** (máx. 4, sin repetir consultas): la propuesta base, una variante con otro vocabulario (p. ej. «wide leg»), los colores propuestos o los que te favorecen y faltan en tu armario, y el material. Sin colorimetría se usan **colores versátiles por consejo general de estilista** (los que menos tienes de ese tipo de prenda), marcados como tales y nunca como «te favorece». El corte va como atributo estructurado de Channel3 (`fit`), no como palabra exigida.
+- **Fuentes**: tiendas UCP, feeds y buscador, como siempre, y Channel3 con su **catálogo abierto en tu mercado** (no solo tus tiendas; las que excluyes siguen fuera; un mismo producto publicado en varios dominios de una marca cuenta una vez). Solo tu mercado: el stock de otro no se puede confirmar para ti.
 - **¿Materializa la oportunidad?** Cada producto se comprueba contra ella (tipo de prenda, corte o silueta, material, color si la oportunidad es de color). Un fallo conocido lo excluye (se cuenta como «descartado por no materializarla»); lo desconocido no excluye y queda marcado («corte sin confirmar»).
 - **Mismos filtros y evaluación**: moda masculina, tu talla disponible y comprobada, y el motor 4C, sin cambios.
 - **Diversidad**: como mucho 2 productos por marca antes de repetir marca en la selección. Se registra la cobertura (candidatos, marcas, tiendas) y cada producto indica en qué propuesta se encontró.
 - **Presupuesto**: 25 créditos de Channel3 por estrategia completa = 6 de tendencias + 19 de búsqueda (1 por faceta). Con el presupuesto agotado no se gasta ni un crédito más y se avisa; las demás fuentes siguen funcionando. La caché de 24 h (15 min con UCP) evita repetir consultas.
 
 Migración `0024_opportunity_discovery.sql` (`shopping_searches.opportunity_id`). API `POST /api/stylist/opportunities/:id/search`. Pruebas: `tests/opportunity-discovery.test.ts`, `tests/e2e/stylist-strategy.cjs` (feed de prueba con varias marcas) y `tests/e2e/opportunity-live.cjs` (`OPPORTUNITY_LIVE=1`, Channel3 real).
+
+### 2.0F · Evaluación estratégica (`lib/stylist/evaluation.ts`)
+
+En las búsquedas por oportunidad cada producto tiene dos niveles, **separados del 4C** (cuyos pesos 25/20/15/20/10/10 no cambian):
+
+- **Nivel 1 · Elegibilidad**: moda masculina, tu talla disponible y comprobada, información comercial suficiente (precio en tu moneda y tienda identificada) y que materialice la oportunidad. Si falla, «No disponible para ti».
+- **Nivel 2 · Valor estratégico (0-100)**: adecuación a la oportunidad (25), contribución al armario (25: proporción que tus conjuntos no tienen, conexión de prendas aisladas, conjuntos nuevos; resta si duplica algo o si depende de compras futuras), idoneidad personal (25: color, corte y estética del 4C), potencial de conjuntos (15) y relevancia de mercado (10, solo si hay tendencia). Lo desconocido no cuenta: los pesos se reparten entre lo conocido; sin 4C no hay valor.
+- **Alertas** que una puntuación alta no oculta y que limitan la decisión: color poco favorable, corte que choca, duplicado, dependiente de compras futuras, 4C «no lo compraría».
+- **Decisión**: elección del estilista, buena opción, con reservas, no lo recomiendo o no disponible para ti; con su explicación y el nivel de precio (económica, media o premium respecto a los demás).
+- **Interfaz**: «Selección del estilista» (hasta 3, de marcas distintas, ordenada por valor estratégico), «Alternativas de otras marcas y precios» y «No los recomiendo para esta oportunidad». Cada tarjeta muestra el valor estratégico con sus componentes y, aparte, la compatibilidad personal (4C).
+
+Pruebas: `tests/strategic-evaluation.test.ts`, `tests/e2e/stylist-strategy.cjs` y `tests/e2e/opportunity-live.cjs` (Channel3 real: catálogo abierto, selección y alertas).
 
 ## Channel3 (catálogo multimarca)
 

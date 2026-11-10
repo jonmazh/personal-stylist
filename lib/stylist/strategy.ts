@@ -7,6 +7,7 @@ import { buildShopperContext } from '@/lib/shopping/intelligence/context'
 import { analyzeColor } from '@/lib/shopping/intelligence/color'
 import { detectColors } from '@/lib/shopping/catalog/normalize'
 import type { StrategicFinding, WardrobeAnalysis, Experimentation } from './wardrobe'
+import { generalColors } from './discovery'
 
 /**
  * Personal Shopper 2.0 · 2.0D — Style Strategy Engine.
@@ -193,13 +194,15 @@ export function buildStrategy(input: StrategyInput) {
     if (f.kind === 'color_monotony' || f.kind === 'color_unfavorable') {
       const accents = (f.direction ?? '').match(/: ([^.]+)\./)?.[1]?.split(', ').map((c) => c.trim()).map((c) => c.charAt(0).toUpperCase() + c.slice(1)).filter((c) => detectColors(c).length) ?? []
       const fromTrend = signals.flatMap((s) => traitsOf.get(s.id ?? s.key)!.colors).filter((c) => (favorable(c) ?? 0) >= 0.75)
-      const colors = [...new Set([...fromTrend, ...accents])].slice(0, 3)
+      // Sin colorimetría: consejo general de estilista (colores versátiles que menos tienes), nunca «te favorece»
+      const general = !ctx.color.temp ? generalColors('top', ctx.wardrobe.byCategory.top?.colors ?? {}, 3) : []
+      const colors = [...new Set([...fromTrend, ...accents, ...general])].slice(0, 3)
       const market = marketFor((t) => t.colors.some((c) => colors.includes(c)))
       add({
         key: `color:${f.kind}`, title: f.kind === 'color_monotony' ? 'Un acento de color que te favorece' : 'Llevar tu paleta cerca de la cara', purchase: true, diagnosis: f.diagnosis, wardrobe_evidence: fid(f), profile_relation: [], market,
         proposal: colors.length ? `Introducir ${colors.map((c) => c.toLowerCase()).join(' o ')} en una prenda de arriba o una capa, sobre tu base actual.` : (f.direction ?? 'Introducir un color de tu paleta.'),
         target: { category: 'top', subcategory: null, label: 'prenda de arriba o capa en un color de tu paleta', element: null, cut: null, silhouette: null, color: colors[0] ?? null, material: null, colors_ok: colors },
-        impact: f.kind === 'color_unfavorable' ? 70 : 55, suit: suitability(null, colors[0] ?? null),
+        impact: f.kind === 'color_unfavorable' ? 70 : 55, suit: general.length ? { score: 55, why: ['Sin colorimetría: colores versátiles por consejo general de estilista, no porque te favorezcan. Completa tu estudio cromático para personalizarlos.'] } : suitability(null, colors[0] ?? null),
         benefits: ['Da profundidad a conjuntos sencillos', 'Mejora el efecto del color en tu cara'], drawbacks: ['Un acento mal combinado se nota más que un neutro'], confidence: confOf(f.confidence, market?.confidence), sources: [`armario:${f.key}`],
       })
     }
