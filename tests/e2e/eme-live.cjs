@@ -23,6 +23,12 @@ if (process.env.EME_LIVE !== '1') { console.log('— omitida: exporta EME_LIVE=1
   const src = s.sources.find((x) => x.label === 'EME Studios (UCP)')
   assert.ok(src && src.status === 'ok', JSON.stringify(s.sources))
   const hits = s.results.filter((h) => h.source_label === 'EME Studios (UCP)')
+  // Personal Shopper Intelligence: cada producto real evaluado con el perfil y ordenado por esa evaluación
+  assert.ok(s.results.every((h) => h.evaluation && h.evaluation.criteria.length === 6), 'todos los candidatos evaluados')
+  assert.ok(s.query.plan.length >= 1 && s.query.ctx_hash, 'búsqueda planificada desde el perfil')
+  const order = s.results.map((h) => (h.evaluation.verdict === 'skip' ? -200 : h.evaluation.verdict === 'wait' ? -100 : 0) + h.evaluation.score)
+  assert.ok(order.every((x, i) => i === 0 || order[i - 1] >= x - 1), 'ordenados por evaluación personal')
+  console.log('   evaluación personal: ' + s.results.slice(0, 3).map((h) => `${h.product_name} ${h.evaluation.score}/100 ${h.evaluation.verdict}`).join(' · '))
   assert.ok(hits.length > 0)
   for (const h of hits) {
     assert.match(h.product_url, /^https:\/\/checkout\.emestudios\.com\/products\//); assert.equal(h.currency, 'EUR'); assert.ok(h.current_price > 0 && h.current_price <= 120)

@@ -16,6 +16,13 @@ F1,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.
 F2,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.00 EUR,out of stock,Tienda Test,Gris,50,100% lana,Hombre > Pantalones,G1
 F3,"Chino beige",http://127.0.0.1:4700/p/chino.html,49.00 EUR,in stock,Tienda Test,Beige,48,98% algodón 2% elastano,Hombre > Pantalones,
 F4,"Pantalón de vestir gris marengo",http://127.0.0.1:4700/p/marengo.html,140.00 EUR,in stock,Tienda Test,Gris,48,,Hombre > Pantalones,`
+// Feed para Personal Shopper Intelligence: mismos productos para perfiles distintos y pares parecidos
+const feedPsi = `id,title,link,price,availability,brand,color,size,material,product_type
+S1,"Sudadera azul marino",http://127.0.0.1:4700/p/sudadera-marino.html,59.00 EUR,in stock,Tienda Test,Azul marino,M,100% algodón,Hombre > Sudaderas
+S2,"Sudadera crudo",http://127.0.0.1:4700/p/sudadera-crudo.html,59.00 EUR,in stock,Tienda Test,Crudo,M,100% algodón,Hombre > Sudaderas
+S3,"Sudadera camel",http://127.0.0.1:4700/p/sudadera-camel.html,59.00 EUR,in stock,Tienda Test,Camel,M,100% algodón,Hombre > Sudaderas
+P1,"Pantalón de vestir recto gris",http://127.0.0.1:4700/p/pantalon-recto-gris.html,79.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones
+P2,"Pantalón de vestir slim gris",http://127.0.0.1:4700/p/pantalon-slim-gris.html,59.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones`
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1:4700')
   const send = (code, type, body, headers = {}) => { res.writeHead(code, { 'content-type': type, ...headers }); res.end(body) }
@@ -26,6 +33,7 @@ http.createServer((req, res) => {
   if (u.pathname === '/privado/oferta.html') return send(200, 'text/html', ld())
   if (u.pathname === '/redir') return send(302, 'text/plain', '', { location: 'http://169.254.169.254/latest/meta-data' })
   if (u.pathname === '/feed.csv') return send(200, 'text/csv', feed)
+  if (u.pathname === '/feed-psi.csv') return send(200, 'text/csv', feedPsi)
   if (u.pathname === '/admin/price') { price = u.searchParams.get('v') ?? price; return send(200, 'text/plain', price) }
   if (u.pathname === '/admin/last-query') return send(200, 'text/plain', lastQuery)
   if (u.pathname === '/search') {

@@ -27,13 +27,20 @@ if (process.env.GRIMEY_LIVE !== '1') { console.log('— omitida: exporta GRIMEY_
   const grimeySrc = s.sources.find((x) => x.label === 'Grimey (UCP)')
   assert.ok(grimeySrc, JSON.stringify(s.sources)); assert.equal(grimeySrc.status, 'ok', JSON.stringify(grimeySrc))
   const hits = s.results.filter((h) => h.source_label === 'Grimey (UCP)')
+  // Personal Shopper Intelligence: cada producto real evaluado con el perfil y ordenado por esa evaluación
+  assert.ok(s.results.every((h) => h.evaluation && h.evaluation.criteria.length === 6), 'todos los candidatos evaluados')
+  assert.ok(s.query.plan.length >= 1 && s.query.ctx_hash, 'búsqueda planificada desde el perfil')
+  const order = s.results.map((h) => (h.evaluation.verdict === 'skip' ? -200 : h.evaluation.verdict === 'wait' ? -100 : 0) + h.evaluation.score)
+  assert.ok(order.every((x, i) => i === 0 || order[i - 1] >= x - 1), 'ordenados por evaluación personal')
+  console.log('   evaluación personal: ' + s.results.slice(0, 3).map((h) => `${h.product_name} ${h.evaluation.score}/100 ${h.evaluation.verdict}`).join(' · '))
   assert.ok(hits.length > 0, 'resultados reales de Grimey')
   for (const h of hits) {
     assert.match(h.product_url, /^https:\/\/grimey\.com\/products\//); assert.equal(h.currency, 'EUR'); assert.ok(h.current_price > 0 && h.current_price <= 90, `precio dentro del límite: ${h.current_price}`)
-    assert.equal(h.subcategory, 'joggers'); assert.ok(h.colors.includes('Negro')); assert.equal(h.field_sources.product_name.source, 'store')
+    assert.equal(h.subcategory, 'joggers'); assert.equal(h.field_sources.product_name.source, 'store')
     assert.ok(h.variants.length > 0 && h.variants.every((v) => v.size)); assert.match(h.external_product_id, /^gid:\/\/shopify\/Product\//)
     assert.ok(h.images.every((i) => i.permission === 'link_only'))
   }
+  assert.ok(hits.some((h) => h.colors.includes('Negro')), 'el color pedido se sigue buscando (pero ya no filtra)')
   console.log('   ', hits.slice(0, 3).map((h) => `${h.product_name} · ${h.current_price} €${h.raw_attributes.previous_price ? ` (antes ${h.raw_attributes.previous_price.amount})` : ''} · ${h.confirmed_composition ?? 'composición desconocida'} · tallas ${h.variants.filter((v) => v.availability === 'in_stock').map((v) => v.size).join('/')}`).join('\n    '))
   log(`búsqueda por necesidad en el catálogo real: ${hits.length} productos normalizados (precio, tallas, procedencia)`)
 

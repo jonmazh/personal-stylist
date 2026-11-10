@@ -22,10 +22,10 @@ const WOOL = { product_name: 'Pantalón recto lana gris', category: 'bottom', su
 const CHINO = { product_name: 'Chino beige recto', category: 'bottom', subcategory: 'chinos', primary_color: 'Beige', colors: ['Beige'], cut: 'Recto', formality_level: 3, seasons: ['primavera', 'otono'], current_price: 39, availability_status: 'in_stock', field_sources: {}, images: [] }
 
 test('puntuación de compra: pesos de la especificación y explicación por criterio', () => {
-  assert.deepEqual({ ...PURCHASE_WEIGHTS }, { style: 20, cut: 20, color: 15, combos: 20, needs: 10, quality: 10, value: 5 })
+  assert.deepEqual({ ...PURCHASE_WEIGHTS }, { color: 25, cut: 20, style: 15, wardrobe: 20, need: 10, quality: 10 })
   assert.equal(Object.values(PURCHASE_WEIGHTS).reduce((s, x) => s + x, 0), 100)
   const e = evaluatePurchase(WOOL, env({ need: NEED }))
-  assert.equal(e.criteria.length, 7)
+  assert.equal(e.criteria.length, 6)
   for (const c of e.criteria) { assert.ok(c.points <= c.weight + 0.01); assert.ok(c.reasons.length || c.missing.length, c.key) }
   assert.ok(Math.abs(e.criteria.reduce((s, c) => s + c.points, 0) - e.score) <= 1)
   assert.equal(e.verdict, 'buy', e.verdict_text); assert.ok(e.score >= 75); assert.match(e.verdict_text, /cubre «Pantalón de vestir gris»/)
@@ -39,7 +39,7 @@ test('redundancia: compatible pero no lo compraría; dice qué ya tienes y dónd
   assert.match(e.verdict_text, /Es compatible con tu estilo, pero no lo compraría\. Ya tienes 2 prendas que cumplen prácticamente la misma función \(«Chino beige», «Chino beige 2»\)/)
   assert.match(e.verdict_text, /No ampliaría tus combinaciones|Apenas ampliaría/); assert.match(e.verdict_text, /Priorizaría invertir en «Abrigo camel»/)
   assert.ok(e.redundancy.adds.length > 0); assert.ok(e.risks.some((r) => /duplicar/.test(r)))
-  assert.match(e.criteria.find((c) => c.key === 'needs')!.reasons[0], /sería un deseo/)
+  assert.match(e.criteria.find((c) => c.key === 'need')!.reasons[0], /es un deseo/)
 })
 
 test('redundancia con pocos datos: dos prendas del mismo tipo y color ya bastan para «duplicidad alta»', () => {
@@ -69,12 +69,12 @@ test('esperar: agotado, talla agotada, necesidad más urgente o precio muy por e
   assert.equal(evaluatePurchase({ ...WOOL, current_price: 200 }, env({ need: NEED })).verdict, 'wait')
 })
 
-test('la calidad no sale del precio: mismo producto más caro no puntúa más en calidad', () => {
+test('la calidad no sale del precio: el más caro no puntúa más; la composición documentada sí cuenta', () => {
   const a = evaluatePurchase({ ...WOOL, current_price: 40 }, env({ need: NEED })), b = evaluatePurchase({ ...WOOL, current_price: 95 }, env({ need: NEED }))
-  assert.equal(a.criteria.find((c) => c.key === 'quality')!.points, b.criteria.find((c) => c.key === 'quality')!.points)
-  assert.ok(a.criteria.find((c) => c.key === 'value')!.points >= b.criteria.find((c) => c.key === 'value')!.points)
+  const q = (e: ReturnType<typeof evaluatePurchase>) => e.criteria.find((c) => c.key === 'quality')!.points
+  assert.ok(q(a) >= q(b), 'pagar más no sube la nota de calidad y precio')
   const synth = evaluatePurchase({ ...WOOL, confirmed_composition: '100 % poliester' }, env({ need: NEED }))
-  assert.ok(synth.criteria.find((c) => c.key === 'quality')!.points < a.criteria.find((c) => c.key === 'quality')!.points)
+  assert.ok(q(synth) < q(a), 'a igual precio, el tejido sintético documentado puntúa menos')
 })
 
 test('producto como prenda virtual: procedencia IA → confianza baja en compatibilidad; ocasiones de la necesidad', () => {

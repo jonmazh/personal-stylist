@@ -231,6 +231,38 @@ Disponibilidad: disponible, pocas unidades, agotado, reserva, sin comprobar. Cad
 
 Las de la tienda solo se enlazan (no se copian). Tus capturas y fotos se recodifican en el navegador (sin metadatos ni GPS) y se guardan en el bucket privado `shopping-private`, servidas con URLs firmadas.
 
+## Personal Shopper Intelligence
+
+El Personal Shopper ya no es un buscador por palabras: **perfil → diagnóstico → necesidad → búsqueda → evaluación → recomendación**. Tres motores separados: Product Discovery (encuentra productos reales), Personal Style Evaluator (los evalúa con tu perfil) y Wardrobe Compatibility (simula la compra con tu armario). La IA solo interpreta productos (Product Analyzer); el código calcula puntuaciones, aplica restricciones y valida que productos y prendas existan.
+
+**Diagnóstico previo (10-11-2026):** la búsqueda solo usaba el texto de la necesidad y descartaba cualquier producto de otro color; la evaluación personal existía (4C) pero solo al abrir un producto; el color ignoraba qué colores faltan o sobran en tu armario; no había Wardrobe Value Added. Los datos del perfil existían: faltaba conectarlos.
+
+### Contexto de compra (`lib/shopping/intelligence/context.ts`)
+
+Se construye una vez por búsqueda con lo que ya existe: colorimetría (temperatura con su origen y confianza, contraste, profundidad, intensidad, colores que te gustan y evitas, paleta), ajuste (preferencias por tipo de prenda, ajuste general, proporciones de tus medidas, lo que nunca te pondrías), identidad estética (influencias, rasgos preferidos y rechazados, marcas), armario (prendas activas, distribución cromática por categoría, tonos claros y oscuros, uso real si hay registro suficiente), aprendizaje de Outfit Studio y necesidades. Su huella (hash) forma parte de la caché: si cambian tu perfil o tu armario, la búsqueda se repite.
+
+### Color Intelligence (`lib/shopping/intelligence/color.ts`)
+
+Separa tres preguntas: **¿te favorece?** (colorimetría, con la confianza de su origen; un color que evitas no se compensa con nada), **¿lo necesita tu armario?** (ausente, escaso, presente o saturado en esa categoría; dominante en el armario; equilibrio claro/oscuro) y **¿combina con lo que tienes?** (prendas complementarias reales). Etiquetas: te favorece y te falta, equilibra el armario, redundante, poco favorable, correcto o sin datos. Sin colorimetría la parte personal queda neutra y se dice que no se puede afirmar que un color favorezca.
+
+### Búsqueda inteligente (`lib/shopping/intelligence/discovery.ts`)
+
+Se busca el **tipo de prenda** sin exigir el color escrito, además el color pedido (si lo hay) y los **colores que te favorecen y faltan** en tu armario (hasta 3 consultas, en serie para respetar los límites de cada tienda). Los candidatos se normalizan (con corte y silueta deducidos del texto de la tienda cuando lo dice), se quitan duplicados, se evalúan uno a uno con tu perfil y tu armario (Outfit Engine incluido) y se ordenan por esa evaluación: nunca por precio, popularidad ni coincidencia textual.
+
+### Wardrobe Value Added
+
+¿Qué aporta que hoy no tienes? Conjuntos nuevos generados y validados por el Outfit Engine con IDs reales (si es casi un duplicado, solo cuentan los que la prenda parecida no permite), ocasiones hoy sin cubrir, huecos y necesidades que resuelve, diferenciación frente a lo que tienes, sustitución, versatilidad y coste por uso estimado. Se guarda con ejemplos de conjuntos y las prendas con las que combina.
+
+### Resultados
+
+Recomendados para ti (mayor compatibilidad personal), mejor aportación al armario, mejor opción para tu necesidad, alternativas interesantes y no recomendados con sus motivos (los descartados nunca aparecen como recomendación principal). Cada producto muestra puntuación, confianza, completitud, por qué encaja, qué aporta, con qué prendas combina, un conjunto de ejemplo, inconvenientes e información que falta.
+
+### Pruebas
+
+- `tests/personal-shopper.test.ts`: el mismo producto puntúa distinto para perfiles distintos; un color favorable pero saturado no gana; el corte que no prefieres resta; los outfits nuevos (con IDs reales) suman; la redundancia penaliza; la falta de datos queda neutra y baja la confianza; cambian las recomendaciones al cambiar el perfil o el armario; los descartados no se recomiendan; búsqueda ampliada y Color Intelligence.
+- `tests/e2e/personal-shopper.cjs` (tienda de prueba): dos perfiles con los mismos productos; el color saturado no gana y queda como no recomendado con motivo; entre dos pantalones parecidos gana el de corte adecuado aunque sea más caro; al cambiar el armario cambia la recomendación y la caché.
+- `tests/e2e/psi-live.cjs` (`PSI_LIVE=1`): dos perfiles opuestos con productos reales de Grimey y EME Studios.
+
 ## Product Analyzer y Purchase Evaluator (4C)
 
 ### Product Analyzer (`product-analyst@1`, esquema `product-analysis@1`)
@@ -261,19 +293,18 @@ REGLAS FUNDAMENTALES:
 9. Devuelve ÚNICAMENTE el JSON con el esquema indicado.
 ```
 
-### Puntuación de compra (`purchase-eval@1`, reglas, sin IA)
+### Puntuación de compra (`personal-shopper@1`, reglas, sin IA)
 
 | Criterio | Peso | De dónde sale |
 |---|---|---|
-| Compatibilidad con tu estilo | 20 | Compatibilidad personal (2C): identidad estética |
-| Corte y proporciones | 20 | Compatibilidad personal (2C): proporciones y cortes preferidos |
-| Compatibilidad cromática | 15 | Compatibilidad personal (2C): colorimetría |
-| Combinabilidad con tu armario | 20 | Outfit Engine (3B) con el producto como prenda virtual; si se parece mucho a algo tuyo, solo cuentan las combinaciones nuevas |
-| Adecuación a tus necesidades | 10 | Necesidad vinculada o abierta del mismo tipo (4A) y su prioridad; sin necesidad, es un deseo |
-| Calidad y materiales documentados | 10 | Composición publicada y calidad documentada; nunca el precio |
-| Relación calidad-precio | 5 | Precio frente a tu límite y coste por uso estimado |
+| Compatibilidad cromática | 25 | Te favorece (colorimetría y contraste), aporta colores que faltan y combina con tus prendas. |
+| Corte y proporciones | 20 | Corte, silueta, largo y volumen frente a tus preferencias de ajuste y tus proporciones. |
+| Identidad estética | 15 | Encaje con tus estilos validados, referencias, rasgos que prefieres o rechazas y marcas. |
+| Compatibilidad con tu armario | 20 | Wardrobe Value Added: outfits nuevos validados, ocasiones, huecos, diferenciación y versatilidad. |
+| Necesidad y utilidad | 10 | Si resuelve un hueco, es una mejora, una sustitución necesaria o un deseo. |
+| Calidad y precio | 10 | Materiales documentados y precio frente a utilidad y calidad conocida (nunca el precio como prueba de calidad). |
 
-Indicadores independientes (la puntuación no los oculta): compatibilidad con tu perfil, confianza de la evaluación, tallas, precio y bajadas, riesgo de duplicidad y combinaciones. Además se listan los **límites** (composición desconocida, sin analizar, datos de IA sin confirmar, precio o tallas sin verificar) y los **riesgos**.
+Lo desconocido **no** cuenta como negativo: el criterio queda neutro (50 % de su peso) y baja la confianza. Indicadores independientes (la puntuación no los oculta): confianza (0-100, según qué criterios se conocen y la fiabilidad de su fuente), completitud de los datos del producto, redundancia (0-100), Wardrobe Value Added, outfits nuevos, compatibilidad con tu perfil, tallas, precio y bajadas. Además se listan los **límites**, los **riesgos**, la **información que falta** y, si se descarta, los **motivos**.
 
 ### Redundancia
 
@@ -288,7 +319,7 @@ Se compara con tus prendas de la misma categoría (similitud de la auditoría 2D
 | Esperar | Falta algo (talla, precio, datos o una necesidad más urgente) antes de decidir. |
 | No comprar | No aporta lo suficiente a tu armario o no encaja contigo. |
 
-Reglas: **no comprar** si duplica algo y apenas abre combinaciones nuevas, si puntúa menos de 45 o si el color no te favorece; **esperar** si está agotado o no queda tu talla, si no cubre ninguna necesidad y hay otra más urgente, o si el precio supera mucho tu límite; **comprar** con 75 o más, confianza media o alta, sin duplicidad y cubriendo una necesidad; si no, **considerar**. El texto explica por qué y, si procede, en qué invertir en su lugar.
+Reglas: **no comprar** si duplica algo y apenas abre combinaciones nuevas, si el color es uno que evitas o no te favorece (con colorimetría fiable), si el corte choca con tus preferencias o lo que nunca te pondrías, o si puntúa menos de 50; **esperar** si está agotado o no queda tu talla, si no cubre ninguna necesidad y hay otra más urgente, o si el precio supera mucho tu límite; **comprar** con 75 o más, confianza de 55/100 o más, sin duplicidad, cubriendo una necesidad y con color y corte (si se conocen) favorables; si no, **considerar**. El texto explica por qué y, si procede, en qué invertir en su lugar.
 
 ### Talla
 
