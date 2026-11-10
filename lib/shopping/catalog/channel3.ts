@@ -172,7 +172,8 @@ export function buildSearchBody(q: ProductSearchQuery, market: string, domains: 
   if (cat) filters.category_ids = [cat]
   // Tallas (prefiltro, solo en tu mercado): los valores de Channel3 no llevan sistema de tallaje (un «42» EU no es un 42 de
   // EE. UU.), así que fuera de tu mercado no se filtra; la comprobación real es siempre local, por variante
-  if (local && cat && sizes?.values.length) filters.attributes = { [sizes.key]: sizes.values }
+  const attrs = { ...(local && cat ? q.c3_attributes ?? {} : {}), ...(local && cat && sizes?.values.length ? { [sizes.key]: sizes.values } : {}) }
+  if (Object.keys(attrs).length) filters.attributes = attrs
   // Un solo color por consulta (la paleta de Channel3 es una condición AND); el motor 4C evalúa después si te favorece
   if (color) filters.colors = { palette: [{ hex: hexOf(color)! }], match: 'loose' }
   // El rango de precio solo tiene sentido en tu moneda
@@ -262,7 +263,7 @@ export function normalizeChannel3Product(raw: unknown, opts: { market: string; c
 export const isChannel3 = (p: { raw_attributes?: unknown }): boolean => (p.raw_attributes as C3Meta | undefined)?.provider === 'channel3'
 
 // ── ProductSource ──
-export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}, opts: { sizesFor?: (q: ProductSearchQuery) => { key: 'size' | 'shoe-size'; values: string[] } | null } = {}) {
+export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}, opts: { sizesFor?: (q: ProductSearchQuery) => { key: 'size' | 'shoe-size'; values: string[] } | null; localOnly?: boolean; budget?: () => number } = {}) {
   const label = 'Channel3'
   const shopsFor = (q: ProductSearchQuery) => retailers.filter((r) => !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
   /** Tiendas agrupadas por el mercado en el que se consultan (las no indexadas en ninguno se omiten). */
@@ -293,6 +294,9 @@ export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = c
       const { groups } = await plan(q)
       const hits: SearchHit[] = []
       for (const [market, g] of groups) {
+        // Búsqueda estratégica: solo el mercado local (el stock de otro mercado no se puede confirmar para ti) y con tope de créditos
+        if (opts.localOnly && market !== cfg.country) continue
+        if (opts.budget && opts.budget() <= 0) throw new Channel3Error('Presupuesto de Channel3 de esta estrategia agotado.', 'credits')
         const raw = await c3request(cfg, 'search', 'v1/search', { method: 'POST', body: buildSearchBody(q, market, g.domains, cfg, opts.sizesFor?.(q) ?? null) }, deps)
         const sr = SearchResponse.safeParse(raw); if (!sr.success) throw new Channel3Error('Respuesta de Channel3 (búsqueda) con un formato inesperado.', 'protocol')
         for (const item of sr.data.products) {

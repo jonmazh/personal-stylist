@@ -315,6 +315,19 @@ Convierte el diagnóstico del armario, las señales de mercado y tu perfil en **
 
 Persistencia: `style_strategies` y `style_opportunities` (migración 0023, RLS), ligadas al diagnóstico y a la investigación usadas; se reutiliza mientras no cambien. Puedes marcar cada oportunidad como «Me interesa» o «No es para mí». API: `GET/POST /api/stylist/strategy`, `PATCH /api/stylist/opportunities/:id`. Pruebas: `tests/strategy.test.ts`, `tests/e2e/stylist-strategy.cjs`.
 
+### 2.0E · Market Discovery desde oportunidades (`lib/stylist/discovery.ts`)
+
+Cada oportunidad con algo que comprar tiene el botón **Buscar productos**. La búsqueda parte de la oportunidad, no de una categoría:
+
+- **Facetas complementarias** (máx. 4, sin repetir consultas): la propuesta base, una variante con otro vocabulario (p. ej. «wide leg»), los colores propuestos o los que te favorecen y faltan en tu armario, y el material. El corte va como atributo estructurado de Channel3 (`fit`), no como palabra exigida.
+- **Fuentes**: Channel3, tiendas UCP, feeds y buscador, como siempre; Channel3 **solo en tu mercado** (el stock de otro mercado no se puede confirmar para ti).
+- **¿Materializa la oportunidad?** Cada producto se comprueba contra ella (tipo de prenda, corte o silueta, material, color si la oportunidad es de color). Un fallo conocido lo excluye (se cuenta como «descartado por no materializarla»); lo desconocido no excluye y queda marcado («corte sin confirmar»).
+- **Mismos filtros y evaluación**: moda masculina, tu talla disponible y comprobada, y el motor 4C, sin cambios.
+- **Diversidad**: como mucho 2 productos por marca antes de repetir marca en la selección. Se registra la cobertura (candidatos, marcas, tiendas) y cada producto indica en qué propuesta se encontró.
+- **Presupuesto**: 25 créditos de Channel3 por estrategia completa = 6 de tendencias + 19 de búsqueda (1 por faceta). Con el presupuesto agotado no se gasta ni un crédito más y se avisa; las demás fuentes siguen funcionando. La caché de 24 h (15 min con UCP) evita repetir consultas.
+
+Migración `0024_opportunity_discovery.sql` (`shopping_searches.opportunity_id`). API `POST /api/stylist/opportunities/:id/search`. Pruebas: `tests/opportunity-discovery.test.ts`, `tests/e2e/stylist-strategy.cjs` (feed de prueba con varias marcas) y `tests/e2e/opportunity-live.cjs` (`OPPORTUNITY_LIVE=1`, Channel3 real).
+
 ## Channel3 (catálogo multimarca)
 
 Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus datos; **no decide qué te favorece** (lo decide el motor 4C) y su relevancia no se usa como puntuación. Conector: `lib/shopping/catalog/channel3.ts` (cumple `ProductSource`). Documentación oficial: https://channel3.ai/docs; esquemas comprobados con el SDK oficial `@channel3/sdk` 4.9.0 (no se usa como dependencia: el conector llama a la API directamente y valida cada respuesta con Zod).

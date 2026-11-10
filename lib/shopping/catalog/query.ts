@@ -6,6 +6,8 @@ import { detectColors, detectKind, type NormalizedProduct } from './normalize'
 export interface ProductSearchQuery {
   text: string; category: string | null; subcategory: string | null; colors: string[]; cut: string | null; materials: string | null
   price_min: number | null; price_max: number | null; retailers: string[]; excluded: string[]; need_id: string | null
+  /** Atributos estructurados de Channel3 (p. ej. {fit: ['Wide']}) y propuesta a la que pertenece la consulta (búsqueda estratégica) */
+  c3_attributes?: Record<string, string[]>; facet?: string
 }
 const lc = (s: string) => s.toLowerCase()
 /** De la necesidad (4A) a una búsqueda: tipo de prenda, colores, corte, materiales y rango de precio. Tiendas: tus preferencias. */

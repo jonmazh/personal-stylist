@@ -4,7 +4,7 @@ import { styleStrategy } from '@/lib/stylist/service'
 import { MODES } from '@/lib/stylist/strategy'
 import { FINDING_LABEL, type StrategicFinding } from '@/lib/stylist/wardrobe'
 import { PendingButton } from '@/components/outfits/pending-button'
-import { opportunityStatusAction, refreshAnalysisAction, refreshStrategyAction, researchTrendsAction } from './actions'
+import { opportunityStatusAction, searchOpportunityAction, refreshAnalysisAction, refreshStrategyAction, researchTrendsAction } from './actions'
 import { latestTrends } from '@/lib/stylist/trend-service'
 import { DIMENSIONS, KINDS, STAGES } from '@/lib/stylist/trends'
 
@@ -28,6 +28,7 @@ export default async function StylistPage({ searchParams }: { searchParams: Prom
       <h1 className="display">Tu estilista</h1>
       <p className="m">Antes de proponerte nada, estudio tu armario como un conjunto, tu identidad y lo que está pasando en la moda masculina. Después decido qué merece la pena incorporar —y si no hace falta comprar nada, te lo digo— y solo entonces buscaré productos.</p>
       {sp.strategy && <p className="note" role="status">Estrategia recalculada.</p>}
+      {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
       {st && <StrategyView st={st} />}
       {sp.updated && <p className="note" role="status">Diagnóstico recalculado.</p>}
       {err && <p className="note warn" role="alert">{err}</p>}
@@ -126,6 +127,7 @@ function StrategyView({ st }: { st: Awaited<ReturnType<typeof styleStrategy>> })
       {o.drawbacks?.length > 0 && <p className="m small">Inconvenientes: {o.drawbacks.join(' · ')}</p>}
       {o.purchase && o.target && <p className="m small">Buscaría: {o.target.label}{o.target.colors_ok?.length ? ` (${o.target.colors_ok.map((c: string) => c.toLowerCase()).join(' o ')})` : ''}</p>}
       <div className="btns">
+        {o.purchase && o.target && o.status !== 'descartada' && <form action={searchOpportunityAction}><input type="hidden" name="id" value={o.id} /><PendingButton className="btn small primary" label="Buscar productos" pending="Investigando tiendas…" /></form>}
         {(['me_interesa', 'descartada'] as const).map((x) => <form key={x} action={opportunityStatusAction}><input type="hidden" name="id" value={o.id} /><input type="hidden" name="status" value={o.status === x ? 'propuesta' : x} /><button className="btn small">{o.status === x ? 'Deshacer' : x === 'me_interesa' ? 'Me interesa' : 'No es para mí'}</button></form>)}
       </div>
     </div>)

@@ -29,6 +29,17 @@ const feedPsi = [`id,title,link,price,availability,brand,color,size,material,pro
   row('P1', 'Pantalón de vestir recto gris', 'pantalon-recto-gris', '79.00', 'Gris', [['48', 'in stock'], ['50', 'in stock']], 'Hombre > Pantalones', 'male,adult', '100% lana'),
   row('P2', 'Pantalón de vestir slim gris', 'pantalon-slim-gris', '59.00', 'Gris', [['48', 'in stock'], ['50', 'in stock']], 'Hombre > Pantalones', 'male,adult', '100% lana'),
 ].join('\n')
+// Feed para la búsqueda estratégica (2.0E): pantalones amplios de varias marcas, uno slim (no materializa la
+// oportunidad) y uno sin la talla 48. Una fila por talla, con género y edad.
+const rowB = (id, title, slug, price, color, sizes, brand) => sizes.map(([size, av], i) => `${id}-${i},"${title}",http://127.0.0.1:4700/p/${slug}.html,${price} EUR,${av},${brand},${color},${size},100% algodón,Hombre > Pantalones,${id},male,adult`).join('\n')
+const feedStylist = [`id,title,link,price,availability,brand,color,size,material,product_type,item_group_id,gender,age_group`,
+  rowB('W1', 'Pantalón ancho crudo', 'ancho-crudo', '69.00', 'Crudo', [['48', 'in stock'], ['50', 'in stock']], 'Atelier Uno'),
+  rowB('W2', 'Pantalón wide leg camel', 'wide-camel', '75.00', 'Camel', [['48', 'in stock']], 'Atelier Dos'),
+  rowB('W3', 'Pantalón wide leg gris', 'wide-gris', '65.00', 'Gris', [['48', 'in stock']], 'Atelier Uno'),
+  rowB('W4', 'Pantalón ancho negro', 'ancho-negro', '59.00', 'Negro', [['48', 'in stock']], 'Atelier Uno'),
+  rowB('W5', 'Pantalón slim gris', 'slim-gris', '49.00', 'Gris', [['48', 'in stock']], 'Atelier Tres'),
+  rowB('W6', 'Pantalón ancho beige', 'ancho-beige', '70.00', 'Beige', [['50', 'in stock']], 'Atelier Dos'),
+].join('\n')
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1:4700')
   const send = (code, type, body, headers = {}) => { res.writeHead(code, { 'content-type': type, ...headers }); res.end(body) }
@@ -40,6 +51,7 @@ http.createServer((req, res) => {
   if (u.pathname === '/redir') return send(302, 'text/plain', '', { location: 'http://169.254.169.254/latest/meta-data' })
   if (u.pathname === '/feed.csv') return send(200, 'text/csv', feed)
   if (u.pathname === '/feed-psi.csv') return send(200, 'text/csv', feedPsi)
+  if (u.pathname === '/feed-stylist.csv') return send(200, 'text/csv', feedStylist)
   if (u.pathname === '/admin/price') { price = u.searchParams.get('v') ?? price; return send(200, 'text/plain', price) }
   if (u.pathname === '/admin/last-query') return send(200, 'text/plain', lastQuery)
   // Brave Search (falso) para Trend Intelligence: resultados SINTÉTICOS (no se guardan resultados reales de Brave).

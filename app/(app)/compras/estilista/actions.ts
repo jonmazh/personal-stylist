@@ -30,3 +30,12 @@ export async function refreshStrategyAction() {
   await styleStrategy(user.supabase, user.id, { force: true })
   redirect('/compras/estilista?strategy=1#oportunidades')
 }
+
+export async function searchOpportunityAction(form: FormData) {
+  const user = await getUser(); if (!user) redirect('/login')
+  const { searchForOpportunity } = await import('@/lib/shopping/catalog-service')
+  let id: string
+  try { id = (await searchForOpportunity(user.supabase, user.id, String(form.get('id')), { force: form.get('force') === '1' })).id }
+  catch (e) { redirect(`/compras/estilista?error=${encodeURIComponent((e as Error).message)}#oportunidades`) }
+  redirect(`/compras/buscar?s=${id}`)
+}
