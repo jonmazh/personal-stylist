@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { getUser } from '@/lib/supabase/server'
-import { getSearch, searchConfigured } from '@/lib/shopping/catalog-service'
+import { channel3Configured, getSearchForDisplay, searchConfigured } from '@/lib/shopping/catalog-service'
 import { listNeeds } from '@/lib/shopping/service'
 import { AVAILABILITY, SOURCE_KINDS, label } from '@/lib/shopping/catalog/taxonomy'
 import { label as tlabel } from '@/lib/shopping/taxonomy'
@@ -16,16 +16,16 @@ const fmt = (p: number | null, c = 'EUR') => (p == null ? 'Precio sin comprobar'
 export default async function SearchPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams
   const user = (await getUser())!
-  const [needs, search] = await Promise.all([listNeeds(user.supabase).catch(() => []), sp.s ? getSearch(user.supabase, sp.s).catch(() => null) : Promise.resolve(null)])
-  const provider = searchConfigured()
+  const [needs, search] = await Promise.all([listNeeds(user.supabase).catch(() => []), sp.s ? getSearchForDisplay(user.supabase, user.id, sp.s).catch(() => null) : Promise.resolve(null)])
+  const provider = searchConfigured() || channel3Configured()
   const need = search?.need_id ? needs.find((n: Row) => n.id === search.need_id) : null
   return (
     <main className="wide shop">
       <p className="eyebrow"><Link href="/compras">Compras</Link> · Buscar productos · <Link href="/compras/productos">Candidatos</Link> · <Link href="/compras/fuentes">Fuentes</Link></p>
       <h1 className="display">Buscar productos</h1>
-      <p className="m">Busco en tus fuentes autorizadas (feeds) y, si está configurado, en un buscador de productos que solo enlaza a las páginas de las tiendas. Parto de tu perfil: busco el tipo de prenda (no solo las palabras que escribes) y también en los colores que te favorecen y te faltan; después evalúo cada producto con tu colorimetría, tu ajuste, tu estilo y tu armario. Nunca ordeno por precio ni por popularidad.</p>
+      <p className="m">Busco en tus fuentes autorizadas (feeds), en las tiendas con catálogo oficial (UCP) y, si están configurados, en Channel3 (catálogo multimarca) y en un buscador que solo enlaza a las páginas de las tiendas. Las fuentes solo encuentran productos: lo que te favorece lo decide la evaluación. Parto de tu perfil: busco el tipo de prenda (no solo las palabras que escribes) y también en los colores que te favorecen y te faltan; después evalúo cada producto con tu colorimetría, tu ajuste, tu estilo y tu armario. Nunca ordeno por precio ni por popularidad.</p>
       {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
-      {!provider && <p className="note">No hay buscador de productos configurado: solo se busca en tus feeds. También puedes <Link href="/compras/importar">importar un producto por URL o a mano</Link>.</p>}
+      {!provider && <p className="note">No hay buscador de productos ni Channel3 configurados: solo se busca en tus feeds y en las tiendas con catálogo oficial. También puedes <Link href="/compras/importar">importar un producto por URL o a mano</Link>.</p>}
 
       <form action={searchAction} className="osec">
         <label>Para la necesidad<select name="need_id" defaultValue={search?.need_id ?? sp.need ?? ''}><option value="">— Búsqueda libre —</option>{needs.map((n: Row) => <option key={n.id} value={n.id}>{n.title}</option>)}</select></label>

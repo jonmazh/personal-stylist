@@ -216,6 +216,7 @@ Grimey (tienda Shopify) publica su catálogo con el **Universal Commerce Protoco
 | Tienda (`store`) | Publicado por la tienda en la página del producto. |
 | Feed (`feed`) | Viene del feed autorizado. |
 | Buscador (`search`) | Resumen del buscador: hay que confirmarlo en la tienda. |
+| Channel3 (`channel3`) | Datos de la tienda recopilados por el catálogo de Channel3 (precio y stock se vuelven a consultar antes de mostrarlos). |
 | Deducido (`derived`) | Deducido por reglas del nombre o la descripción de la tienda (p. ej. el tipo de prenda). |
 | Foto (`photo`) | Extraído de fotografías. |
 | IA (`ai`) | Inferencia de la IA, sin confirmar. |
@@ -262,6 +263,31 @@ Recomendados para ti (mayor compatibilidad personal), mejor aportación al armar
 - `tests/personal-shopper.test.ts`: el mismo producto puntúa distinto para perfiles distintos; un color favorable pero saturado no gana; el corte que no prefieres resta; los outfits nuevos (con IDs reales) suman; la redundancia penaliza; la falta de datos queda neutra y baja la confianza; cambian las recomendaciones al cambiar el perfil o el armario; los descartados no se recomiendan; búsqueda ampliada y Color Intelligence.
 - `tests/e2e/personal-shopper.cjs` (tienda de prueba): dos perfiles con los mismos productos; el color saturado no gana y queda como no recomendado con motivo; entre dos pantalones parecidos gana el de corte adecuado aunque sea más caro; al cambiar el armario cambia la recomendación y la caché.
 - `tests/e2e/psi-live.cjs` (`PSI_LIVE=1`): dos perfiles opuestos con productos reales de Grimey y EME Studios.
+
+## Channel3 (catálogo multimarca)
+
+Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus datos; **no decide qué te favorece** (lo decide el motor 4C) y su relevancia no se usa como puntuación. Conector: `lib/shopping/catalog/channel3.ts` (cumple `ProductSource`). Documentación oficial: https://channel3.ai/docs; esquemas comprobados con el SDK oficial `@channel3/sdk` 4.9.0 (no se usa como dependencia: el conector llama a la API directamente y valida cada respuesta con Zod).
+
+| Operación | Uso | Coste |
+| - | - | - |
+| `POST /v1/search` | Buscar candidatos (modo `default`: texto + semántica) | 1 crédito |
+| `GET /v1/products/{id}` | Ficha actual: precio, disponibilidad, tallas y enlace de compra | Gratis |
+| `GET /v1/websites/search` | Dominio → tienda y mercados en los que está indexada (caché 24 h) | Gratis |
+| `POST /v1/lookup` | URL de una tienda «solo enlace» → ficha, solo si ya está en su catálogo (`realtime_fetch: false`) | 1 crédito |
+
+**Configuración** (solo servidor; ver `.env.example`): `CHANNEL3_API_KEY`, `CHANNEL3_COUNTRY=ES`, `CHANNEL3_LANGUAGE=es`, `CHANNEL3_CURRENCY=EUR`, `CHANNEL3_FOREIGN_MARKETS=1`, `CHANNEL3_MODE=default`. La clave va en la cabecera `x-api-key`, solo hacia la API oficial; nunca llega al navegador, a los registros ni a la base de datos. Sin clave, Channel3 queda desactivado.
+
+**Mercados.** Channel3 indica en qué países tiene cada tienda. A 10-11-2026: Zara está indexada en España; **Bershka solo en Reino Unido y EE. UU.; Pull&Bear solo en EE. UU.** Con `CHANNEL3_FOREIGN_MARKETS=1` esas tiendas se consultan en su mercado y sus productos se marcan «precio de otro mercado, no verificado para España»: el precio (en £ o $) **no** se compara con tu presupuesto en euros (para el motor queda desconocido y neutro; no se convierten divisas).
+
+**Consultas.** Se envían solo criterios comerciales: tipo de prenda (categoría de la taxonomía de Channel3 comprobada), un color por consulta (hex; la paleta de Channel3 es una condición AND), tiendas, género y precio en tu moneda. Nunca medidas, fotos ni tu perfil. En mercados extranjeros el texto va en inglés. Se agrupan las tiendas por mercado: 1 crédito por consulta y mercado (una búsqueda típica: 3 créditos). El modo `agentic` (un LLM planifica sub-búsquedas, más latencia) existe pero no se activa por defecto (`CHANNEL3_MODE=agentic`).
+
+**Normalización y procedencia.** Cada producto pasa al modelo común (`external_products`): título, marca, categoría, descripción, precio y precio anterior, moneda, composición (solo con porcentajes), corte o silueta del atributo `fit`, imágenes (solo enlazadas), tallas con disponibilidad (si la ficha las trae) y fecha de consulta. Procedencia: «Channel3» para lo publicado; «Deducido» para lo sacado del texto; «Foto» para el color estimado de la imagen. Lo ausente queda desconocido. Identidad estable: `channel3:<id>`.
+
+**Actualización.** Según sus normas de caché se guardan los ID, no los precios: la caché de 24 h reutiliza el descubrimiento y la evaluación, pero antes de mostrar resultados (o una ficha con más de 30 min) se pide la ficha actual (gratis), se reevalúa y se reordena. El enlace de compra es temporal: no se guarda y se genera en el momento del clic (`/api/shopping/channel3/offer`). La comisión de afiliación ni se guarda ni influye en nada.
+
+**Consumo.** Cada búsqueda, verificación o clic registra en `ai_runs.meta.channel3` las llamadas por tipo, el tiempo, los errores y los créditos estimados (0,007 $ por crédito tras los 1000 gratuitos al mes). Límites de la API: 10 búsquedas/s y 10 000 llamadas/día; un 429 se respeta (`Retry-After`, un único reintento).
+
+**Pruebas.** `tests/channel3.test.ts` (respuestas reales guardadas en `tests/fixtures/channel3-*.json`: configuración, autenticación, 429, tiempo agotado, mercados, consultas, normalización, deduplicación y evaluación 4C con dos perfiles, cambio de corte y de armario). `tests/e2e/channel3-live.cjs` (`CHANNEL3_LIVE=1`, API real: Bershka y Pull&Bear por separado, Zara, dos perfiles, interfaz, enlace de oferta, verificación, caché con refresco y que la clave no llegue al navegador).
 
 ## Product Analyzer y Purchase Evaluator (4C)
 

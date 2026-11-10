@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getUser } from '@/lib/supabase/server'
-import { getProduct } from '@/lib/shopping/catalog-service'
+import { getProduct, refreshChannel3Product } from '@/lib/shopping/catalog-service'
 import { listNeeds } from '@/lib/shopping/service'
 import { AVAILABILITY, PRODUCT_STATUSES, SOURCE_KINDS, STALE_DAYS, label } from '@/lib/shopping/catalog/taxonomy'
 import { GARMENT_COLORS, GROUPS, SUBS, subOf } from '@/lib/wardrobe/taxonomy'
@@ -15,11 +15,13 @@ import { EvaluationView } from '@/components/shopping/evaluation'
 import { garmentTitle } from '@/lib/wardrobe/display'
 
 type Row = Record<string, any>
-const eur = (x: unknown) => (x == null ? null : `${Number(x).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`)
+const money = (x: unknown, c = 'EUR') => (x == null ? null : `${Number(x).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c === 'EUR' ? '€' : c}`)
 
 export default async function ProductPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const [{ id }, sp] = await Promise.all([params, searchParams])
   const user = (await getUser())!
+  // Channel3: precio, disponibilidad y tallas se vuelven a pedir (gratis) antes de mostrarlos si la ficha tiene más de 30 min
+  await refreshChannel3Product(user.supabase, user.id, id).catch(() => null)
   const p = await getProduct(user.supabase, id).catch(() => null)
   if (!p) notFound()
   const [needs, analysis, evaluation, refs] = await Promise.all([listNeeds(user.supabase, { status: 'all' }).catch(() => []), latestAnalysis(user.supabase, id).catch(() => null), latestEvaluation(user.supabase, id).catch(() => null), referenceGarments(user.supabase, p).catch(() => [])])
@@ -30,7 +32,9 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
   const na = analysis?.normalized as Row | undefined
   const fs = p.field_sources as Record<string, { source: string; at?: string }>
   const storeImgs = (p.images as Row[]).filter((i) => i.origin === 'store'), mine = (p.images as Row[]).filter((i) => i.origin === 'user')
-  const manualOnly = p.retailers?.url_policy === 'manual_only'
+  const c3 = p.raw_attributes?.provider === 'channel3' ? p.raw_attributes as Row : null
+  const manualOnly = p.retailers?.url_policy === 'manual_only' && !c3
+  const eur = (x: unknown) => money(x, p.currency)
   const Field = ({ k, name, children }: { k: string; name: string; children: React.ReactNode }) => <><dt>{name}</dt><dd>{children}<Src fs={fs} k={k} /></dd></>
   return (
     <main className="wide shop">
@@ -60,7 +64,8 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           <Field k="current_price" name="Precio">{eur(p.current_price) ?? 'Sin comprobar'}{p.raw_attributes?.previous_price ? <span className="m small"> · antes {eur(p.raw_attributes.previous_price.amount)}</span> : null}{p.raw_attributes?.price_range && p.raw_attributes.price_range.max !== p.raw_attributes.price_range.min ? <span className="m small"> · según talla, hasta {eur(p.raw_attributes.price_range.max)}</span> : null}</Field>
           <Field k="availability_status" name="Disponibilidad">{label(AVAILABILITY, p.availability_status)}</Field>
           <Field k="description" name="Descripción">{p.description ?? '—'}</Field>
-          <dt>Enlace</dt><dd>{p.product_url ? <a href={p.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a> : '—'}</dd>
+          <dt>Enlace</dt><dd>{c3 ? <><a href={`/api/shopping/channel3/offer?product=${p.id}`} target="_blank" rel="noopener noreferrer nofollow">Ver oferta actual en {p.retailers?.name ?? c3.domain}</a><span className="m small"> · enlace generado por Channel3 en el momento del clic</span></> : p.product_url ? <a href={p.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a> : '—'}</dd>
+          {c3 && <><dt>Mercado</dt><dd>{c3.market_name}{c3.foreign_market ? <span className="m small"> · precio de otro mercado ({p.currency}), no verificado para España: no se compara con tu presupuesto</span> : null}<span className="m small"> · comprobado el {new Date(p.last_verified_at ?? c3.fetched_at).toLocaleString('es-ES')}</span></dd></>}
           <dt>Tienda</dt><dd>{p.retailers?.name ?? 'Desconocida'}{p.retailers?.policy_note ? <span className="m small"> · {p.retailers.policy_note}</span> : null}</dd>
         </dl>
         {p.variants.length > 0 && (<><h3>Tallas</h3><p className="small">{(p.variants as Row[]).map((v) => `${v.size ?? '—'}${v.color ? ` (${v.color})` : ''}: ${label(AVAILABILITY, v.availability).toLowerCase()}`).join(' · ')}</p><p className="m small">Comprobadas el {new Date(p.variants[0].checked_at).toLocaleDateString('es-ES')}.</p></>)}
@@ -118,7 +123,7 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
       </section>)}
 
       <section className="osec"><h2>Verificar precio y tallas</h2>
-        {!manualOnly && p.source_kind !== 'manual' && (p.product_url || p.source_kind === 'feed') && <form action={verifyAction}><input type="hidden" name="id" value={p.id} /><PendingButton className="btn small" label="Volver a comprobar en la fuente" pending="Comprobando…" /></form>}
+        {!manualOnly && p.source_kind !== 'manual' && (p.product_url || p.source_kind === 'feed' || c3) && <form action={verifyAction}><input type="hidden" name="id" value={p.id} /><PendingButton className="btn small" label="Volver a comprobar en la fuente" pending="Comprobando…" /></form>}
         <form action={verifyAction} className="btns">
           <input type="hidden" name="id" value={p.id} /><input type="hidden" name="manual" value="1" />
           <label>Precio que ves (€)<input name="price" inputMode="decimal" defaultValue={p.current_price ?? ''} /></label>

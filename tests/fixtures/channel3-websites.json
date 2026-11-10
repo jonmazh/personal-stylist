@@ -1,0 +1,76 @@
+{
+ "bershka.com": {
+  "websites": [
+   {
+    "id": "HkwK",
+    "name": "Bershka",
+    "url": "bershka.com",
+    "logo_url": "https://cdn.trychannel3.com/19a8508b-7c83-44e8-8813-ffbed935c454",
+    "description": "Bershka is an online fashion retailer for men and women.",
+    "best_commission_rate": 4.9,
+    "countries": [
+     "US",
+     "GB"
+    ]
+   }
+  ]
+ },
+ "pullandbear.com": {
+  "websites": [
+   {
+    "id": "LYcr",
+    "name": "PULL and BEAR",
+    "url": "pullandbear.com",
+    "logo_url": "https://cdn.trychannel3.com/f485d7e3-ddd2-476c-a4b7-a2922815f409",
+    "description": "PULL and BEAR is a casual fashion retailer for men and women.",
+    "best_commission_rate": 8.4,
+    "countries": [
+     "US"
+    ]
+   }
+  ]
+ },
+ "zara.com": {
+  "websites": [
+   {
+    "id": "K3tv",
+    "name": "Sasa.com",
+    "url": "sasa.com",
+    "logo_url": "https://cdn.trychannel3.com/f8ae1e50-5915-4f8b-a969-16c3aefc0fa2",
+    "description": "Sasa.com is a leading beauty retailer selling skincare, makeup, and healthcare.",
+    "best_commission_rate": 7.0,
+    "countries": [
+     "US"
+    ]
+   },
+   {
+    "id": "Mnrl",
+    "name": "Zara",
+    "url": "zara.com",
+    "logo_url": "https://cdn.trychannel3.com/339a97cb-d4f6-489c-bda2-0741150ff79b",
+    "description": "Zara is a Spanish multinational retail chain specializing in fast fashion apparel.",
+    "best_commission_rate": 0.0,
+    "countries": [
+     "ES",
+     "US",
+     "CA",
+     "GB",
+     "SE",
+     "IE",
+     "RO",
+     "PL",
+     "FR",
+     "PT",
+     "NL",
+     "GR",
+     "CH",
+     "DE",
+     "IT",
+     "BE",
+     "AT",
+     "FI"
+    ]
+   }
+  ]
+ }
+}
