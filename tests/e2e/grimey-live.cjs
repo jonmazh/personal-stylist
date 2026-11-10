@@ -26,7 +26,7 @@ if (process.env.GRIMEY_LIVE !== '1') { console.log('— omitida: exporta GRIMEY_
   const s = await A.post('/api/shopping/search', { need_id: need, force: true })
   const grimeySrc = s.sources.find((x) => x.label === 'Grimey (UCP)')
   assert.ok(grimeySrc, JSON.stringify(s.sources)); assert.equal(grimeySrc.status, 'ok', JSON.stringify(grimeySrc))
-  const hits = s.results.filter((h) => h.source_kind === 'api')
+  const hits = s.results.filter((h) => h.source_label === 'Grimey (UCP)')
   assert.ok(hits.length > 0, 'resultados reales de Grimey')
   for (const h of hits) {
     assert.match(h.product_url, /^https:\/\/grimey\.com\/products\//); assert.equal(h.currency, 'EUR'); assert.ok(h.current_price > 0 && h.current_price <= 90, `precio dentro del límite: ${h.current_price}`)
@@ -39,7 +39,7 @@ if (process.env.GRIMEY_LIVE !== '1') { console.log('— omitida: exporta GRIMEY_
 
   await go(`/compras/buscar?s=${s.id}`)
   assert.match(await main(), /Grimey \(UCP\): \d+ resultados?/)
-  const idx = s.results.findIndex((h) => h.source_kind === 'api')
+  const idx = s.results.findIndex((h) => h.source_label === 'Grimey (UCP)')
   await p.locator('.hit').nth(idx).locator('button:has-text("Guardar como candidato")').click(); await p.waitForURL(/productos\/[0-9a-f-]{36}\?saved=1/); await p.waitForLoadState('networkidle')
   const pid = p.url().split('?')[0].split('/').pop()
   let t = await main()

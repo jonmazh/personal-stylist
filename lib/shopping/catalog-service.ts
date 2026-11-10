@@ -8,7 +8,8 @@ import { canonicalUrl, normalizeProduct, retailerForUrl, type NormalizedProduct 
 import { FetchBlocked, safeFetch } from './catalog/net'
 import { parseFeed } from './catalog/feed'
 import { queryFromNeed, queryFromText, type ProductSearchQuery } from './catalog/query'
-import { ucpConfig, ucpSource, UcpError, type UcpRetailer } from './catalog/ucp'
+import { ucpConfig, UcpError, type UcpRetailer } from './catalog/ucp'
+import { connectorSource } from './catalog/registry'
 import { feedSource, manualProduct, searchAll, searchProviderConfig, searchProviderSource, urlImportSource, type ProductSource, type RetailerRef, type SearchHit } from './catalog/sources'
 
 /** Product Discovery (fase 4B): tiendas, fuentes autorizadas, búsqueda, importación y catálogo de candidatos. */
@@ -102,7 +103,7 @@ async function buildSources(sb: Sb, retailers: RetailerRef[]): Promise<ProductSo
     out.push(feedSource(f, (items ?? []).map((i) => i.product as NormalizedProduct), retailers, retailers.find((r) => r.id === f.retailer_id) ?? null))
   }
   // Tiendas con conector UCP (p. ej. Grimey): catálogo oficial, consultado bajo demanda
-  for (const r of retailers as UcpRetailer[]) if (r.connector === 'ucp') out.push(ucpSource(r))
+  for (const r of retailers as UcpRetailer[]) if (r.connector === 'ucp') out.push(connectorSource(r))
   // El buscador genérico no repite las tiendas que ya se consultan por su catálogo oficial
   out.push(searchProviderSource(searchProviderConfig(), (retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp')))
   return out
@@ -209,7 +210,7 @@ export async function importFromUrl(sb: Sb, uid: string, raw: { url?: string; ne
   if (!/^https?:\/\//i.test(url)) throw new WardrobeError('Pega la dirección completa del producto (https://…).')
   const retailers = await listRetailers(sb)
   const ucpShop = (retailers as UcpRetailer[]).find((x) => x.connector === 'ucp' && retailerForUrl(url, [x]))
-  const r = ucpShop ? await ucpSource(ucpShop).getProduct!(url) : await urlImportSource(retailers).getProduct!(url)
+  const r = ucpShop ? await connectorSource(ucpShop).getProduct!(url) : await urlImportSource(retailers).getProduct!(url)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_import', model: 'reglas', meta: { ok: r.ok, reason: r.ok ? r.how : r.reason, retailer: r.retailer?.slug ?? null } })
   if (!r.ok) return { ok: false as const, reason: r.reason, message: r.message, url, retailer: r.retailer ? { id: r.retailer.id, name: r.retailer.name } : null }
   const saved = await upsertProduct(sb, uid, r.product, { need_id: raw.need_id ?? null, retailer_id: r.retailer?.id ?? null, verify_note: r.note })
@@ -326,7 +327,7 @@ export async function verifyProduct(sb: Sb, uid: string, id: string, manual?: { 
   const shop = p.source_kind === 'api' && p.retailer_id ? ((await listRetailers(sb)) as UcpRetailer[]).find((x) => x.id === p.retailer_id && x.connector === 'ucp') : null
   if (shop && p.external_product_id) {
     try {
-      const fresh = await ucpSource(shop).getById(p.external_product_id)
+      const fresh = await connectorSource(shop).getById(p.external_product_id)
       const old = (p.variants as Row[]).filter((v) => v.availability !== 'unknown').length
       if (fresh.variants.every((v) => v.availability === 'unknown') && old) fresh.variants = []   // el detalle no trae tallas: se conservan las comprobadas
       await upsertProduct(sb, uid, fresh, { verify_note: `Comprobado en el catálogo oficial de ${shop.name} (UCP) el ${new Date().toLocaleString('es-ES')}.` })

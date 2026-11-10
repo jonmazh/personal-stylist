@@ -88,7 +88,7 @@ Precio objetivo (máximo, si no mínimo; si no hay, tu presupuesto máximo por p
 
 ## Preferencias
 
-Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme, Grimey. La búsqueda de productos (4B) solo consulta tus tiendas preferidas (si has elegido alguna) y nunca las excluidas.
+Tiendas preferidas y excluidas (no ambas a la vez), calidad frente a precio, umbral para proponer compra (por defecto 45) y pesos. Tiendas disponibles: Zara, Massimo Dutti, Pull&Bear, Bershka, Stradivarius, COS, ARKET, Uniqlo, Mango Man, Selected Homme, Grimey, EME Studios. La búsqueda de productos (4B) solo consulta tus tiendas preferidas (si has elegido alguna) y nunca las excluidas.
 
 ## Product Discovery (4B)
 
@@ -119,6 +119,7 @@ Todas cumplen la interfaz `ProductSource` (`lib/shopping/catalog/sources.ts`); e
 | Mango Man | Complementarias | mango.com | Solo metadatos públicos |
 | Selected Homme | Complementarias | selected.com | Solo metadatos públicos |
 | Grimey | Conectadas por UCP | grimey.com | Solo metadatos públicos |
+| EME Studios | Conectadas por UCP | emestudios.com | Solo metadatos públicos |
 
 - **Solo metadatos públicos** (`metadata`): Una página, a petición tuya, si robots.txt lo permite.
 - **Solo enlace y tus datos** (`manual_only`): Sus condiciones no permiten la extracción automatizada.
@@ -185,6 +186,28 @@ Grimey (tienda Shopify) publica su catálogo con el **Universal Commerce Protoco
 - Detrás de un proxy de salida que resuelve DNS (como en el entorno de pruebas en la nube), `SHOPPING_FETCH_VIA_PROXY=1` y `NODE_USE_ENV_PROXY=1`.
 
 **Verificado contra el catálogo real** (`GRIMEY_LIVE=1 node tests/e2e/grimey-live.cjs`): búsqueda por necesidad, ficha guardada, verificación con `get_product`, importación por URL, URL inexistente, Product Analyzer y evaluación de compra. Para esa verificación se usó como perfil el de ejemplo que publica Shopify para pruebas, porque el entorno no tiene una URL pública; en producción debe usarse el de la app.
+
+### Conector UCP: EME Studios
+
+`EmeStudiosProductSource` (`lib/shopping/catalog/eme-studios.ts`) cumple `ProductSource` y reutiliza el cliente UCP (descubrimiento, MCP limitado a las herramientas de catálogo, límites y 429). El registro `lib/shopping/catalog/registry.ts` elige este conector para la tienda `eme-studios` (migración `0020_eme_studios.sql`) y el genérico para el resto.
+
+**Descubrimiento (9-11-2026):**
+
+- `https://emestudios.com/agents.md`: los protocolos de agentes funcionan en `https://checkout.emestudios.com`; MCP en `https://checkout.emestudios.com/api/ucp/mcp`; versiones `2026-04-08` y `2026-01-23`; pide pasar `context.address_country` y `context.currency`, respetar 429 (límite por IP) y aprobación humana para pagar. Recomienda instalar la Shop Skill: **no se instala ni se conectan cuentas** (no hace falta para consultar el catálogo).
+- `https://emestudios.com/robots.txt`: solo bloquea `/location`, `/studio` y cuenta, contraseña, lista de deseos y pruebas de acceso por idioma. `sitemap.xml` enlaza sitemaps por país e idioma; no se recorre.
+- `https://emestudios.com/.well-known/ucp` responde **403 de Cloudflare** a este servidor («Sorry, you have been blocked»). No se intenta eludir: el perfil se lee en `https://checkout.emestudios.com/.well-known/ucp`, el dominio que `agents.md` indica para los protocolos de agentes.
+- Perfil UCP: versión `2026-08-25` (anteriores soportadas: `2026-04-08`, `2026-01-23`); endpoint MCP anunciado `https://eme-official.myshopify.com/api/ucp/mcp` (el de `agents.md` responde igual); capacidades `dev.ucp.shopping.catalog.search`, `dev.ucp.shopping.catalog.lookup`, `dev.shopify.catalog`, además de carrito, checkout, pedidos, etc.
+- `tools/list`: 15 herramientas. `search_catalog`, `lookup_catalog` y `get_product` tienen **los mismos esquemas de entrada y salida** que en Grimey. La consulta de catálogo **no exige habilitar ninguna operación transaccional**: `create_cart`, `create_checkout`, `update_checkout`, `complete_checkout`, `get_order` y demás no se llaman nunca (lista blanca del cliente UCP).
+
+**Búsqueda real (validación):** herramienta `search_catalog` con `catalog.query` de la necesidad («Vaqueros hombre»), `context = {address_country: ES, language: es, currency: EUR}`, `filters.price.max` en céntimos y `pagination.limit = 10`. Respuesta: `structuredContent` con `ucp.version = 2026-08-25`, `products[]` y `pagination.has_next_page`. Ejemplos recibidos: «Ledger Raw Denim Pants», 65 € (antes 89 €), tallas 34-46 disponibles, `tags` con «hombre»; «Rough Denim Pants», 89 €. Después: `get_product` (verificación) y resolución de un enlace `emestudios.com/es/es/products/{handle}` con `search_catalog` + `get_product`.
+
+**Campos obtenidos:** los mismos que en Grimey (nombre, URL de `checkout.emestudios.com`, identificador gid, precio y moneda, precio anterior, tallas con disponibilidad, imágenes de `cdn.shopify.com` solo enlazadas, colecciones, fecha de consulta) y además **público** (`raw_attributes.audience`: hombre, mujer o unisex) según las etiquetas que publica la tienda, con procedencia «Tienda».
+
+**Lo que la tienda no publica y queda desconocido:** composición (las descripciones solo indican la altura y la talla del modelo; esa información sí llega al Product Analyzer), marca (los nombres no la incluyen), color en la mayoría de nombres. Las categorías de Shopify vienen como identificadores de taxonomía; el tipo de prenda se deduce del nombre.
+
+**Límites y políticas:** consultas bajo demanda; ritmo por tienda y `Retry-After` en 429 (límite por IP según `agents.md`); caché de búsquedas de 15 minutos; nunca se lee la web de emestudios.com; las prendas etiquetadas solo «mujer» no se proponen (el armario es masculino), las «FOR EVERYONE» sí; los productos externos nunca entran en `garments`.
+
+**Pruebas:** `tests/eme-studios.test.ts` (respuestas reales como datos: descubrimiento, búsqueda por necesidad, normalización, público, consulta por enlace localizado, 429, sin perfil, tienda excluida, registro de conectores, ausencia de herramientas transaccionales) y `EME_LIVE=1 node tests/e2e/eme-live.cjs` contra el catálogo real (con el perfil de prueba de Shopify, por la misma razón que Grimey).
 
 ### Procedencia de cada dato
 
