@@ -130,6 +130,7 @@ _Hacia dónde quieres ir. Lo revisaremos en cada actualización de tu perfil._
 | Pregunta | Tipo | Respuestas | Qué extrae | Se guarda en | Alimenta |
 |---|---|---|---|---|---|
 | Hasta tres palabras que quieres que piensen al verte | Varias opciones | Limpia · Estructurada · Relajada · Profesional · Creativa · Elegante · Cercana · Segura · Versátil · Discreta (máx. 3) | Objetivo visual en términos que el motor puede usar. | `style_goals.image_words` | Objetivos; Identidad estética |
+| ¿Cuánto te apetece experimentar con tu estilo? | Una opción | Conservador · Abierto · Explorador | Grado de experimentación aceptado. | `style_goals.experimentation` | Personal Shopper (prioridad de las oportunidades de estilo) |
 | ¿Qué te gustaría cambiar de tu forma de vestir? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g0` (jsonb) | Objetivos |
 | ¿En qué situaciones nunca encuentras la ropa adecuada? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g1` (jsonb) | Objetivos |
 | ¿Qué imagen quieres proyectar? | Texto libre | Libre | Motivación y contexto en tus palabras. | `style_goals.answers.g2` (jsonb) | Objetivos |

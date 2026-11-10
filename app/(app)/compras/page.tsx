@@ -26,7 +26,7 @@ export default async function ShoppingPage({ searchParams }: { searchParams: Pro
 
   return (
     <main className="wide shop">
-      <p className="eyebrow">Personal Shopper · <Link href="/compras/plan">Planificador</Link> · <Link href="/compras/buscar">Buscar productos</Link> · <Link href="/compras/productos">Candidatos</Link> · <Link href="/compras/fuentes">Fuentes</Link></p>
+      <p className="eyebrow">Personal Shopper · <Link href="/compras/estilista">Estilista</Link> · <Link href="/compras/plan">Planificador</Link> · <Link href="/compras/buscar">Buscar productos</Link> · <Link href="/compras/productos">Candidatos</Link> · <Link href="/compras/fuentes">Fuentes</Link></p>
       <h1 className="display">¿Qué te falta de verdad?</h1>
       <p className="m">Analizo tu armario, la auditoría, tu perfil y cómo usas la ropa para decidir si hace falta comprar algo, qué y con qué prioridad. Primero la necesidad; después, si hace falta, los productos.</p>
       {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
