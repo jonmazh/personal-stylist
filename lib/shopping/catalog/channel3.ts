@@ -161,18 +161,20 @@ const kindKey = (q: ProductSearchQuery) => q.subcategory ?? (q.category ? `group
 export function hexOf(color: string) { const h = COLOR_SWATCH[color]; return h && /^#[0-9a-f]{6}$/i.test(h) ? h.toLowerCase() : null }
 
 /** Cuerpo de POST /v1/search para una consulta y un mercado. Texto en español en España; en inglés en mercados anglosajones. */
-export function buildSearchBody(q: ProductSearchQuery, market: string, domains: string[], cfg: Channel3Config, sizes?: { key: 'size' | 'shoe-size'; values: string[] } | null) {
+export function buildSearchBody(q: ProductSearchQuery, market: string, domains: string[], cfg: Channel3Config, sizes?: { key: 'size' | 'shoe-size'; values: string[] } | null, excludeDomains: string[] = []) {
   const key = kindKey(q)
   const color = detectColors(q.text).find((c) => hexOf(c)) ?? null
   const local = market === cfg.country
   const text = local ? q.text : [color ? EN_COLOR[color] : null, (key && EN_KIND[key]) ?? q.text, 'men'].filter(Boolean).join(' ')
   // Moda masculina adulta en la propia petición (y validación posterior sobre cada producto)
-  const filters: Record<string, unknown> = { gender: 'male', age: ['adult'], website_ids: domains }
+  // Sin tiendas concretas = catálogo abierto de Channel3 en ese mercado (las tiendas que excluyes siguen fuera)
+  const filters: Record<string, unknown> = { gender: 'male', age: ['adult'], ...(domains.length ? { website_ids: domains } : {}), ...(excludeDomains.length ? { exclude_website_ids: excludeDomains } : {}) }
   const cat = key ? C3_CATEGORY[key] : null
   if (cat) filters.category_ids = [cat]
   // Tallas (prefiltro, solo en tu mercado): los valores de Channel3 no llevan sistema de tallaje (un «42» EU no es un 42 de
   // EE. UU.), así que fuera de tu mercado no se filtra; la comprobación real es siempre local, por variante
-  if (local && cat && sizes?.values.length) filters.attributes = { [sizes.key]: sizes.values }
+  const attrs = { ...(local && cat ? q.c3_attributes ?? {} : {}), ...(local && cat && sizes?.values.length ? { [sizes.key]: sizes.values } : {}) }
+  if (Object.keys(attrs).length) filters.attributes = attrs
   // Un solo color por consulta (la paleta de Channel3 es una condición AND); el motor 4C evalúa después si te favorece
   if (color) filters.colors = { palette: [{ hex: hexOf(color)! }], match: 'loose' }
   // El rango de precio solo tiene sentido en tu moneda
@@ -262,7 +264,7 @@ export function normalizeChannel3Product(raw: unknown, opts: { market: string; c
 export const isChannel3 = (p: { raw_attributes?: unknown }): boolean => (p.raw_attributes as C3Meta | undefined)?.provider === 'channel3'
 
 // ── ProductSource ──
-export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}, opts: { sizesFor?: (q: ProductSearchQuery) => { key: 'size' | 'shoe-size'; values: string[] } | null } = {}) {
+export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}, opts: { sizesFor?: (q: ProductSearchQuery) => { key: 'size' | 'shoe-size'; values: string[] } | null; localOnly?: boolean; budget?: () => number; openCatalog?: boolean } = {}) {
   const label = 'Channel3'
   const shopsFor = (q: ProductSearchQuery) => retailers.filter((r) => !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
   /** Tiendas agrupadas por el mercado en el que se consultan (las no indexadas en ninguno se omiten). */
@@ -290,15 +292,24 @@ export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = c
     available: () => (cfg.key ? { ok: true } : { ok: false, reason: 'Channel3 no está configurado (CHANNEL3_API_KEY).' }),
     plan,
     async searchProducts(q: ProductSearchQuery): Promise<SearchHit[]> {
-      const { groups } = await plan(q)
+      // Catálogo abierto (búsqueda estratégica): todo el catálogo de Channel3 en tu mercado, no solo tus tiendas
+      const groups = opts.openCatalog ? new Map([[cfg.country, { domains: [] as string[], shops: retailers }]]) : (await plan(q)).groups
+      const excluded = opts.openCatalog ? retailers.filter((r) => q.excluded.includes(r.slug)).flatMap((r) => r.domains) : []
       const hits: SearchHit[] = []
+      const seenName = new Set<string>()   // catálogo abierto: el mismo producto publicado en varios dominios de una marca cuenta una vez
       for (const [market, g] of groups) {
-        const raw = await c3request(cfg, 'search', 'v1/search', { method: 'POST', body: buildSearchBody(q, market, g.domains, cfg, opts.sizesFor?.(q) ?? null) }, deps)
+        // Búsqueda estratégica: solo el mercado local (el stock de otro mercado no se puede confirmar para ti) y con tope de créditos
+        if (opts.localOnly && market !== cfg.country) continue
+        if (opts.budget && opts.budget() <= 0) throw new Channel3Error('Presupuesto de Channel3 de esta estrategia agotado.', 'credits')
+        const raw = await c3request(cfg, 'search', 'v1/search', { method: 'POST', body: buildSearchBody(q, market, g.domains, cfg, opts.sizesFor?.(q) ?? null, excluded) }, deps)
         const sr = SearchResponse.safeParse(raw); if (!sr.success) throw new Channel3Error('Respuesta de Channel3 (búsqueda) con un formato inesperado.', 'protocol')
         for (const item of sr.data.products) {
           const n = normalizeChannel3Product(item, { market, cfg }); if (!n) continue
-          const retailer = retailerForUrl(`https://${(n.raw_attributes as unknown as C3Meta).domain ?? ''}`, g.shops)
-          if (!retailer) continue   // solo ofertas de las tiendas pedidas
+          const domain = (n.raw_attributes as unknown as C3Meta).domain ?? ''
+          const retailer = retailerForUrl(`https://${domain}`, g.shops)
+          if (!retailer && !opts.openCatalog) continue   // solo ofertas de las tiendas pedidas
+          if (opts.openCatalog && excluded.some((d) => domain === d || domain.endsWith('.' + d))) continue
+          if (opts.openCatalog) { const k = `${(n.brand ?? domain).toLowerCase()}|${n.product_name.toLowerCase()}`; if (seenName.has(k)) continue; seenName.add(k) }
           if (n.category && q.category && n.category !== q.category) continue
           hits.push({ ...n, retailer, source_label: label, source_id: null, match: matchProduct(n, { ...q, colors: [], price_min: null, price_max: null }) })
         }

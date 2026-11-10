@@ -37,7 +37,7 @@ const env = Object.fromEntries(fs.readFileSync('.env.local', 'utf8').split('\n')
 
   await go('/compras'); await p.click('.eyebrow a:has-text("Estilista")'); await p.waitForURL(/compras\/estilista/); await p.waitForLoadState('networkidle')
   let t = await main()
-  assert.match(t, /Tu armario, visto por un estilista/)
+  assert.match(t, /Tu estilista[\s\S]*Diagnóstico del armario/i)
   assert.match(t, /Tu identidad: Clean streetwear 100 %/)
   assert.match(t, /Te falta un pantalón amplio \(wide\)[\s\S]*Tienes 10 pantalones y 10 de 10 son de corte recto: la categoría está cubierta, pero la silueta no varía/)
   assert.match(t, /Hipótesis de estilo: Introducir una silueta amplio \(wide\)/)

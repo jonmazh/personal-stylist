@@ -456,3 +456,9 @@ p.state { white-space: normal; }
 .minibars { display: grid; gap: 3px; margin: 6px 0; font-size: 12px; color: var(--mut); }
 .minibars span { position: relative; display: block; padding-left: 0; }
 .minibars i { display: block; height: 3px; background: var(--olive); margin-bottom: 1px; } .minibars i.unknown { background: var(--line); }
+
+/* Personal Shopper 2.0: selección del estilista */
+.hit.curated .pimg { width: 100%; max-height: 260px; object-fit: contain; background: var(--paper, #f6f4ef); border-radius: 8px; margin-bottom: .5rem }
+.hit.curated.d-eleccion { border-left: 3px solid var(--accent, #2f5d3a) }
+.fbform { align-items: end; flex-wrap: wrap }
+.fbform select { max-width: 100% }
