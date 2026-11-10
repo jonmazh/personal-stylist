@@ -1,3 +1,4 @@
+import { forEvaluation } from './catalog/channel3'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { configError, MODEL_CHAT, MODEL_VISION, providerId } from '@/lib/ai/client'
@@ -135,11 +136,14 @@ export async function evaluateProduct(sb: Sb, uid: string, id: string, opts: { r
   const drop = first != null && p.current_price != null && first > Number(p.current_price) ? Math.round((first - Number(p.current_price)) * 100) / 100 : null
   const staleDays = p.last_verified_at ? (Date.now() - new Date(p.last_verified_at).getTime()) / 864e5 : null
   const { data: needAssess } = need ? await sb.from('shopping_need_assessments').select('expected_wears_month').eq('need_id', need.id).order('created_at', { ascending: false }).limit(1).maybeSingle() : { data: null }
-  const e: PurchaseEvaluation = evaluatePurchase(p, {
+  // Precio en otra moneda (p. ej. mercado extranjero de Channel3): no se compara con tu presupuesto en euros → neutro
+  const { product: forEval, foreign } = forEvaluation(p)
+  const e: PurchaseEvaluation = evaluatePurchase(forEval, {
     garments: prep.garments, evals: prep.evals, bundle: prep.bundle, signals: prep.signals, need: needT, openNeeds: needs, size, staleDays,
     analyzed: !!analysis, quality: analysis?.normalized?.quality ?? null, modelPhotos: !!analysis?.normalized?.model_photos, priceDrop: drop,
     usesPerMonth: needAssess?.expected_wears_month != null ? Number(needAssess.expected_wears_month) : null,
   })
+  if (foreign) e.limitations.unshift(`Precio en ${p.currency} (otro mercado, no verificado para España): no se compara con tu presupuesto.`)
   const { data: row, error } = await sb.from('purchase_evaluations').insert({
     user_id: uid, product_id: id, need_id: need?.id ?? null, engine_version: e.version, weights: e.weights, score: e.score, confidence: e.confidence, criteria: e.criteria,
     // Detalle de Personal Shopper Intelligence (sin columnas nuevas): WVA, color, confianza, completitud, redundancia, motivos

@@ -10,6 +10,7 @@ import { parseFeed } from './catalog/feed'
 import { queryFromNeed, queryFromText, type ProductSearchQuery } from './catalog/query'
 import { ucpConfig, UcpError, type UcpRetailer } from './catalog/ucp'
 import { connectorSource } from './catalog/registry'
+import { Channel3Error, Channel3Meter, channel3Config, channel3Label, forEvaluation, channel3Source, isChannel3, type C3Meta } from './catalog/channel3'
 import { buildShopperContext } from './intelligence/context'
 import { discoveryQueries } from './intelligence/discovery'
 import { rankHits } from './intelligence/rank'
@@ -100,7 +101,7 @@ export async function syncSource(sb: Sb, uid: string, id: string, uploaded?: str
 
 // ── Búsqueda ──
 async function prefsOf(sb: Sb) { const { data } = await sb.from('shopping_preferences').select('preferred_retailers, excluded_retailers').maybeSingle(); return data }
-async function buildSources(sb: Sb, retailers: RetailerRef[]): Promise<ProductSource[]> {
+async function buildSources(sb: Sb, retailers: RetailerRef[], meter?: Channel3Meter): Promise<ProductSource[]> {
   const { data: feeds } = await sb.from('product_sources').select('id, name, retailer_id').eq('kind', 'feed').eq('status', 'active')
   const out: ProductSource[] = []
   for (const f of feeds ?? []) {
@@ -109,6 +110,9 @@ async function buildSources(sb: Sb, retailers: RetailerRef[]): Promise<ProductSo
   }
   // Tiendas con conector UCP (p. ej. Grimey): catálogo oficial, consultado bajo demanda
   for (const r of retailers as UcpRetailer[]) if (r.connector === 'ucp') out.push(connectorSource(r))
+  // Channel3: catálogo multimarca (solo descubrimiento) para las tiendas sin conector propio
+  const c3 = channel3Config()
+  if (c3.key) out.push(channel3Source((retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp'), c3, { meter }))
   // El buscador genérico no repite las tiendas que ya se consultan por su catálogo oficial
   out.push(searchProviderSource(searchProviderConfig(), (retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp')))
   return out
@@ -134,6 +138,70 @@ function compactEval(e: PurchaseEvaluation) {
     wva: { score: e.wva.score, new_outfits: e.wva.new_outfits, total_outfits: e.wva.total_outfits, outfit_samples: e.wva.outfit_samples, occasions_new: e.wva.occasions_new, gaps: e.wva.gaps, reasons: e.wva.reasons.slice(0, 3) },
     combines_with: e.combines_with.slice(0, 6), reasons: e.reasons, risks: e.risks.slice(0, 4), missing_info: e.missing_info.slice(0, 4), discard_reasons: e.discard_reasons, sizes: e.indicators.sizes,
   }
+}
+
+const c3Signature = () => { const c = channel3Config(); return c.key ? `|c3:${c.country}:${c.mode}:${c.foreignMarkets ? 'fx' : 'local'}` : '' }
+/**
+ * Evaluación 4C de un candidato (sin cambiar el motor). Un precio en otra moneda (mercado extranjero de Channel3) no se
+ * compara con tu presupuesto en euros: para la evaluación queda como desconocido (neutro) y se avisa.
+ */
+function evalHit(h: Row, o: { ctx: ReturnType<typeof buildShopperContext>; need: Row | null; needs: Row[]; fast: boolean }) {
+  try {
+    const { product: p, foreign } = forEvaluation(h, channel3Config().currency)
+    const e = compactEval(evaluatePurchase(p as never, { garments: o.ctx.garments, evals: o.ctx.evals, bundle: o.ctx.bundle, ctx: o.ctx, need: o.need as never, openNeeds: o.needs as never, analyzed: false, staleDays: h.source_kind === 'search' ? null : 0, fast: o.fast }))
+    const note = isChannel3(h) ? channel3Label(h.raw_attributes as C3Meta) : null
+    if (foreign || note) e.missing_info = [...(note ? [`${note}: el precio (${h.current_price ?? '—'} ${h.currency}) no se compara con tu presupuesto.`] : []), ...e.missing_info].slice(0, 5)
+    return e
+  } catch { return null /* sin evaluar: se muestra aparte */ }
+}
+/** Ficha actual (gratis) de cada resultado de Channel3: precio, disponibilidad y tallas; se reevalúa y se reordena. */
+async function refreshChannel3Hits(results: Row[], evaluate: (h: Row) => ReturnType<typeof evalHit>, meter: Channel3Meter) {
+  const c3 = channel3Source([], channel3Config(), { meter })
+  const out = [...results]
+  const idx = out.map((h, i) => (isChannel3(h) ? i : -1)).filter((i) => i >= 0)
+  for (let k = 0; k < idx.length; k += 6) {
+    await Promise.all(idx.slice(k, k + 6).map(async (i) => {
+      const h = out[i]; const m = h.raw_attributes as C3Meta
+      try {
+        const { product } = await c3.getById(m.channel3_id, { market: m.market, domain: m.domain })
+        const fresh = { ...h, current_price: product.current_price, currency: product.currency, availability_status: product.availability_status, variants: product.variants, raw_attributes: { ...m, fetched_at: (product.raw_attributes as unknown as C3Meta).fetched_at, previous_price: (product.raw_attributes as unknown as C3Meta).previous_price, refresh: 'ok' } }
+        out[i] = { ...fresh, evaluation: evaluate(fresh) }
+      } catch (e) {
+        const gone = e instanceof Channel3Error && e.code === 'not_found'
+        const fresh = { ...h, ...(gone ? { availability_status: 'out_of_stock' } : {}), raw_attributes: { ...m, refresh: gone ? 'gone' : 'failed', refresh_error: (e as Error).message } }
+        out[i] = gone ? { ...fresh, evaluation: evaluate(fresh) } : fresh
+      }
+    }))
+  }
+  return rankHits(out as never) as Row[]
+}
+
+/**
+ * Antes de mostrar una búsqueda con resultados de Channel3 (de la caché o al volver a la página): si su ficha tiene más de
+ * `maxAgeMin` minutos, se piden las fichas actuales (gratis), se reevalúan con el motor 4C y se guarda el nuevo orden
+ * (el índice de cada resultado debe coincidir con lo guardado para «Guardar como candidato» y «Ver oferta actual»).
+ */
+async function refreshSearchRow(sb: Sb, uid: string, row: Row, ev: { ctx: ReturnType<typeof buildShopperContext>; need: Row | null; needs: Row[] } | null, maxAgeMin = 30) {
+  let results = row.results as Row[]
+  const old = results.filter((h) => isChannel3(h) && Date.now() - new Date((h.raw_attributes as C3Meta).fetched_at).getTime() >= maxAgeMin * 60e3)
+  if (!old.length || !channel3Config().key) return results
+  if (!ev) {
+    const [sc, needs] = await Promise.all([shoppingContext(sb, uid), listNeeds(sb)])
+    const ctx = buildShopperContext({ bundle: sc.prep.bundle, garments: sc.prep.garments, evals: sc.prep.evals, signals: sc.prep.signals, needs, prefs: sc.prefs, use: sc.use })
+    let need: Row | null = null
+    if (row.need_id) { const { data: n } = await sb.from('shopping_needs').select('*').eq('id', row.need_id).maybeSingle(); if (n) need = { ...n, spec: NeedSpec.parse(n.spec) } }
+    ev = { ctx, need, needs }
+  }
+  const meter = new Channel3Meter()
+  results = await refreshChannel3Hits(results, (h) => evalHit(h, { ctx: ev!.ctx, need: ev!.need, needs: ev!.needs, fast: results.length > 25 }), meter)
+  await sb.from('shopping_searches').update({ results }).eq('id', row.id)
+  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: row.id, refreshed: true, channel3: meter.summary() } })
+  return results
+}
+/** Búsqueda guardada lista para mostrar: precio, stock y tallas de Channel3 actualizados si tienen más de 30 min. */
+export async function getSearchForDisplay(sb: Sb, uid: string, id: string) {
+  const row = await getSearch(sb, id)
+  return { ...row, results: await refreshSearchRow(sb, uid, row, null).catch(() => row.results) }
 }
 
 /**
@@ -162,15 +230,20 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
   const retailers = await listRetailers(sb)
   const { data: feeds } = await sb.from('product_sources').select('id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
   const ucp = (retailers as UcpRetailer[]).some((r) => r.connector === 'ucp' && !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
-  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : '') + `|ctx:${ctx.hash}|${EVAL_VERSION}`)
+  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : '') + c3Signature() + `|ctx:${ctx.hash}|${EVAL_VERSION}`)
   if (!raw.force) {
     // UCP: las respuestas de catálogo no deben reutilizarse entre sesiones sin revalidar → caché de 15 minutos
     const since = new Date(Date.now() - (ucp ? UCP_CACHE_MINUTES * 60e3 : CACHE_HOURS * 3600e3)).toISOString()
     const { data: hit } = await sb.from('shopping_searches').select('*').eq('cache_key', cache_key).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (hit) return { id: hit.id as string, query: hit.query as ProductSearchQuery, results: hit.results as Row[], sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
+    if (hit) {
+      // Caché de descubrimiento (IDs y evaluación); precio, stock y tallas de Channel3 se vuelven a pedir (gratis) antes de mostrarlos
+      const results = await refreshSearchRow(sb, uid, hit, { ctx, need, needs }, 0)
+      return { id: hit.id as string, query: hit.query as ProductSearchQuery, results, sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
+    }
   }
   // Descubrimiento (consultas en serie: respeta los límites de cada tienda)
-  const sources = await buildSources(sb, retailers)
+  const meter = new Channel3Meter()
+  const sources = await buildSources(sb, retailers, meter)
   const byKey = new Map<string, SearchHit>(); const stat = new Map<string, Row>()
   for (const dq of plan.queries) {
     const { results, statuses } = await searchAll(dq, sources, 30)
@@ -180,18 +253,14 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
   // Evaluación personal de cada candidato
   const t0 = Date.now()
   const candidates = [...byKey.values()].slice(0, 40)
-  const evaluated = candidates.map((h) => {
-    let evaluation = null
-    try { evaluation = compactEval(evaluatePurchase(h, { garments: ctx.garments, evals: ctx.evals, bundle: ctx.bundle, ctx, need, openNeeds: needs, analyzed: false, staleDays: h.source_kind === 'search' ? null : 0, fast: candidates.length > 25 })) } catch { /* sin evaluar: se muestra aparte */ }
-    return { ...slim(h), evaluation }
-  })
+  const evaluated = candidates.map((h) => ({ ...slim(h), evaluation: evalHit(h, { ctx, need, needs, fast: candidates.length > 25 }) }))
   const ranked = rankHits(evaluated)
   // Recuento por fuente de productos únicos (la misma prenda puede salir en varias consultas)
   const statuses = [...stat.values()].map((st) => { const count = [...byKey.values()].filter((h) => (st.id ? h.source_id === st.id : h.source_label === st.label)).length; return { ...st, count, status: count ? 'ok' : st.status === 'ok' ? 'empty' : st.status } as Row })
   const query = { ...q, plan: plan.queries.map((x) => x.text), notes: plan.notes, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
   const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query, query_text: q.text, cache_key, sources: statuses, results: ranked, result_count: ranked.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
-  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: ranked.length, queries: plan.queries.length, sources: statuses.map((x) => `${x.kind}:${x.status}`), eval_ms: query.eval_ms } })
+  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: ranked.length, queries: plan.queries.length, sources: statuses.map((x) => `${x.kind}:${x.status}`), eval_ms: query.eval_ms, ...(meter.calls.length ? { channel3: meter.summary() } : {}) } })
   return { id: s.id as string, query, results: ranked as Row[], sources: statuses as Row[], cached: false, created_at: s.created_at as string }
 }
 export async function getSearch(sb: Sb, id: string) {
@@ -249,7 +318,7 @@ export async function saveSearchResult(sb: Sb, uid: string, searchId: string, in
   const s = await getSearch(sb, searchId)
   const h = (s.results as Row[])[index]
   if (!h) throw new WardrobeError('Ese resultado ya no está disponible.', 404)
-  return upsertProduct(sb, uid, h as never, { need_id: s.need_id, search_id: s.id, source_id: h.source_id, retailer_id: h.retailer?.id ?? null, verify_note: h.source_kind === 'search' ? 'Datos del buscador: impórtalo o verifícalo en la tienda.' : null })
+  return upsertProduct(sb, uid, h as never, { need_id: s.need_id, search_id: s.id, source_id: h.source_id, retailer_id: h.retailer?.id ?? null, verify_note: h.source_kind === 'search' ? 'Datos del buscador: impórtalo o verifícalo en la tienda.' : isChannel3(h) ? `Datos de Channel3 (${(h.raw_attributes as C3Meta).market_name}) del ${new Date((h.raw_attributes as C3Meta).fetched_at).toLocaleString('es-ES')}.` : null })
 }
 
 /** Importación por URL. Si la tienda o robots.txt no lo permiten, no se descarga nada y se ofrece la importación asistida. */
@@ -258,7 +327,14 @@ export async function importFromUrl(sb: Sb, uid: string, raw: { url?: string; ne
   if (!/^https?:\/\//i.test(url)) throw new WardrobeError('Pega la dirección completa del producto (https://…).')
   const retailers = await listRetailers(sb)
   const ucpShop = (retailers as UcpRetailer[]).find((x) => x.connector === 'ucp' && retailerForUrl(url, [x]))
-  const r = ucpShop ? await connectorSource(ucpShop).getProduct!(url) : await urlImportSource(retailers).getProduct!(url)
+  let r = ucpShop ? await connectorSource(ucpShop).getProduct!(url) : await urlImportSource(retailers).getProduct!(url)
+  // Tienda «solo enlace» (no se lee su página): si Channel3 está configurado, se consulta su catálogo (1 crédito, sin lectura en vivo)
+  if (!r.ok && r.reason === 'policy' && channel3Config().key) {
+    const meter = new Channel3Meter()
+    const c3 = await channel3Source(retailers, channel3Config(), { meter }).getProduct(url)
+    await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_import', model: 'reglas', meta: { channel3: meter.summary(), ok: c3.ok } })
+    if (c3.ok) r = c3
+  }
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_import', model: 'reglas', meta: { ok: r.ok, reason: r.ok ? r.how : r.reason, retailer: r.retailer?.slug ?? null } })
   if (!r.ok) return { ok: false as const, reason: r.reason, message: r.message, url, retailer: r.retailer ? { id: r.retailer.id, name: r.retailer.name } : null }
   const saved = await upsertProduct(sb, uid, r.product, { need_id: raw.need_id ?? null, retailer_id: r.retailer?.id ?? null, verify_note: r.note })
@@ -372,6 +448,20 @@ export async function verifyProduct(sb: Sb, uid: string, id: string, manual?: { 
     await upsertProduct(sb, uid, it, { verify_note: `Según el feed sincronizado el ${new Date(src?.last_sync_at ?? now).toLocaleDateString('es-ES')}.` })
     return { ok: true, how: 'feed', changed: true, note: 'Actualizado desde el feed.' }
   }
+  if (isChannel3(p)) {
+    const m = p.raw_attributes as C3Meta
+    const meter = new Channel3Meter()
+    try {
+      const { product } = await channel3Source([], channel3Config(), { meter }).getById(m.channel3_id, { market: m.market, domain: m.domain })
+      await upsertProduct(sb, uid, product, { verify_note: `Comprobado en Channel3 (${m.market_name}) el ${new Date().toLocaleString('es-ES')}.` })
+      return { ok: true, how: 'channel3', changed: true, note: `Precio, disponibilidad y tallas actualizados desde Channel3 (${m.market_name}).` }
+    } catch (e) {
+      if (e instanceof Channel3Error && e.code === 'not_found') { await sb.from('external_products').update({ availability_status: 'out_of_stock', verify_note: 'Ya no está en el catálogo de Channel3.', last_verified_at: now }).eq('id', id); await recordPrice(sb, uid, id, p.current_price, p.currency, 'out_of_stock', 'api'); return { ok: true, how: 'channel3', changed: true, note: 'Ya no está en el catálogo de Channel3.' } }
+      const msg = e instanceof Channel3Error ? e.message : 'No se pudo consultar Channel3.'
+      await sb.from('external_products').update({ verify_note: msg }).eq('id', id)
+      return { ok: false, how: 'manual', changed: false, note: `${msg} Indica tú el precio y la disponibilidad que ves en la tienda.` }
+    } finally { await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_verify', model: 'reglas', meta: { channel3: meter.summary() } }) }
+  }
   const shop = p.source_kind === 'api' && p.retailer_id ? ((await listRetailers(sb)) as UcpRetailer[]).find((x) => x.id === p.retailer_id && x.connector === 'ucp') : null
   if (shop && p.external_product_id) {
     try {
@@ -413,3 +503,32 @@ export async function removeProductImage(sb: Sb, uid: string, id: string, storag
 }
 export const searchConfigured = () => { const c = searchProviderConfig(); return !!(c.provider && c.key) }
 export { canonicalUrl }
+
+/**
+ * Enlace de compra de un resultado o producto de Channel3: se pide la ficha ACTUAL (gratis) en el momento del clic y se
+ * devuelve su enlace de oferta (temporal, nunca guardado). Solo para productos de tus búsquedas o de tu lista.
+ */
+export async function channel3OfferUrl(sb: Sb, uid: string, ref: { search_id?: string | null; index?: number | null; product_id?: string | null }) {
+  let m: C3Meta | null = null
+  if (ref.product_id) { const { data } = await sb.from('external_products').select('raw_attributes').eq('id', ref.product_id).maybeSingle(); if (data && isChannel3(data)) m = data.raw_attributes as C3Meta }
+  else if (ref.search_id && ref.index != null) { const s = await getSearch(sb, ref.search_id); const h = (s.results as Row[])[ref.index]; if (h && isChannel3(h)) m = h.raw_attributes as C3Meta }
+  if (!m) throw new WardrobeError('Ese producto no viene de Channel3.', 404)
+  const meter = new Channel3Meter()
+  try {
+    const { offerUrl } = await channel3Source([], channel3Config(), { meter }).getById(m.channel3_id, { market: m.market, domain: m.domain })
+    if (!offerUrl) throw new WardrobeError('Channel3 ya no tiene una oferta para este producto.', 404)
+    return offerUrl
+  } catch (e) {
+    if (e instanceof Channel3Error) throw new WardrobeError(e.code === 'not_found' ? 'Ese producto ya no está en el catálogo de Channel3.' : e.message, e.code === 'not_found' ? 404 : 502)
+    throw e
+  } finally { await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_offer', model: 'reglas', meta: { channel3: meter.summary() } }) }
+}
+export const channel3Configured = () => !!channel3Config().key
+
+/** Antes de mostrar un producto de Channel3: si su ficha tiene más de 30 min, se pide la actual (gratis) y se guarda. */
+export async function refreshChannel3Product(sb: Sb, uid: string, id: string, maxAgeMin = 30) {
+  const { data } = await sb.from('external_products').select('id, raw_attributes, last_verified_at').eq('id', id).maybeSingle()
+  if (!data || !isChannel3(data) || !channel3Config().key) return null
+  if (data.last_verified_at && Date.now() - new Date(data.last_verified_at).getTime() < maxAgeMin * 60e3) return null
+  return verifyProduct(sb, uid, id)
+}

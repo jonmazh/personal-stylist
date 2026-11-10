@@ -13,10 +13,12 @@ const COLOR_LABEL: Record<string, string> = {
 export function HitCard({ h, index, searchId, compact = false }: { h: Row; index: number; searchId: string; compact?: boolean }) {
   const e = h.evaluation as Row | null
   const v = e ? VERDICTS.find((x) => x.id === e.verdict) : null
+  const c3 = h.raw_attributes?.provider === 'channel3' ? h.raw_attributes as Row : null
   return (
     <div className={`hit ${e ? `v-${e.verdict}` : ''}`}>
       <span className="st">{h.retailer?.name ?? h.brand ?? 'Tienda'} · {h.source_label ?? label(SOURCE_KINDS, h.source_kind)}</span>
       <h3>{h.product_name}</h3>
+      {c3 && <span className="m small">{c3.foreign_market ? `Mercado: ${c3.market_name} · precio de otro mercado, no verificado para España` : `Mercado: ${c3.market_name}`} · {c3.refresh === 'failed' ? 'no se pudo actualizar: precio sin verificar' : c3.refresh === 'gone' ? 'ya no está en el catálogo' : `precio comprobado el ${new Date(c3.fetched_at).toLocaleString('es-ES')}`}</span>}
       <span className="small">{fmt(h.current_price, h.currency)}{h.raw_attributes?.previous_price ? ` (antes ${fmt(h.raw_attributes.previous_price.amount, h.currency)})` : ''}{h.availability_status && h.availability_status !== 'unknown' ? ` · ${label(AVAILABILITY, h.availability_status)}` : ''}{h.confirmed_composition ? ` · ${h.confirmed_composition}` : ''}</span>
       {e ? (<>
         <p className="score-line"><b>{e.score}/100</b> · {v?.label} · confianza {e.confidence} ({e.confidence_score}/100) · datos {Math.round(e.completeness * 100)} %</p>
@@ -36,7 +38,8 @@ export function HitCard({ h, index, searchId, compact = false }: { h: Row; index
         </>)}
       </>) : <p className="m small">Sin evaluar (faltan datos para compararlo con tu perfil).</p>}
       <div className="btns">
-        {h.product_url && <a className="btn small" href={h.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a>}
+        {c3 ? <a className="btn small" href={`/api/shopping/channel3/offer?search=${searchId}&i=${index}`} target="_blank" rel="noopener noreferrer nofollow">Ver oferta actual</a>
+          : h.product_url && <a className="btn small" href={h.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a>}
         <form action={saveResultAction}><input type="hidden" name="search_id" value={searchId} /><input type="hidden" name="index" value={index} /><button className="btn small primary">Guardar como candidato</button></form>
       </div>
     </div>

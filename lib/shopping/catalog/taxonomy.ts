@@ -16,6 +16,7 @@ export const FIELD_ORIGINS = [
   { id: 'store', label: 'Tienda', help: 'Publicado por la tienda en la página del producto.' },
   { id: 'feed', label: 'Feed', help: 'Viene del feed autorizado.' },
   { id: 'search', label: 'Buscador', help: 'Resumen del buscador: hay que confirmarlo en la tienda.' },
+  { id: 'channel3', label: 'Channel3', help: 'Datos de la tienda recopilados por el catálogo de Channel3 (precio y stock se vuelven a consultar antes de mostrarlos).' },
   { id: 'derived', label: 'Deducido', help: 'Deducido por reglas del nombre o la descripción de la tienda (p. ej. el tipo de prenda).' },
   { id: 'photo', label: 'Foto', help: 'Extraído de fotografías.' },
   { id: 'ai', label: 'IA', help: 'Inferencia de la IA, sin confirmar.' },
