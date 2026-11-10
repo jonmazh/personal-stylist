@@ -302,6 +302,19 @@ Investiga **direcciones** de la moda masculina (siluetas y proporciones, color, 
 
 Pruebas: `tests/trends.test.ts`, `tests/e2e/stylist-trends.cjs` (Brave de prueba con resultados sintéticos e IA simulada con trampas) y `tests/e2e/trends-live.cjs` (`TRENDS_LIVE=1`, Brave y Channel3 reales).
 
+### 2.0D · Style Strategy Engine (`lib/stylist/strategy.ts`)
+
+Convierte el diagnóstico del armario, las señales de mercado y tu perfil en **oportunidades de estilo** antes de buscar productos. La categoría de prenda no se fija de antemano: surge del razonamiento (una silueta que falta, una proporción repetida, un rasgo de tu identidad ausente, un acento de color que te favorece, una textura, una ocasión sin resolver o una tendencia que encaja contigo). Determinista y explicable.
+
+- **Tres modos**: *tu estilo evolucionado* (coherente con tu estilo principal), *expansión* (nuevas siluetas, materiales o colores compatibles con tu identidad) y *exploración* (rasgos de estilos cercanos o más lejanos).
+- **Tres criterios separados** por oportunidad: relevancia de moda (solo con señales validadas; puede no haber: vestir bien no es estar a la moda), idoneidad personal (identidad, rasgos que te gustan o rechazas, silueta corporal, colorimetría) e impacto en tu estilo (según el diagnóstico).
+- **Prioridad** = impacto, idoneidad y relevancia, más el ajuste del grado de experimentación (conservador favorece la evolución; explorador, la exploración). Ordena; no prohíbe.
+- Cada oportunidad incluye diagnóstico, evidencias del armario, relación con tu perfil, tendencia relacionada (con su presencia comercial), propuesta, qué se buscaría, beneficios, inconvenientes, confianza y prioridad.
+- **Una tendencia no es una recomendación**: se descarta (y se explica) si está saturada, si solo tiene una fuente, si incluye algo que rechazas, si no favorece tu silueta o tu color, si tu armario ya la resuelve o si no se traduce en nada concreto. Las redundancias del armario también frenan compras.
+- Puede concluir que **no hace falta comprar**: entonces lo dice y propone aprovechar lo que tienes (prendas con potencial sin usar, prendas aisladas).
+
+Persistencia: `style_strategies` y `style_opportunities` (migración 0023, RLS), ligadas al diagnóstico y a la investigación usadas; se reutiliza mientras no cambien. Puedes marcar cada oportunidad como «Me interesa» o «No es para mí». API: `GET/POST /api/stylist/strategy`, `PATCH /api/stylist/opportunities/:id`. Pruebas: `tests/strategy.test.ts`, `tests/e2e/stylist-strategy.cjs`.
+
 ## Channel3 (catálogo multimarca)
 
 Channel3 es un proveedor de **descubrimiento**: encuentra productos y aporta sus datos; **no decide qué te favorece** (lo decide el motor 4C) y su relevancia no se usa como puntuación. Conector: `lib/shopping/catalog/channel3.ts` (cumple `ProductSource`). Documentación oficial: https://channel3.ai/docs; esquemas comprobados con el SDK oficial `@channel3/sdk` 4.9.0 (no se usa como dependencia: el conector llama a la API directamente y valida cada respuesta con Zod).

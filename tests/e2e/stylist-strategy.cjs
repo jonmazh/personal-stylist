@@ -1,0 +1,62 @@
+// Personal Shopper 2.0 · 2.0D: Style Strategy Engine en la app (Brave de prueba con resultados sintéticos e IA simulada).
+// Perfil Clean streetwear con 10 pantalones rectos → oportunidad de silueta amplia respaldada por una tendencia; ideas
+// descartadas; «Me interesa»; caché; aislamiento. Mismo arranque de la app que stylist-trends.cjs.
+const { chromium, devices } = require('playwright'); const assert = require('assert'); const fs = require('fs')
+const { createClient } = require('@supabase/supabase-js')
+const { signup } = require('./lib.cjs')
+const U = process.env.APP_URL || 'http://127.0.0.1:3100'
+const log = (...a) => console.log('✔', ...a)
+const env = Object.fromEntries(fs.readFileSync('.env.local', 'utf8').split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]))
+
+;(async () => {
+  const br = await chromium.launch()
+  const p = await (await br.newContext({ ...devices['iPhone 13'] })).newPage(); p.setDefaultTimeout(60000)
+  const go = async (path) => { await p.goto(U + path); await p.waitForLoadState('networkidle') }
+  const pick = (name, value) => p.locator(`.opts label:has(input[name="${name}"][value="${value}"])`).click()
+  const api = async (method, path, data, status = 200) => { const r = await p.request[method](U + path, data ? { data } : undefined); assert.equal(r.status(), status, `${path}: ${await r.text()}`); return r.json() }
+  const save = async (slug, fill) => { await go(`/profile/${slug}`); await fill(); await p.click('main button:has-text("Guardar")'); await p.waitForURL(/saved=1/) }
+  const email = await signup(p, U)
+  await go('/estilos/clean-streetwear'); await p.selectOption('select[aria-label="Papel en tu identidad"]', 'principal'); await p.click('button:has-text("Añadir a mi identidad")'); await p.waitForURL(/added=1/)
+  await save('cuerpo', async () => { await p.fill('input[name=pecho]', '104'); await p.fill('input[name=cintura]', '82') })
+  await save('objetivos', async () => { await pick('experimentation', 'Abierto') })
+  const G = (name, category, subcategory, primary_color, x = {}) => ({ name, category, subcategory, primary_color, formality_level: 2, status: 'active', occasions: ['ocio'], seasons: ['primavera', 'otono', 'invierno'], silhouette: 'Regular', ...x })
+  for (const g of [...['Gris', 'Negro', 'Azul marino', 'Beige', 'Gris', 'Negro', 'Azul marino', 'Beige', 'Antracita', 'Denim'].map((c, i) => G(`Pantalón ${i + 1}`, 'bottom', i === 9 ? 'jeans' : 'chinos', c, { cut: 'Recto' })),
+    G('Camiseta blanca', 'top', 'tee', 'Blanco'), G('Camiseta negra', 'top', 'tee', 'Negro'), G('Sudadera gris', 'top', 'sweatshirt', 'Gris'), G('Camisa azul', 'top', 'shirt', 'Azul marino'), G('Zapatilla blanca', 'footwear', 'sneakers', 'Blanco')]) await api('post', '/api/wardrobe/items', g, 201)
+
+  // Sin tendencias: la estrategia existe igualmente (vestir bien no es estar a la moda)
+  const s0 = await api('get', '/api/stylist/strategy')
+  const w0 = s0.opportunities.find((o) => o.key === 'el:leg-wide')
+  assert.ok(w0 && w0.market === null && w0.scores.fashion_relevance === null)
+  // Con tendencias investigadas, la misma oportunidad gana respaldo de mercado
+  await api('post', '/api/stylist/trends', { force: true })
+  await go('/compras/estilista')
+  for (const d of await p.locator('#oportunidades details').all()) await d.evaluate((el) => { el.open = true })
+  const t = await p.locator('main').innerText()
+  assert.match(t, /Dirección de estilo[\s\S]*Desarrollar Clean streetwear/i)
+  assert.match(t, /Expansión de estilo[\s\S]*Introducir pantalón de pierna amplia/i)
+  assert.match(t, /Mercado: tendencia con evidencia editorial «Pantalón amplio con caída»/i)
+  assert.match(t, /Relevancia de moda \d+ · idoneidad personal \d+ · impacto en tu estilo \d+/i)
+  assert.match(t, /Por qué encaja contigo:[\s\S]*Clean streetwear/i)
+  assert.match(t, /Ideas descartadas \(\d+\)/i)
+  assert.ok(t.indexOf('Dirección de estilo'.toUpperCase()) < t.indexOf('Diagnóstico del armario'.toUpperCase()) || /Dirección de estilo[\s\S]*Diagnóstico del armario/i.test(t), 'primero la estrategia, después el diagnóstico')
+  assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true)
+  log('estrategia: dirección, oportunidad de silueta amplia (expansión) con respaldo de tendencia, tres criterios separados e ideas descartadas')
+
+  const s1 = await api('get', '/api/stylist/strategy'); assert.equal(s1.cached, true)
+  assert.notEqual(s1.strategy.id, s0.strategy.id, 'una nueva investigación de tendencias genera una estrategia nueva')
+  const wide = s1.opportunities.find((o) => o.key === 'el:leg-wide')
+  assert.equal(wide.market.name, 'Pantalón amplio con caída'); assert.equal(wide.rank, 1)
+  await p.locator('.hit', { hasText: 'Introducir pantalón de pierna amplia' }).locator('button:has-text("Me interesa")').click(); await p.waitForURL(/#oportunidades/); await p.waitForLoadState('networkidle')
+  assert.equal((await api('get', '/api/stylist/strategy')).opportunities.find((o) => o.key === 'el:leg-wide').status, 'me_interesa')
+  assert.match(await p.locator('.hit', { hasText: 'Introducir pantalón de pierna amplia' }).innerText(), /Te interesa/i)
+  log('«Me interesa» guardado; caché de la estrategia mientras nada cambia')
+
+  const b = await (await br.newContext()).newPage(); const emailB = await signup(b, U)
+  const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } })
+  assert.ok(!(await sb.auth.signInWithPassword({ email: emailB, password: 'password123' })).error)
+  for (const tb of ['style_strategies', 'style_opportunities']) assert.equal((await sb.from(tb).select('id')).data.length, 0, `RLS ${tb}`)
+  const r = await b.request.patch(`${U}/api/stylist/opportunities/${wide.id}`, { data: { status: 'descartada' } }); assert.equal(r.status(), 404)
+  log('RLS: cada usuario solo ve y cambia sus estrategias')
+  void email
+  await br.close()
+})().catch((e) => { console.error('✘', e); process.exit(1) })
