@@ -1,0 +1,269 @@
+{
+ "id": "wVxmoLW",
+ "title": "Pantalon Cargo Relaxed Fit",
+ "description": "Pantalón de corte relajado (relaxed fit) estilo cargo, confeccionado en tejido de algodón con estructura diagonal. Presenta bolsillos plastrón con solapa en las caderas, bolsillos traseros de vivo, efecto lavado y cierre frontal de botonadura.",
+ "brands": [
+  {
+   "id": "pjbn",
+   "name": "Zara"
+  }
+ ],
+ "images": [
+  {
+   "url": "https://cdn.trychannel3.com/69f1c286-07f1-4e8b-94da-212dfc1cc457?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": true,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing relaxed fit cargo pants and a black t-shirt."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/bcb1f126-f76d-458a-ad55-f154d0492da4?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing cargo pants and belt from the waist down."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/5972356c-b50e-4a26-b0e2-be0974286d63?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/5972356c-b50e-4a26-b0e2-be0974286d63?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Back view of beige cargo pants on a model."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/13067597-ff1a-4870-a2cd-f5d364095e70?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Man wearing cargo pants, t-shirt, and belt, full body."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/e6e4f04a-8a07-41ca-967f-460cfcf93377?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/e6e4f04a-8a07-41ca-967f-460cfcf93377?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "on_model",
+   "alt_text": "Side view of beige cargo pants and belt on model."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/bd2e089b-3427-457d-8bcc-1b63b998cb6f?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/bd2e089b-3427-457d-8bcc-1b63b998cb6f?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "flat_lay",
+   "alt_text": "Front view of beige cargo pants laid flat."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/d63fd5fe-5e92-48ad-b271-c7edd0c46357?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": "https://cdn.trychannel3.com/cleaned/v1/d63fd5fe-5e92-48ad-b271-c7edd0c46357?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "is_main_image": false,
+   "shot_type": "flat_lay",
+   "alt_text": "Back view of beige cargo pants laid flat."
+  },
+  {
+   "url": "https://cdn.trychannel3.com/b3247d72-66f7-4ba6-8aa0-9f4484a39e67?aid=01M72S8DFTSPTXPK8178M1EH3G&mid=Mnrl",
+   "cleaned_url": null,
+   "is_main_image": false,
+   "shot_type": "detail",
+   "alt_text": "Close-up detail of cargo pants pocket and waistband."
+  }
+ ],
+ "category": {
+  "slug": "cargo-pants",
+  "title": "Cargo Pants",
+  "path": [
+   {
+    "slug": "apparel-accessories",
+    "title": "Apparel & Accessories"
+   },
+   {
+    "slug": "clothing",
+    "title": "Clothing"
+   },
+   {
+    "slug": "pants",
+    "title": "Pants"
+   },
+   {
+    "slug": "cargo-pants",
+    "title": "Cargo Pants"
+   }
+  ],
+  "has_children": false
+ },
+ "gender": "male",
+ "age": "adult",
+ "materials": [
+  "100% algodón"
+ ],
+ "key_features": [
+  "Corte relaxed fit",
+  "Bolsillos plastrón con solapa en cadera",
+  "Bolsillos traseros de vivo",
+  "Efecto lavado",
+  "Cierre frontal de botonadura"
+ ],
+ "colors": [
+  {
+   "hex": "#96886c",
+   "percentage": 0.3517
+  },
+  {
+   "hex": "#b1a48b",
+   "percentage": 0.274
+  },
+  {
+   "hex": "#746a57",
+   "percentage": 0.1449
+  },
+  {
+   "hex": "#211f1a",
+   "percentage": 0.1289
+  },
+  {
+   "hex": "#4b463e",
+   "percentage": 0.1005
+  }
+ ],
+ "offers": [
+  {
+   "url": "https://buy.trychannel3.com/wVxmoLW-Mnrl-ZbZ6hs?o=01M32Z0VT30SC48MXNDN474P17&aid=01M72S8DFTSPTXPK8178M1EH3G",
+   "domain": "zara.com",
+   "price": {
+    "price": 59.95,
+    "compare_at_price": null,
+    "currency": "EUR"
+   },
+   "availability": "InStock",
+   "condition": "new",
+   "max_commission_rate": 0.0,
+   "dimensions": null
+  }
+ ],
+ "variants": {
+  "options": [
+   {
+    "name": "Color",
+    "values": [
+     {
+      "label": "Blanco Roto",
+      "exists": true,
+      "available": null,
+      "thumbnail_url": "https://cdn.trychannel3.com/46eec9f7-e2b8-45f5-b247-16bd33bb7950",
+      "product_id": "JcpGWbn"
+     },
+     {
+      "label": "Verde Gris",
+      "exists": true,
+      "available": null,
+      "thumbnail_url": "https://cdn.trychannel3.com/69f1c286-07f1-4e8b-94da-212dfc1cc457",
+      "product_id": "wVxmoLW"
+     }
+    ]
+   },
+   {
+    "name": "Talla",
+    "values": [
+     {
+      "label": "29",
+      "exists": false,
+      "available": null,
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "30",
+      "exists": false,
+      "available": null,
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "31",
+      "exists": false,
+      "available": null,
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "32",
+      "exists": false,
+      "available": null,
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "34",
+      "exists": false,
+      "available": null,
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "38",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "40",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "42",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     },
+     {
+      "label": "44",
+      "exists": true,
+      "available": "InStock",
+      "thumbnail_url": null,
+      "product_id": null
+     }
+    ]
+   }
+  ],
+  "selected": [
+   {
+    "name": "Color",
+    "label": "Verde Gris"
+   }
+  ]
+ },
+ "structured_attributes": {
+  "pocket-style": [
+   "Cargo",
+   "Patch",
+   "Flap",
+   "Welt"
+  ],
+  "fit": [
+   "Relaxed"
+  ],
+  "waistband-style": [
+   "Belt loops"
+  ],
+  "fabric": [
+   "Cotton",
+   "Twill"
+  ],
+  "pants-length-type": [
+   "Long"
+  ],
+  "front-style": [
+   "Flat front"
+  ],
+  "leg-cuff-style": [
+   "Straight hem"
+  ],
+  "pattern": [
+   "Solid"
+  ]
+ },
+ "ratings": null
+}

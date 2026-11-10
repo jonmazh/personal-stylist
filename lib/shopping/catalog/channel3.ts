@@ -49,7 +49,7 @@ export const C3Product = z.object({
   brands: z.array(z.object({ id: z.string().nullish(), name: z.string() })).nullish(),
   images: z.array(z.object({ url: z.string(), is_main_image: z.boolean().nullish(), shot_type: z.string().nullish() })).nullish(),
   category: z.object({ slug: z.string(), title: z.string().nullish(), path: z.array(z.object({ slug: z.string(), title: z.string().nullish() })).nullish() }).nullish(),
-  gender: z.string().nullish(), materials: z.array(z.string()).nullish(), key_features: z.array(z.string()).nullish(),
+  gender: z.string().nullish(), age: z.string().nullish(), materials: z.array(z.string()).nullish(), key_features: z.array(z.string()).nullish(),
   colors: z.array(z.object({ hex: z.string(), percentage: z.number().nullish() })).nullish(),
   offers: z.array(Offer).nullish(),
   variants: z.object({ options: z.array(z.object({ name: z.string(), values: z.array(OptionValue) })), selected: z.array(z.object({ name: z.string(), label: z.string() })).nullish() }).nullish(),
@@ -161,14 +161,18 @@ const kindKey = (q: ProductSearchQuery) => q.subcategory ?? (q.category ? `group
 export function hexOf(color: string) { const h = COLOR_SWATCH[color]; return h && /^#[0-9a-f]{6}$/i.test(h) ? h.toLowerCase() : null }
 
 /** Cuerpo de POST /v1/search para una consulta y un mercado. Texto en español en España; en inglés en mercados anglosajones. */
-export function buildSearchBody(q: ProductSearchQuery, market: string, domains: string[], cfg: Channel3Config) {
+export function buildSearchBody(q: ProductSearchQuery, market: string, domains: string[], cfg: Channel3Config, sizes?: { key: 'size' | 'shoe-size'; values: string[] } | null) {
   const key = kindKey(q)
   const color = detectColors(q.text).find((c) => hexOf(c)) ?? null
   const local = market === cfg.country
   const text = local ? q.text : [color ? EN_COLOR[color] : null, (key && EN_KIND[key]) ?? q.text, 'men'].filter(Boolean).join(' ')
-  const filters: Record<string, unknown> = { gender: 'male', website_ids: domains }
+  // Moda masculina adulta en la propia petición (y validación posterior sobre cada producto)
+  const filters: Record<string, unknown> = { gender: 'male', age: ['adult'], website_ids: domains }
   const cat = key ? C3_CATEGORY[key] : null
   if (cat) filters.category_ids = [cat]
+  // Tallas (prefiltro, solo en tu mercado): los valores de Channel3 no llevan sistema de tallaje (un «42» EU no es un 42 de
+  // EE. UU.), así que fuera de tu mercado no se filtra; la comprobación real es siempre local, por variante
+  if (local && cat && sizes?.values.length) filters.attributes = { [sizes.key]: sizes.values }
   // Un solo color por consulta (la paleta de Channel3 es una condición AND); el motor 4C evalúa después si te favorece
   if (color) filters.colors = { palette: [{ hex: hexOf(color)! }], match: 'loose' }
   // El rango de precio solo tiene sentido en tu moneda
@@ -198,7 +202,7 @@ const SIZE_OPT = /^(size|talla|taille|größe|tamaño)$/i
 const BOTTOM_FIT: Record<string, { cut?: string; silhouette?: string }> = { straight: { cut: 'Recto' }, 'straight leg': { cut: 'Recto' }, regular: { cut: 'Recto' }, slim: { cut: 'Slim' }, skinny: { cut: 'Slim' }, tapered: { cut: 'Tapered' }, wide: { cut: 'Wide' }, 'wide leg': { cut: 'Wide' }, loose: { cut: 'Wide' }, baggy: { cut: 'Wide' }, relaxed: { silhouette: 'Amplia' } }
 const TOP_FIT: Record<string, string> = { slim: 'Ajustada', 'muscle fit': 'Ajustada', fitted: 'Ajustada', regular: 'Regular', relaxed: 'Amplia', oversized: 'Amplia', loose: 'Amplia', boxy: 'Amplia' }
 
-export interface C3Meta { provider: 'channel3'; channel3_id: string; domain: string | null; market: string; market_name: string; foreign_market: boolean; fetched_at: string; previous_price: { amount: number; currency: string; source: 'channel3' } | null; image_colors: string[]; key_features: string[]; attributes: Record<string, string[]> }
+export interface C3Meta { provider: 'channel3'; channel3_id: string; gender: string | null; age: string | null; category_path: string[]; selected_color: string | null; domain: string | null; market: string; market_name: string; foreign_market: boolean; fetched_at: string; previous_price: { amount: number; currency: string; source: 'channel3' } | null; image_colors: string[]; key_features: string[]; attributes: Record<string, string[]> }
 /** Normaliza un producto de Channel3. `domain` elige la oferta de esa tienda (si hay varias). */
 export function normalizeChannel3Product(raw: unknown, opts: { market: string; cfg: Pick<Channel3Config, 'country'>; domain?: string | null; now?: Date }): NormalizedProduct | null {
   const parsed = C3Product.safeParse(raw); if (!parsed.success) return null
@@ -244,7 +248,9 @@ export function normalizeChannel3Product(raw: unknown, opts: { market: string; c
   n.product_url = null; delete n.field_sources.product_url
   const prev = offer?.price.compare_at_price
   const meta: C3Meta = {
-    provider: 'channel3', channel3_id: p.id, domain: offer?.domain ?? opts.domain ?? null, market: opts.market, market_name: MARKET_NAME[opts.market] ?? opts.market,
+    provider: 'channel3', channel3_id: p.id, gender: p.gender ?? null, age: p.age ?? null,
+    category_path: [...(p.category?.path ?? []).map((x) => x.slug), ...(p.category && !(p.category.path ?? []).some((x) => x.slug === p.category!.slug) ? [p.category.slug] : [])],
+    selected_color: p.variants?.selected?.find((x) => /^(color|colour)$/i.test(x.name))?.label ?? null, domain: offer?.domain ?? opts.domain ?? null, market: opts.market, market_name: MARKET_NAME[opts.market] ?? opts.market,
     foreign_market: opts.market !== opts.cfg.country, fetched_at: at,
     previous_price: prev && offer && prev > offer.price.price ? { amount: prev, currency: offer.price.currency, source: 'channel3' } : null,
     image_colors: imageColors.slice(0, 4), key_features: (p.key_features ?? []).slice(0, 8),
@@ -256,7 +262,7 @@ export function normalizeChannel3Product(raw: unknown, opts: { market: string; c
 export const isChannel3 = (p: { raw_attributes?: unknown }): boolean => (p.raw_attributes as C3Meta | undefined)?.provider === 'channel3'
 
 // ── ProductSource ──
-export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}) {
+export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = channel3Config(), deps: Deps = {}, opts: { sizesFor?: (q: ProductSearchQuery) => { key: 'size' | 'shoe-size'; values: string[] } | null } = {}) {
   const label = 'Channel3'
   const shopsFor = (q: ProductSearchQuery) => retailers.filter((r) => !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
   /** Tiendas agrupadas por el mercado en el que se consultan (las no indexadas en ninguno se omiten). */
@@ -287,7 +293,7 @@ export function channel3Source(retailers: RetailerRef[], cfg: Channel3Config = c
       const { groups } = await plan(q)
       const hits: SearchHit[] = []
       for (const [market, g] of groups) {
-        const raw = await c3request(cfg, 'search', 'v1/search', { method: 'POST', body: buildSearchBody(q, market, g.domains, cfg) }, deps)
+        const raw = await c3request(cfg, 'search', 'v1/search', { method: 'POST', body: buildSearchBody(q, market, g.domains, cfg, opts.sizesFor?.(q) ?? null) }, deps)
         const sr = SearchResponse.safeParse(raw); if (!sr.success) throw new Channel3Error('Respuesta de Channel3 (búsqueda) con un formato inesperado.', 'protocol')
         for (const item of sr.data.products) {
           const n = normalizeChannel3Product(item, { market, cfg }); if (!n) continue

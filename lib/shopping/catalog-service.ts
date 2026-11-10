@@ -14,6 +14,8 @@ import { Channel3Error, Channel3Meter, channel3Config, channel3Label, forEvaluat
 import { buildShopperContext } from './intelligence/context'
 import { discoveryQueries } from './intelligence/discovery'
 import { rankHits } from './intelligence/rank'
+import { channel3SizeFilter, resolveSizes, sizeGroupOf, type SizeContext } from './intelligence/sizes'
+import { ageOut, eligibilityOf, gateVerdict, GATE_VERSION } from './intelligence/eligibility'
 import { EVAL_VERSION, evaluatePurchase, type PurchaseEvaluation } from './evaluate'
 import { listNeeds, shoppingContext } from './service'
 import { feedSource, manualProduct, searchAll, searchProviderConfig, searchProviderSource, urlImportSource, type ProductSource, type RetailerRef, type SearchHit } from './catalog/sources'
@@ -101,23 +103,25 @@ export async function syncSource(sb: Sb, uid: string, id: string, uploaded?: str
 
 // ── Búsqueda ──
 async function prefsOf(sb: Sb) { const { data } = await sb.from('shopping_preferences').select('preferred_retailers, excluded_retailers').maybeSingle(); return data }
-async function buildSources(sb: Sb, retailers: RetailerRef[], meter?: Channel3Meter): Promise<ProductSource[]> {
-  const { data: feeds } = await sb.from('product_sources').select('id, name, retailer_id').eq('kind', 'feed').eq('status', 'active')
+async function buildSources(sb: Sb, retailers: RetailerRef[], meter?: Channel3Meter, sizes?: SizeContext | null): Promise<ProductSource[]> {
+  const { data: feeds } = await sb.from('product_sources').select('id, name, retailer_id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
   const out: ProductSource[] = []
   for (const f of feeds ?? []) {
     const { data: items } = await sb.from('product_feed_items').select('product').eq('source_id', f.id).limit(FETCH_LIMITS.feedMaxItems)
-    out.push(feedSource(f, (items ?? []).map((i) => i.product as NormalizedProduct), retailers, retailers.find((r) => r.id === f.retailer_id) ?? null))
+    // La disponibilidad de un feed es la de su última sincronización
+    out.push(feedSource(f, (items ?? []).map((i) => ({ ...(i.product as NormalizedProduct), raw_attributes: { ...((i.product as NormalizedProduct).raw_attributes ?? {}), fetched_at: f.last_sync_at } })), retailers, retailers.find((r) => r.id === f.retailer_id) ?? null))
   }
   // Tiendas con conector UCP (p. ej. Grimey): catálogo oficial, consultado bajo demanda
   for (const r of retailers as UcpRetailer[]) if (r.connector === 'ucp') out.push(connectorSource(r))
   // Channel3: catálogo multimarca (solo descubrimiento) para las tiendas sin conector propio
   const c3 = channel3Config()
-  if (c3.key) out.push(channel3Source((retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp'), c3, { meter }))
+  if (c3.key) out.push(channel3Source((retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp'), c3, { meter }, { sizesFor: (q) => channel3SizeFilter(sizeGroupOf(q.subcategory, q.category), sizes ?? null) }))
   // El buscador genérico no repite las tiendas que ya se consultan por su catálogo oficial
   out.push(searchProviderSource(searchProviderConfig(), (retailers as UcpRetailer[]).filter((r) => r.connector !== 'ucp')))
   return out
 }
-const slim = (h: SearchHit) => ({ ...h, raw_attributes: h.source_kind === 'api' ? h.raw_attributes : {}, description: h.description?.slice(0, 600) ?? null, retailer: h.retailer ? { id: h.retailer.id, slug: h.retailer.slug, name: h.retailer.name, url_policy: h.retailer.url_policy, domains: h.retailer.domains } : null })
+const KEEP_RAW = ['gender', 'age', 'fetched_at', 'tags', 'collections']
+const slim = (h: SearchHit) => ({ ...h, raw_attributes: h.source_kind === 'api' ? h.raw_attributes : Object.fromEntries(Object.entries(h.raw_attributes ?? {}).filter(([k]) => KEEP_RAW.includes(k))), description: h.description?.slice(0, 600) ?? null, retailer: h.retailer ? { id: h.retailer.id, slug: h.retailer.slug, name: h.retailer.name, url_policy: h.retailer.url_policy, domains: h.retailer.domains } : null })
 
 /**
  * La caché depende de la búsqueda Y de las fuentes disponibles: si configuras el buscador, añades o sincronizas un feed
@@ -154,48 +158,70 @@ function evalHit(h: Row, o: { ctx: ReturnType<typeof buildShopperContext>; need:
     return e
   } catch { return null /* sin evaluar: se muestra aparte */ }
 }
-/** Ficha actual (gratis) de cada resultado de Channel3: precio, disponibilidad y tallas; se reevalúa y se reordena. */
-async function refreshChannel3Hits(results: Row[], evaluate: (h: Row) => ReturnType<typeof evalHit>, meter: Channel3Meter) {
+type EvalEnv = { ctx: ReturnType<typeof buildShopperContext>; need: Row | null; needs: Row[]; sizes: SizeContext }
+/** Tallas de cada grupo a partir de tus datos (PersonalizedSizeResolver). */
+async function sizeContextFor(sb: Sb, sc: Awaited<ReturnType<typeof shoppingContext>>) {
+  const { data: refs } = await sb.from('garment_measurements').select('garment_id, fits_well')
+  const b = sc.prep.bundle as Row
+  return resolveSizes({ declared: b.profile?.sizes ?? null, garments: sc.prep.garments, fitScore: (id) => (sc.prep.evals.get(id) as Row | undefined)?.fit?.score ?? null, references: (refs ?? []) as never, measures: b.measures ?? {}, fitPrefs: b.fit?.prefs ?? {}, generalFit: b.profile?.fit_pref ?? null })
+}
+async function evalEnvFor(sb: Sb, uid: string, needId: string | null): Promise<EvalEnv> {
+  const [sc, needs] = await Promise.all([shoppingContext(sb, uid), listNeeds(sb)])
+  const ctx = buildShopperContext({ bundle: sc.prep.bundle, garments: sc.prep.garments, evals: sc.prep.evals, signals: sc.prep.signals, needs, prefs: sc.prefs, use: sc.use })
+  let need: Row | null = null
+  if (needId) { const { data: n } = await sb.from('shopping_needs').select('*').eq('id', needId).maybeSingle(); if (n) need = { ...n, spec: NeedSpec.parse(n.spec) } }
+  return { ctx, need, needs, sizes: await sizeContextFor(sb, sc) }
+}
+/**
+ * Condiciones previas (moda masculina, tu talla y su disponibilidad por variante) y, si no queda excluido, evaluación 4C.
+ * Excluido (mujer/infantil, sin tu talla, agotado en tu talla) → no se evalúa. Pendiente → se evalúa, pero no se recomienda.
+ */
+function processHit(h: Row, ev: EvalEnv, n: number) {
+  const eligibility = eligibilityOf(h, ev.sizes, Date.now(), channel3Config().country)
+  if (eligibility.excluded) return { ...h, eligibility, evaluation: null }
+  return { ...h, eligibility, evaluation: gateVerdict(evalHit(h, { ctx: ev.ctx, need: ev.need, needs: ev.needs, fast: n > 25 }), eligibility) }
+}
+/** Ficha actual (gratis) de resultados de Channel3: precio, disponibilidad por talla (del color seleccionado) y variantes. */
+async function hydrateChannel3(rows: Row[], meter: Channel3Meter, which: (h: Row) => boolean) {
   const c3 = channel3Source([], channel3Config(), { meter })
-  const out = [...results]
-  const idx = out.map((h, i) => (isChannel3(h) ? i : -1)).filter((i) => i >= 0)
+  const out = [...rows]
+  const idx = out.map((h, i) => (isChannel3(h) && which(h) ? i : -1)).filter((i) => i >= 0)
   for (let k = 0; k < idx.length; k += 6) {
     await Promise.all(idx.slice(k, k + 6).map(async (i) => {
       const h = out[i]; const m = h.raw_attributes as C3Meta
       try {
         const { product } = await c3.getById(m.channel3_id, { market: m.market, domain: m.domain })
-        const fresh = { ...h, current_price: product.current_price, currency: product.currency, availability_status: product.availability_status, variants: product.variants, raw_attributes: { ...m, fetched_at: (product.raw_attributes as unknown as C3Meta).fetched_at, previous_price: (product.raw_attributes as unknown as C3Meta).previous_price, refresh: 'ok' } }
-        out[i] = { ...fresh, evaluation: evaluate(fresh) }
+        const f = product.raw_attributes as unknown as C3Meta
+        out[i] = { ...h, current_price: product.current_price, currency: product.currency, availability_status: product.availability_status, variants: product.variants, raw_attributes: { ...m, fetched_at: f.fetched_at, previous_price: f.previous_price, selected_color: f.selected_color, gender: f.gender ?? m.gender, age: f.age ?? m.age, refresh: 'ok' }, _touched: true }
       } catch (e) {
         const gone = e instanceof Channel3Error && e.code === 'not_found'
-        const fresh = { ...h, ...(gone ? { availability_status: 'out_of_stock' } : {}), raw_attributes: { ...m, refresh: gone ? 'gone' : 'failed', refresh_error: (e as Error).message } }
-        out[i] = gone ? { ...fresh, evaluation: evaluate(fresh) } : fresh
+        // Sin ficha actual, ninguna disponibilidad cuenta como confirmada
+        out[i] = { ...h, ...(gone ? { availability_status: 'out_of_stock', variants: (h.variants ?? []).map((v: Row) => ({ ...v, availability: 'out_of_stock' })) } : { variants: (h.variants ?? []).map((v: Row) => ({ ...v, availability: 'unknown' })) }), raw_attributes: { ...m, refresh: gone ? 'gone' : 'failed', refresh_error: (e as Error).message }, _touched: true }
       }
     }))
   }
-  return rankHits(out as never) as Row[]
+  return out
 }
 
 /**
- * Antes de mostrar una búsqueda con resultados de Channel3 (de la caché o al volver a la página): si su ficha tiene más de
- * `maxAgeMin` minutos, se piden las fichas actuales (gratis), se reevalúan con el motor 4C y se guarda el nuevo orden
- * (el índice de cada resultado debe coincidir con lo guardado para «Guardar como candidato» y «Ver oferta actual»).
+ * Antes de mostrar una búsqueda (de la caché o al volver a la página): la disponibilidad confirmada hace demasiado deja
+ * de contar como confirmada y los resultados de Channel3 con ficha de más de `maxAgeMin` minutos se actualizan (gratis),
+ * se vuelven a filtrar por talla y stock, se reevalúan y se reordenan. Se guarda el nuevo orden (los índices de
+ * «Guardar como candidato» y «Ver oferta actual» deben coincidir con lo guardado).
  */
-async function refreshSearchRow(sb: Sb, uid: string, row: Row, ev: { ctx: ReturnType<typeof buildShopperContext>; need: Row | null; needs: Row[] } | null, maxAgeMin = 30) {
-  let results = row.results as Row[]
-  const old = results.filter((h) => isChannel3(h) && Date.now() - new Date((h.raw_attributes as C3Meta).fetched_at).getTime() >= maxAgeMin * 60e3)
-  if (!old.length || !channel3Config().key) return results
-  if (!ev) {
-    const [sc, needs] = await Promise.all([shoppingContext(sb, uid), listNeeds(sb)])
-    const ctx = buildShopperContext({ bundle: sc.prep.bundle, garments: sc.prep.garments, evals: sc.prep.evals, signals: sc.prep.signals, needs, prefs: sc.prefs, use: sc.use })
-    let need: Row | null = null
-    if (row.need_id) { const { data: n } = await sb.from('shopping_needs').select('*').eq('id', row.need_id).maybeSingle(); if (n) need = { ...n, spec: NeedSpec.parse(n.spec) } }
-    ev = { ctx, need, needs }
-  }
+async function refreshSearchRow(sb: Sb, uid: string, row: Row, ev: EvalEnv | null, maxAgeMin = 30) {
+  const before = JSON.stringify((row.results as Row[]).map((h) => [h.eligibility?.ok, h.evaluation?.verdict]))
+  let results = (row.results as Row[]).map((h) => ageOut(h))
+  const old = (h: Row) => Date.now() - new Date((h.raw_attributes as C3Meta).fetched_at).getTime() >= maxAgeMin * 60e3
   const meter = new Channel3Meter()
-  results = await refreshChannel3Hits(results, (h) => evalHit(h, { ctx: ev!.ctx, need: ev!.need, needs: ev!.needs, fast: results.length > 25 }), meter)
+  if (results.some((h) => isChannel3(h) && old(h)) && channel3Config().key) {
+    ev ??= await evalEnvFor(sb, uid, row.need_id ?? null)
+    results = (await hydrateChannel3(results, meter, old)).map((h) => { if (!h._touched) return h; const { _touched: _t, ...x } = h; return processHit(x, ev!, results.length) })
+  }
+  if (!meter.calls.length && before === JSON.stringify(results.map((h) => [h.eligibility?.ok, h.evaluation?.verdict]))) return row.results as Row[]
+  results = rankHits(results as never) as Row[]
   await sb.from('shopping_searches').update({ results }).eq('id', row.id)
-  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: row.id, refreshed: true, channel3: meter.summary() } })
+  if (meter.calls.length) await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: row.id, refreshed: true, channel3: meter.summary() } })
   return results
 }
 /** Búsqueda guardada lista para mostrar: precio, stock y tallas de Channel3 actualizados si tienen más de 30 min. */
@@ -226,24 +252,26 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
   }
   const [sc, needs] = await Promise.all([shoppingContext(sb, uid), listNeeds(sb)])
   const ctx = buildShopperContext({ bundle: sc.prep.bundle, garments: sc.prep.garments, evals: sc.prep.evals, signals: sc.prep.signals, needs, prefs: sc.prefs, use: sc.use })
+  const sizes = await sizeContextFor(sb, sc)
+  const ev: EvalEnv = { ctx, need, needs, sizes }
   const plan = discoveryQueries(q, ctx)
   const retailers = await listRetailers(sb)
   const { data: feeds } = await sb.from('product_sources').select('id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
   const ucp = (retailers as UcpRetailer[]).some((r) => r.connector === 'ucp' && !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
-  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : '') + c3Signature() + `|ctx:${ctx.hash}|${EVAL_VERSION}`)
+  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : '') + c3Signature() + `|ctx:${ctx.hash}|sz:${sizes.fingerprint}|${GATE_VERSION}|${EVAL_VERSION}`)
   if (!raw.force) {
     // UCP: las respuestas de catálogo no deben reutilizarse entre sesiones sin revalidar → caché de 15 minutos
     const since = new Date(Date.now() - (ucp ? UCP_CACHE_MINUTES * 60e3 : CACHE_HOURS * 3600e3)).toISOString()
     const { data: hit } = await sb.from('shopping_searches').select('*').eq('cache_key', cache_key).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
     if (hit) {
       // Caché de descubrimiento (IDs y evaluación); precio, stock y tallas de Channel3 se vuelven a pedir (gratis) antes de mostrarlos
-      const results = await refreshSearchRow(sb, uid, hit, { ctx, need, needs }, 0)
+      const results = await refreshSearchRow(sb, uid, hit, ev, 0)
       return { id: hit.id as string, query: hit.query as ProductSearchQuery, results, sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
     }
   }
   // Descubrimiento (consultas en serie: respeta los límites de cada tienda)
   const meter = new Channel3Meter()
-  const sources = await buildSources(sb, retailers, meter)
+  const sources = await buildSources(sb, retailers, meter, sizes)
   const byKey = new Map<string, SearchHit>(); const stat = new Map<string, Row>()
   for (const dq of plan.queries) {
     const { results, statuses } = await searchAll(dq, sources, 30)
@@ -253,11 +281,15 @@ export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: strin
   // Evaluación personal de cada candidato
   const t0 = Date.now()
   const candidates = [...byKey.values()].slice(0, 40)
-  const evaluated = candidates.map((h) => ({ ...slim(h), evaluation: evalHit(h, { ctx, need, needs, fast: candidates.length > 25 }) }))
-  const ranked = rankHits(evaluated)
+  // Disponibilidad por talla: la búsqueda de Channel3 no la trae; su ficha (gratis) sí, para el mercado consultado
+  const hydrated = await hydrateChannel3(candidates.map((h) => slim(h) as Row), meter, () => true)
+  const evaluated = hydrated.map(({ _touched: _t, ...h }) => processHit(h, ev, candidates.length))
+  const ranked = rankHits(evaluated as never) as Row[]
+  const gate = { excluded_gender: ranked.filter((h) => h.eligibility?.gender && !h.eligibility.gender.ok && h.eligibility.excluded && ['female', 'kids'].includes(h.eligibility.gender.class)).length, excluded_size: ranked.filter((h) => h.eligibility?.excluded && ['sin_talla_compatible', 'agotada_en_tu_talla'].includes(h.eligibility.size.status)).length, pending: ranked.filter((h) => h.eligibility && !h.eligibility.ok && !h.eligibility.excluded).length, available: ranked.filter((h) => h.eligibility?.ok).length }
+  const groupSizes = (() => { const g = sizeGroupOf(q.subcategory, q.category); return g ? { group: g, label: sizes.groups[g].label, principal: sizes.groups[g].principal?.size.original ?? null, alternatives: sizes.groups[g].alternatives.map((a) => a.size.original), confidence: sizes.groups[g].confidence, reason: sizes.groups[g].reason, missing: sizes.groups[g].missing } : null })()
   // Recuento por fuente de productos únicos (la misma prenda puede salir en varias consultas)
   const statuses = [...stat.values()].map((st) => { const count = [...byKey.values()].filter((h) => (st.id ? h.source_id === st.id : h.source_label === st.label)).length; return { ...st, count, status: count ? 'ok' : st.status === 'ok' ? 'empty' : st.status } as Row })
-  const query = { ...q, plan: plan.queries.map((x) => x.text), notes: plan.notes, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
+  const query = { ...q, plan: plan.queries.map((x) => x.text), notes: plan.notes, gate, sizes: groupSizes, sizes_fingerprint: sizes.fingerprint, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
   const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query, query_text: q.text, cache_key, sources: statuses, results: ranked, result_count: ranked.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
   await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: ranked.length, queries: plan.queries.length, sources: statuses.map((x) => `${x.kind}:${x.status}`), eval_ms: query.eval_ms, ...(meter.calls.length ? { channel3: meter.summary() } : {}) } })

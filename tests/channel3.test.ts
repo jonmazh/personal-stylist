@@ -106,7 +106,7 @@ test('consulta: solo criterios comerciales; un color por consulta en hex; catego
   const es = buildSearchBody(q, 'ES', ['zara.com'], CFG)
   assert.deepEqual(Object.keys(es).sort(), ['config', 'filters', 'limit', 'query'])
   assert.equal(es.query, 'pantalón beige hombre')
-  assert.deepEqual(es.filters, { gender: 'male', website_ids: ['zara.com'], category_ids: ['pants'], colors: { palette: [{ hex: hexOf('Beige') }], match: 'loose' }, price: { max_price: 60 } })
+  assert.deepEqual(es.filters, { gender: 'male', age: ['adult'], website_ids: ['zara.com'], category_ids: ['pants'], colors: { palette: [{ hex: hexOf('Beige') }], match: 'loose' }, price: { max_price: 60 } })
   assert.deepEqual(es.config, { country: 'ES', mode: 'default', language: 'es', currency: 'EUR' })
   const gb = buildSearchBody(q, 'GB', ['bershka.com'], CFG)
   assert.equal(gb.query, 'beige trousers men'); assert.equal((gb.filters as Record<string, unknown>).price, undefined, 'sin rango en € para precios en £')

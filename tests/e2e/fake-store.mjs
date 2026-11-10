@@ -11,18 +11,24 @@ const ld = () => `<!doctype html><html><head><title>Pantalón</title><script typ
     { '@type': 'Product', sku: 'PL-1-50', size: '50', color: 'Gris oscuro', offers: { '@type': 'Offer', price, priceCurrency: 'EUR', availability: 'https://schema.org/OutOfStock' } },
   ] })}</script></head><body><h1>Pantalón</h1><span class="precio">1 €</span></body></html>`
 const og = '<!doctype html><html><head><meta property="og:type" content="product"><meta property="og:title" content="Camisa oxford azul claro"><meta property="product:price:amount" content="45,00"><meta property="product:price:currency" content="EUR"></head><body></body></html>'
-const feed = `id,title,link,price,availability,brand,color,size,material,product_type,item_group_id
-F1,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones,G1
-F2,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.00 EUR,out of stock,Tienda Test,Gris,50,100% lana,Hombre > Pantalones,G1
-F3,"Chino beige",http://127.0.0.1:4700/p/chino.html,49.00 EUR,in stock,Tienda Test,Beige,48,98% algodón 2% elastano,Hombre > Pantalones,
-F4,"Pantalón de vestir gris marengo",http://127.0.0.1:4700/p/marengo.html,140.00 EUR,in stock,Tienda Test,Gris,48,,Hombre > Pantalones,`
-// Feed para Personal Shopper Intelligence: mismos productos para perfiles distintos y pares parecidos
-const feedPsi = `id,title,link,price,availability,brand,color,size,material,product_type
-S1,"Sudadera azul marino",http://127.0.0.1:4700/p/sudadera-marino.html,59.00 EUR,in stock,Tienda Test,Azul marino,M,100% algodón,Hombre > Sudaderas
-S2,"Sudadera crudo",http://127.0.0.1:4700/p/sudadera-crudo.html,59.00 EUR,in stock,Tienda Test,Crudo,M,100% algodón,Hombre > Sudaderas
-S3,"Sudadera camel",http://127.0.0.1:4700/p/sudadera-camel.html,59.00 EUR,in stock,Tienda Test,Camel,M,100% algodón,Hombre > Sudaderas
-P1,"Pantalón de vestir recto gris",http://127.0.0.1:4700/p/pantalon-recto-gris.html,79.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones
-P2,"Pantalón de vestir slim gris",http://127.0.0.1:4700/p/pantalon-slim-gris.html,59.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones`
+const feed = `id,title,link,price,availability,brand,color,size,material,product_type,item_group_id,gender
+F1,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.00 EUR,in stock,Tienda Test,Gris,48,100% lana,Hombre > Pantalones,G1,male
+F2,"Pantalón recto de lana gris",http://127.0.0.1:4700/p/pantalon-lana.html,89.00 EUR,out of stock,Tienda Test,Gris,50,100% lana,Hombre > Pantalones,G1,male
+F3,"Chino beige",http://127.0.0.1:4700/p/chino.html,49.00 EUR,in stock,Tienda Test,Beige,48,98% algodón 2% elastano,Hombre > Pantalones,,male
+F4,"Pantalón de vestir gris marengo",http://127.0.0.1:4700/p/marengo.html,140.00 EUR,in stock,Tienda Test,Gris,48,,Hombre > Pantalones,,male`
+// Feed para Personal Shopper Intelligence: mismos productos para perfiles distintos y pares parecidos. Una fila por talla
+// (item_group_id), con género y edad como en Google Merchant. Incluye un producto de mujer, uno infantil y uno agotado en M.
+const row = (id, title, slug, price, color, sizes, cat, extra = 'male,adult', mat = '100% algodón') => sizes.map(([size, av], i) => `${id}-${i},"${title}",http://127.0.0.1:4700/p/${slug}.html,${price} EUR,${av},Tienda Test,${color},${size},${mat},${cat},${id},${extra}`).join('\n')
+const feedPsi = [`id,title,link,price,availability,brand,color,size,material,product_type,item_group_id,gender,age_group`,
+  row('S1', 'Sudadera azul marino', 'sudadera-marino', '59.00', 'Azul marino', [['M', 'in stock'], ['L', 'in stock']], 'Hombre > Sudaderas'),
+  row('S2', 'Sudadera crudo', 'sudadera-crudo', '59.00', 'Crudo', [['M', 'in stock'], ['L', 'in stock']], 'Hombre > Sudaderas'),
+  row('S3', 'Sudadera camel', 'sudadera-camel', '59.00', 'Camel', [['M', 'in stock'], ['L', 'in stock']], 'Hombre > Sudaderas'),
+  row('S4', 'Sudadera gris', 'sudadera-gris', '59.00', 'Gris', [['M', 'out of stock'], ['L', 'in stock']], 'Hombre > Sudaderas'),
+  row('S5', 'Sudadera camel mujer', 'sudadera-camel-w', '59.00', 'Camel', [['M', 'in stock']], 'Sudaderas', 'female,adult'),
+  row('S6', 'Sudadera camel infantil', 'sudadera-camel-k', '29.00', 'Camel', [['M', 'in stock']], 'Sudaderas', 'male,kids'),
+  row('P1', 'Pantalón de vestir recto gris', 'pantalon-recto-gris', '79.00', 'Gris', [['48', 'in stock'], ['50', 'in stock']], 'Hombre > Pantalones', 'male,adult', '100% lana'),
+  row('P2', 'Pantalón de vestir slim gris', 'pantalon-slim-gris', '59.00', 'Gris', [['48', 'in stock'], ['50', 'in stock']], 'Hombre > Pantalones', 'male,adult', '100% lana'),
+].join('\n')
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://127.0.0.1:4700')
   const send = (code, type, body, headers = {}) => { res.writeHead(code, { 'content-type': type, ...headers }); res.end(body) }
