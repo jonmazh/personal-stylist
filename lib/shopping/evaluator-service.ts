@@ -142,14 +142,17 @@ export async function evaluateProduct(sb: Sb, uid: string, id: string, opts: { r
   })
   const { data: row, error } = await sb.from('purchase_evaluations').insert({
     user_id: uid, product_id: id, need_id: need?.id ?? null, engine_version: e.version, weights: e.weights, score: e.score, confidence: e.confidence, criteria: e.criteria,
-    indicators: e.indicators, redundancy: e.redundancy, size, verdict: e.verdict, verdict_text: e.verdict_text, reasons: e.reasons, risks: e.risks, limitations: e.limitations,
+    // Detalle de Personal Shopper Intelligence (sin columnas nuevas): WVA, color, confianza, completitud, redundancia, motivos
+    indicators: { ...e.indicators, detail: { wva: e.wva, combines_with: e.combines_with, color: e.color, confidence_score: e.confidence_score, completeness: e.completeness, redundancy_score: e.redundancy_score, missing_info: e.missing_info, discard_reasons: e.discard_reasons } },
+    redundancy: e.redundancy, size, verdict: e.verdict, verdict_text: e.verdict_text, reasons: e.reasons, risks: e.risks, limitations: e.limitations,
   }).select('*').single()
   if (error) throw dbErr(error.message)
-  return row
+  return flatten(row)
 }
+const flatten = (row: Row | null) => (row ? { ...row, ...(row.indicators?.detail ?? {}) } : row)
 export async function latestEvaluation(sb: Sb, productId: string) {
   const { data } = await sb.from('purchase_evaluations').select('*').eq('product_id', productId).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  return data
+  return flatten(data)
 }
 
 /** Comparar varios candidatos: su última evaluación (o una nueva si no la tienen), ordenados por puntuación de compra. */

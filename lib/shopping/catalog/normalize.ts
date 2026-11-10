@@ -15,6 +15,7 @@ export interface RawVariant { size?: string | null; color?: string | null; sku?:
 export interface Variant { size: string | null; color: string | null; sku: string | null; availability: Availability; price: number | null }
 export interface FieldSource { source: FieldOrigin; at: string }
 export interface NormalizedProduct {
+  cut?: string | null; silhouette?: string | null
   product_name: string; brand: string | null; product_url: string | null; canonical_url: string | null; external_product_id: string | null
   description: string | null; category: string | null; subcategory: string | null; primary_color: string | null; colors: string[]
   confirmed_composition: string | null; current_price: number | null; currency: string; availability_status: Availability
@@ -78,6 +79,19 @@ export function detectColors(text?: string | null): string[] {
   const found: { c: string; pos: number }[] = []
   for (const [c, res] of COLOR_RES) for (const re of res) { const m = re.exec(t); if (m) { found.push({ c, pos: m.index }); t = t.slice(0, m.index) + ' '.repeat(m[0].length) + t.slice(m.index + m[0].length); break } }
   return [...new Set(found.sort((a, z) => a.pos - z.pos).map((x) => x.c))].slice(0, 4)
+}
+
+// ── Corte y silueta: solo si la tienda los dice en el nombre o la descripción (procedencia «Deducido») ──
+const CUT_WORDS: [string, RegExp][] = [
+  ['Recto', /(^|[^a-z])(recto|recta|straight|regular fit)([^a-z]|$)/], ['Slim', /(^|[^a-z])(slim|pitillo|skinny|ajustado)([^a-z]|$)/],
+  ['Tapered', /(^|[^a-z])(tapered|carrot|zanahoria)([^a-z]|$)/], ['Wide', /(^|[^a-z])(wide|ancho|amplio|baggy|barrel|loose|palazzo)([^a-z]|$)/],
+]
+const SIL_WORDS: [string, RegExp][] = [['Amplia', /(^|[^a-z])(oversize|oversized|relaxed|boxy|holgad[ao])([^a-z]|$)/], ['Ajustada', /(^|[^a-z])(slim fit|entallad[ao]|muscle fit)([^a-z]|$)/], ['Regular', /(^|[^a-z])(regular fit|corte regular)([^a-z]|$)/]]
+export function detectCut(name?: string | null, description?: string | null, category?: string | null) {
+  const t = strip(`${name ?? ''} ${description ?? ''}`)
+  const cut = category === 'bottom' ? CUT_WORDS.find(([, re]) => re.test(strip(name ?? '')))?.[0] ?? CUT_WORDS.find(([, re]) => re.test(t))?.[0] ?? null : null
+  const silhouette = category && ['top', 'outerwear', 'tailoring'].includes(category) ? SIL_WORDS.find(([, re]) => re.test(t))?.[0] ?? null : null
+  return { cut, silhouette }
 }
 
 // ── Precio, moneda, disponibilidad, composición ──
@@ -171,6 +185,9 @@ export function normalizeProduct(raw: RawProduct, kind: SourceKind, origin: Fiel
     images: (raw.images ?? []).filter((x) => typeof x === 'string' && /^https?:\/\//.test(x)).slice(0, 8).map((u2) => ({ url: u2, origin: 'store' as const, permission: 'link_only' as const })),
     variants, field_sources: fs, source_kind: kind, raw_attributes: {},
   }
+  const shape = detectCut(name, description, kindOf.category)
+  if (shape.cut) { p.cut = shape.cut; fs.cut = { source: 'derived', at } }
+  if (shape.silhouette) { p.silhouette = shape.silhouette; fs.silhouette = { source: 'derived', at } }
   if (p.availability_status === 'unknown') delete fs.availability_status
   return p
 }

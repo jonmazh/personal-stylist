@@ -5,7 +5,9 @@ import { listNeeds } from '@/lib/shopping/service'
 import { AVAILABILITY, SOURCE_KINDS, label } from '@/lib/shopping/catalog/taxonomy'
 import { label as tlabel } from '@/lib/shopping/taxonomy'
 import { PendingButton } from '@/components/outfits/pending-button'
-import { saveResultAction, searchAction } from '../product-actions'
+import { searchAction } from '../product-actions'
+import { HitCard } from '@/components/shopping/hit-card'
+import { groupHits } from '@/lib/shopping/intelligence/rank'
 
 type Row = Record<string, any>
 const fmt = (p: number | null, c = 'EUR') => (p == null ? 'Precio sin comprobar' : `${p.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${c === 'EUR' ? '€' : c}`)
@@ -21,7 +23,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     <main className="wide shop">
       <p className="eyebrow"><Link href="/compras">Compras</Link> · Buscar productos · <Link href="/compras/productos">Candidatos</Link> · <Link href="/compras/fuentes">Fuentes</Link></p>
       <h1 className="display">Buscar productos</h1>
-      <p className="m">Busco en tus fuentes autorizadas (feeds) y, si está configurado, en un buscador de productos que solo enlaza a las páginas de las tiendas. Ordeno por cuánto se parece a lo que buscas, no por precio ni popularidad. Esto todavía no es una recomendación de compra.</p>
+      <p className="m">Busco en tus fuentes autorizadas (feeds) y, si está configurado, en un buscador de productos que solo enlaza a las páginas de las tiendas. Parto de tu perfil: busco el tipo de prenda (no solo las palabras que escribes) y también en los colores que te favorecen y te faltan; después evalúo cada producto con tu colorimetría, tu ajuste, tu estilo y tu armario. Nunca ordeno por precio ni por popularidad.</p>
       {sp.error && <p className="note warn" role="alert">{sp.error}</p>}
       {!provider && <p className="note">No hay buscador de productos configurado: solo se busca en tus feeds. También puedes <Link href="/compras/importar">importar un producto por URL o a mano</Link>.</p>}
 
@@ -31,25 +33,26 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
         <div className="btns"><PendingButton label="Buscar" pending="Buscando en las fuentes autorizadas…" />{search && <button className="btn small" name="force" value="1">Buscar de nuevo (sin caché)</button>}</div>
       </form>
 
-      {search && (<section className="osec">
-        <h2>{need ? `Para «${need.title}»` : `«${search.query_text}»`} <span className="m small">· {search.result_count} resultado{search.result_count === 1 ? '' : 's'} · {new Date(search.created_at).toLocaleString('es-ES')}</span></h2>
-        <div className="srcs">{(search.sources as Row[]).map((s, i) => <span key={i} className={s.status === 'ok' ? '' : 'm'}>{s.label}: {s.status === 'ok' ? `${s.count} resultado${s.count === 1 ? '' : 's'}` : s.status === 'empty' ? 'sin resultados' : s.message}</span>)}</div>
-        {!(search.results as Row[]).length && <p className="verdict">No he encontrado productos que encajen en tus fuentes. Puedes <Link href={`/compras/importar${search.need_id ? `?need=${search.need_id}` : ''}`}>importar uno que hayas visto</Link>.</p>}
-        <div className="combos">{(search.results as Row[]).map((h, i) => (
-          <div key={i} className="hit">
-            <span className="st">{h.retailer?.name ?? h.brand ?? 'Tienda'} · {tlabel(SOURCE_KINDS, h.source_kind)}</span>
-            <h3>{h.product_name}</h3>
-            <span className="small">{fmt(h.current_price, h.currency)}{h.raw_attributes?.previous_price ? ` (antes ${fmt(h.raw_attributes.previous_price.amount, h.currency)})` : ''}{h.availability_status !== 'unknown' ? ` · ${label(AVAILABILITY, h.availability_status)}` : ''}{h.confirmed_composition ? ` · ${h.confirmed_composition}` : ''}</span>
-            <span className="small">Coincidencia {h.match.score}/100{h.match.matches.length ? ` · ${h.match.matches.join(' · ')}` : ''}</span>
-            {h.match.unknown.length > 0 && <span className="m small">Sin confirmar: {h.match.unknown.join(', ').toLowerCase()}</span>}
-            {h.source_kind === 'api' && h.variants?.length > 0 && <span className="m small">Tallas: {(h.variants as Row[]).map((v) => `${v.size}${v.availability === 'out_of_stock' ? ' (agotada)' : ''}`).join(', ')}</span>}
-            {h.source_kind === 'search' && <span className="m small">Del buscador: solo nombre y enlace; impórtalo para ver sus datos{h.retailer?.url_policy === 'manual_only' ? ' (en esta tienda, a mano)' : ''}.</span>}
-            <div className="btns">
-              {h.product_url && <a className="btn small" href={h.product_url} target="_blank" rel="noopener noreferrer nofollow">Ver en la tienda</a>}
-              <form action={saveResultAction}><input type="hidden" name="search_id" value={search.id} /><input type="hidden" name="index" value={i} /><button className="btn small primary">Guardar como candidato</button></form>
-            </div>
-          </div>))}</div>
-      </section>)}
+      {search && (() => {
+        const results = search.results as Row[]
+        const g = groupHits(results)
+        const q = search.query as Row
+        const card = (i: number, compact = false) => <HitCard key={i} h={results[i]} index={i} searchId={search.id} compact={compact} />
+        return (<section className="osec">
+          <h2>{need ? `Para «${need.title}»` : `«${search.query_text}»`} <span className="m small">· {search.result_count} candidato{search.result_count === 1 ? '' : 's'} evaluado{search.result_count === 1 ? '' : 's'} con tu perfil · {new Date(search.created_at).toLocaleString('es-ES')}</span></h2>
+          <div className="srcs">{(search.sources as Row[]).map((s, i) => <span key={i} className={s.status === 'ok' ? '' : 'm'}>{s.label}: {s.status === 'ok' ? `${s.count} resultado${s.count === 1 ? '' : 's'}` : s.status === 'empty' ? 'sin resultados' : s.message}</span>)}</div>
+          {q?.plan && <p className="m small">Búsquedas: {(q.plan as string[]).map((t) => `«${t}»`).join(', ')}. {(q.notes as string[] ?? []).join(' ')}</p>}
+          {q?.known && (!q.known.color || !q.known.fit || !q.known.style || q.known.color_confidence === 'baja') && <p className="note">{[!q.known.color ? 'No conozco tu colorimetría: no afirmo que un color te favorezca' : q.known.color_confidence === 'baja' ? 'Tu colorimetría es una estimación sin validar: tómala como orientación' : null, !q.known.fit ? 'no conozco tus preferencias de ajuste' : null, !q.known.style ? 'no conozco tu identidad estética' : null].filter(Boolean).join('; ')}. Esos criterios quedan neutros (no cuentan en contra). <Link href="/profile">Completar el perfil</Link></p>}
+          {!results.length && <p className="verdict">No he encontrado productos de este tipo en tus fuentes. Puedes <Link href={`/compras/importar${search.need_id ? `?need=${search.need_id}` : ''}`}>importar uno que hayas visto</Link>.</p>}
+          {results.length > 0 && !g.recommended.length && <p className="verdict"><b>Ninguno me convence.</b> Ninguno de los candidatos encaja lo suficiente contigo y con tu armario; esperar también es una opción.</p>}
+          {g.recommended.length > 0 && <><h3>Recomendados para ti</h3><p className="m small">Mayor compatibilidad personal (color, corte, estética, armario, necesidad y calidad).</p><div className="combos">{g.recommended.map((i) => card(i))}</div></>}
+          {g.best_wardrobe != null && !g.recommended.slice(0, 1).includes(g.best_wardrobe) && <><h3>Mejor aportación a tu armario</h3><div className="combos">{card(g.best_wardrobe)}</div></>}
+          {g.best_need != null && !g.recommended.slice(0, 1).includes(g.best_need) && g.best_need !== g.best_wardrobe && <><h3>Mejor opción para tu necesidad</h3><div className="combos">{card(g.best_need)}</div></>}
+          {g.alternatives.length > 0 && <><h3>Alternativas interesantes</h3><div className="combos">{g.alternatives.filter((i) => i !== g.best_wardrobe && i !== g.best_need).map((i) => card(i, true))}</div></>}
+          {g.not_recommended.length > 0 && <details className="howto"><summary>No recomendados ({g.not_recommended.length}) y por qué</summary><div className="combos">{g.not_recommended.map((i) => card(i))}</div></details>}
+          {g.unevaluated.length > 0 && <details className="howto"><summary>Sin evaluar ({g.unevaluated.length})</summary><div className="combos">{g.unevaluated.map((i) => card(i, true))}</div></details>}
+        </section>)
+      })()}
     </main>
   )
 }

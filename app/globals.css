@@ -449,3 +449,10 @@ p.state { white-space: normal; }
 .cmp { width: 100%; border-collapse: collapse; font-size: 13px; } .cmp th, .cmp td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; } .cmp th { color: var(--mut); font-weight: 500; }
 .cmpwrap { overflow-x: auto; max-width: 100%; }
 .sizegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 6px; } .sizegrid input { width: 100%; }
+
+/* ── Personal Shopper Intelligence ── */
+.hit.v-buy { border-left: 3px solid var(--olive); } .hit.v-consider { border-left: 3px solid var(--camel); } .hit.v-skip, .hit.v-wait { opacity: .85; }
+.score-line { font-size: 14px; margin: 2px 0; }
+.minibars { display: grid; gap: 3px; margin: 6px 0; font-size: 12px; color: var(--mut); }
+.minibars span { position: relative; display: block; padding-left: 0; }
+.minibars i { display: block; height: 3px; background: var(--olive); margin-bottom: 1px; } .minibars i.unknown { background: var(--line); }

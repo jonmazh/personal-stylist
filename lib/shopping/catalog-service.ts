@@ -10,6 +10,11 @@ import { parseFeed } from './catalog/feed'
 import { queryFromNeed, queryFromText, type ProductSearchQuery } from './catalog/query'
 import { ucpConfig, UcpError, type UcpRetailer } from './catalog/ucp'
 import { connectorSource } from './catalog/registry'
+import { buildShopperContext } from './intelligence/context'
+import { discoveryQueries } from './intelligence/discovery'
+import { rankHits } from './intelligence/rank'
+import { EVAL_VERSION, evaluatePurchase, type PurchaseEvaluation } from './evaluate'
+import { listNeeds, shoppingContext } from './service'
 import { feedSource, manualProduct, searchAll, searchProviderConfig, searchProviderSource, urlImportSource, type ProductSource, type RetailerRef, type SearchHit } from './catalog/sources'
 
 /** Product Discovery (fase 4B): tiendas, fuentes autorizadas, búsqueda, importación y catálogo de candidatos. */
@@ -119,32 +124,75 @@ export const sourcesSignature = (cfg: { provider: string | null; key: string | n
 export const searchCacheKey = (q: ProductSearchQuery, signature: string) => createHash('sha256').update(JSON.stringify(q) + '|' + signature).digest('hex').slice(0, 32)
 
 /** Busca en las fuentes autorizadas para una necesidad o un texto. Reutiliza la misma búsqueda de las últimas 24 h (caché). */
+/** Evaluación compacta que viaja con cada resultado (la completa se guarda al abrir o evaluar el producto). */
+function compactEval(e: PurchaseEvaluation) {
+  return {
+    version: e.version, score: e.score, verdict: e.verdict, verdict_text: e.verdict_text, confidence: e.confidence, confidence_score: e.confidence_score, completeness: e.completeness,
+    redundancy_score: e.redundancy_score, redundancy: { level: e.redundancy.level, garments: e.redundancy.garments.slice(0, 2).map((g) => ({ id: g.id, title: g.title, similarity: g.similarity })) },
+    criteria: e.criteria.map((c) => ({ key: c.key, label: c.label, weight: c.weight, value: c.value, points: c.points, known: c.known, confidence: c.confidence, reasons: c.reasons.slice(0, 3), missing: c.missing.slice(0, 2) })),
+    color: e.color ? { label: e.color.label, saturation: e.color.wardrobe.saturation, personal: e.color.personal.verdict, confidence: e.color.confidence } : null,
+    wva: { score: e.wva.score, new_outfits: e.wva.new_outfits, total_outfits: e.wva.total_outfits, outfit_samples: e.wva.outfit_samples, occasions_new: e.wva.occasions_new, gaps: e.wva.gaps, reasons: e.wva.reasons.slice(0, 3) },
+    combines_with: e.combines_with.slice(0, 6), reasons: e.reasons, risks: e.risks.slice(0, 4), missing_info: e.missing_info.slice(0, 4), discard_reasons: e.discard_reasons, sizes: e.indicators.sizes,
+  }
+}
+
+/**
+ * Personal Shopper Intelligence: perfil → diagnóstico → necesidad → descubrimiento → evaluación → recomendación.
+ * 1) Contexto personal (colorimetría, ajuste, estilo, armario, uso, aprendizaje, necesidades).
+ * 2) Descubrimiento ampliado en las fuentes (tipo de prenda sin exigir el color escrito + colores que te favorecen y faltan).
+ * 3) Cada candidato se normaliza, se quitan duplicados y se evalúa con tu perfil y tu armario (Outfit Engine incluido).
+ * 4) Orden por compatibilidad personal, nunca por precio ni por coincidencia textual. Caché ligada a tu perfil y armario.
+ */
 export async function searchProducts(sb: Sb, uid: string, raw: { need_id?: string | null; text?: string | null; force?: boolean }) {
   const prefs = await prefsOf(sb)
   let q: ProductSearchQuery
+  let need: Row | null = null
   if (raw.need_id) {
     const { data: n } = await sb.from('shopping_needs').select('*').eq('id', raw.need_id).maybeSingle()
     if (!n) throw new WardrobeError('Necesidad no encontrada', 404)
-    q = queryFromNeed({ ...n, spec: NeedSpec.parse(n.spec) }, prefs)
+    need = { ...n, spec: NeedSpec.parse(n.spec) }
+    q = queryFromNeed(need as never, prefs)
   } else {
     const t = (raw.text ?? '').trim(); if (t.length < 3) throw new WardrobeError('Describe qué buscas (al menos 3 letras) o elige una necesidad.')
     q = queryFromText(t, prefs)
   }
+  const [sc, needs] = await Promise.all([shoppingContext(sb, uid), listNeeds(sb)])
+  const ctx = buildShopperContext({ bundle: sc.prep.bundle, garments: sc.prep.garments, evals: sc.prep.evals, signals: sc.prep.signals, needs, prefs: sc.prefs, use: sc.use })
+  const plan = discoveryQueries(q, ctx)
   const retailers = await listRetailers(sb)
   const { data: feeds } = await sb.from('product_sources').select('id, last_sync_at').eq('kind', 'feed').eq('status', 'active')
   const ucp = (retailers as UcpRetailer[]).some((r) => r.connector === 'ucp' && !q.excluded.includes(r.slug) && (!q.retailers.length || q.retailers.includes(r.slug)))
-  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : ''))
+  const cache_key = searchCacheKey(q, sourcesSignature(searchProviderConfig(), feeds ?? [], retailers) + (ucp && ucpConfig().profileUrl ? '|ucp' : '') + `|ctx:${ctx.hash}|${EVAL_VERSION}`)
   if (!raw.force) {
     // UCP: las respuestas de catálogo no deben reutilizarse entre sesiones sin revalidar → caché de 15 minutos
     const since = new Date(Date.now() - (ucp ? UCP_CACHE_MINUTES * 60e3 : CACHE_HOURS * 3600e3)).toISOString()
     const { data: hit } = await sb.from('shopping_searches').select('*').eq('cache_key', cache_key).gte('created_at', since).order('created_at', { ascending: false }).limit(1).maybeSingle()
-    if (hit) return { id: hit.id as string, query: q, results: hit.results as Row[], sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
+    if (hit) return { id: hit.id as string, query: hit.query as ProductSearchQuery, results: hit.results as Row[], sources: hit.sources as Row[], cached: true, created_at: hit.created_at as string }
   }
-  const { results, statuses } = await searchAll(q, await buildSources(sb, retailers))
-  const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query: q, query_text: q.text, cache_key, sources: statuses, results: results.map(slim), result_count: results.length }).select('id, created_at').single()
+  // Descubrimiento (consultas en serie: respeta los límites de cada tienda)
+  const sources = await buildSources(sb, retailers)
+  const byKey = new Map<string, SearchHit>(); const stat = new Map<string, Row>()
+  for (const dq of plan.queries) {
+    const { results, statuses } = await searchAll(dq, sources, 30)
+    for (const h of results) { const k = h.canonical_url ?? `${h.source_label}:${h.external_product_id ?? h.product_name}`; if (!byKey.has(k)) byKey.set(k, h) }
+    for (const st of statuses) { const k = `${st.kind}:${st.id ?? st.label}`; const prev = stat.get(k); stat.set(k, prev ? { ...prev, count: prev.count + st.count, status: prev.status === 'ok' || st.status === 'ok' ? 'ok' : st.status, message: prev.message ?? st.message } : { ...st }) }
+  }
+  // Evaluación personal de cada candidato
+  const t0 = Date.now()
+  const candidates = [...byKey.values()].slice(0, 40)
+  const evaluated = candidates.map((h) => {
+    let evaluation = null
+    try { evaluation = compactEval(evaluatePurchase(h, { garments: ctx.garments, evals: ctx.evals, bundle: ctx.bundle, ctx, need, openNeeds: needs, analyzed: false, staleDays: h.source_kind === 'search' ? null : 0, fast: candidates.length > 25 })) } catch { /* sin evaluar: se muestra aparte */ }
+    return { ...slim(h), evaluation }
+  })
+  const ranked = rankHits(evaluated)
+  // Recuento por fuente de productos únicos (la misma prenda puede salir en varias consultas)
+  const statuses = [...stat.values()].map((st) => { const count = [...byKey.values()].filter((h) => (st.id ? h.source_id === st.id : h.source_label === st.label)).length; return { ...st, count, status: count ? 'ok' : st.status === 'ok' ? 'empty' : st.status } as Row })
+  const query = { ...q, plan: plan.queries.map((x) => x.text), notes: plan.notes, ctx_hash: ctx.hash, engine: EVAL_VERSION, completeness: ctx.completeness, known: { color: !!ctx.color.temp, color_confidence: ctx.color.confidence, fit: !!(ctx.fit.general || Object.keys(ctx.fit.prefs).length), style: ctx.style.source !== 'ninguna' }, eval_ms: Date.now() - t0 }
+  const { data: s, error } = await sb.from('shopping_searches').insert({ user_id: uid, need_id: q.need_id, query, query_text: q.text, cache_key, sources: statuses, results: ranked, result_count: ranked.length }).select('id, created_at').single()
   if (error) throw dbErr(error.message)
-  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: results.length, sources: statuses.map((x) => `${x.kind}:${x.status}`) } })
-  return { id: s.id as string, query: q, results: results.map(slim) as Row[], sources: statuses as Row[], cached: false, created_at: s.created_at as string }
+  await sb.from('ai_runs').insert({ user_id: uid, kind: 'product_search', model: 'reglas', meta: { search_id: s.id, results: ranked.length, queries: plan.queries.length, sources: statuses.map((x) => `${x.kind}:${x.status}`), eval_ms: query.eval_ms } })
+  return { id: s.id as string, query, results: ranked as Row[], sources: statuses as Row[], cached: false, created_at: s.created_at as string }
 }
 export async function getSearch(sb: Sb, id: string) {
   const { data } = await sb.from('shopping_searches').select('*').eq('id', id).maybeSingle()
@@ -153,7 +201,7 @@ export async function getSearch(sb: Sb, id: string) {
 }
 
 // ── Catálogo de candidatos ──
-const COLS = ['product_name', 'brand', 'product_url', 'canonical_url', 'external_product_id', 'description', 'category', 'subcategory', 'primary_color', 'colors', 'confirmed_composition', 'current_price', 'currency', 'availability_status', 'images'] as const
+const COLS = ['product_name', 'brand', 'product_url', 'canonical_url', 'external_product_id', 'description', 'category', 'subcategory', 'primary_color', 'colors', 'cut', 'silhouette', 'confirmed_composition', 'current_price', 'currency', 'availability_status', 'images'] as const
 const userFields = (fs: Row) => new Set(Object.entries(fs ?? {}).filter(([, v]) => (v as Row)?.source === 'user').map(([k]) => k))
 
 /** Guarda (o actualiza, sin pisar lo que corregiste tú) un producto normalizado; variantes y precio con fecha. */

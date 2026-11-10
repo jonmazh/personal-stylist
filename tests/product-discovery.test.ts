@@ -179,3 +179,12 @@ test('caché de búsquedas: cambia si se configura el buscador, se sincroniza un
   assert.notEqual(feed1, searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [{ id: 'f', last_sync_at: '2026-11-09' }], shops)), 'sincronizar el feed invalida')
   assert.notEqual(brave, searchCacheKey(q, sourcesSignature({ provider: 'brave', key: 'k', market: 'ES' }, [], [...shops, { id: 'r2', domains: ['x.com'] }])), 'añadir una tienda invalida')
 })
+
+test('corte y silueta solo cuando la tienda los dice (procedencia «Deducido»)', async () => {
+  const { detectCut } = await import('@/lib/shopping/catalog/normalize')
+  assert.deepEqual(detectCut('Pantalón de vestir recto gris', null, 'bottom'), { cut: 'Recto', silhouette: null })
+  assert.equal(detectCut('Slim fit chinos', null, 'bottom').cut, 'Slim'); assert.equal(detectCut('Vaquero baggy', null, 'bottom').cut, 'Wide')
+  assert.equal(detectCut('Sudadera oversize', null, 'top').silhouette, 'Amplia'); assert.deepEqual(detectCut('Pantalón gris', null, 'bottom'), { cut: null, silhouette: null })
+  const p = normalizeProduct({ name: 'Pantalón de vestir slim gris', price: 59 }, 'feed', 'feed')!
+  assert.equal(p.cut, 'Slim'); assert.equal(p.field_sources.cut.source, 'derived')
+})
